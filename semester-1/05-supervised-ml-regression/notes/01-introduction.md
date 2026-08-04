@@ -42,9 +42,13 @@ flowchart TD
 
 **Parent concept.** Machine Learning (ML) is the branch of computer science/statistics where a system learns patterns from data instead of being told exact rules. Before learning any technique (regression, classification, etc.), you need: what ML actually means (1.1), how it differs from normal coding (1.2), the vocabulary used everywhere (1.3), the broad categories it falls into (1.4), how to read a real-world problem and its data (1.5), and the full workflow followed to solve it (1.6). These six pieces build on each other in that order.
 
+> **Formal definition:** Machine Learning is a field of study that gives computers the ability to learn from data and improve their performance at a task without being explicitly programmed with fixed rules.
+
 ### 1.1 Machine Learning Overview
 
-**Meaning** — In plain words: instead of writing step-by-step instructions for a task, you show the computer many examples, and it figures out the pattern itself. Technically, **Machine Learning** is a field of study that gives computers the ability to learn a mapping from input data to an output (a prediction or decision) **without being explicitly programmed** for every rule, by optimizing a model's parameters against past data (Arthur Samuel's classic definition, refined by Tom Mitchell as: _a program learns from experience E, with respect to task T, and performance measure P, if its performance at T improves with E, measured by P_).
+**Meaning** — Instead of writing step-by-step instructions for a task, you show the computer many examples, and it learns a mapping from input data to an output (a prediction or decision) by optimizing a model's parameters against past data, without being explicitly programmed for every rule.
+
+> **Formal definition:** A program is said to learn from experience E, with respect to task T, and performance measure P, if its performance at T improves with E, as measured by P (Tom Mitchell's definition).
 
 **Why it matters** — Many real problems (predicting a house price, recognizing spam, detecting fraud) have rules too complex or too numerous for a human to hand-code. ML lets the data itself reveal the rule.
 
@@ -109,9 +113,11 @@ flowchart LR
 
 **Meaning** — ML techniques are grouped by **what kind of feedback/data** they learn from.
 
-- **Supervised Learning** — plain: learning with an answer key. Technical: the dataset has both features and a known label; the model learns to map features → label. Split further into **Regression** (label is continuous, e.g., price) and **Classification** (label is a category, e.g., spam/not-spam). This whole folder (05) and the next (06) are dedicated to these two.
-- **Unsupervised Learning** — plain: finding hidden groups/structure with no answer key. Technical: the dataset has only features, no labels; the model finds patterns, e.g., **clustering** (grouping similar houses by features) or **dimensionality reduction** (compressing many features into fewer, without losing much information).
-- **Reinforcement Learning** — plain: learning by trial and reward, like training a pet. Technical: an **agent** takes actions in an **environment** and receives **rewards/penalties**; it learns a policy that maximizes total reward over time (e.g., a game-playing agent).
+- **Supervised Learning** — learning with an answer key: the dataset has both features and a known label, and the model learns to map features → label. Split further into **Regression** (label is continuous, e.g., price) and **Classification** (label is a category, e.g., spam/not-spam). This whole folder (05) and the next (06) are dedicated to these two.
+- **Unsupervised Learning** — finding hidden groups/structure with no answer key: the dataset has only features, no labels, and the model finds patterns, e.g., **clustering** (grouping similar houses by features) or **dimensionality reduction** (compressing many features into fewer, without losing much information).
+- **Reinforcement Learning** — learning by trial and reward, like training a pet: an **agent** takes actions in an **environment** and receives **rewards/penalties**, learning a policy that maximizes total reward over time (e.g., a game-playing agent).
+
+> **Formal definition:** Supervised learning trains a model on labeled data (known input-output pairs) to predict outputs for new inputs. Unsupervised learning finds patterns or structure in unlabeled data with no known output. Reinforcement learning trains an agent to choose actions that maximize cumulative reward through trial-and-error interaction with an environment.
 
 **Important details (variant)** — **Semi-supervised learning** (a mix: a little labelled data + a lot of unlabelled data) is a practical variant of supervised learning, worth knowing by name but not detailed further here.
 
@@ -164,6 +170,8 @@ flowchart LR
     H --> I[9. Monitoring]
 ```
 
+> **Formal definition:** The Machine Learning lifecycle is the standard sequence of stages — problem definition, data collection, preprocessing, model selection, training, evaluation, hyperparameter tuning, deployment, and monitoring — followed to turn a real-world question into a working, maintained predictive system.
+
 1. **Problem definition** — frame the question and target (Section 1.5).
 2. **Data collection** — gather the dataset (Section 1.3's "dataset").
 3. **Data preprocessing** — clean and prepare data: missing values, encoding, scaling, outliers, feature engineering, train-test split — the entire subject of **Section 2** of these notes.
@@ -182,9 +190,13 @@ flowchart LR
 
 **Parent concept.** Real-world data is rarely clean enough to feed directly into a model — it can have missing entries, text/categories instead of numbers, features on very different scales, and extreme values. **Data Preprocessing** is the set of techniques that turn raw data into a clean, model-ready form. Its children, in the order applied to the house-price dataset: handle missing values (2.1), convert non-numeric columns to numbers (2.2), bring numeric features to a comparable scale (2.3), detect and treat extreme values (2.4), engineer better features (2.5), and finally split the cleaned data for training and testing (2.6).
 
+> **Formal definition:** Data preprocessing is the stage of the machine learning workflow in which raw data is cleaned, encoded, scaled, and organized into a form suitable for model training and evaluation.
+
 ### 2.1 Missing Values
 
-**Meaning** — Plain: some cells in the data table are empty or hold a "fake" placeholder instead of a real value. Technical: **missing values** are entries in the dataset where no valid measurement was recorded for a given feature of a given instance.
+**Meaning** — Some cells in the data table are empty or hold a "fake" placeholder instead of a real value — **missing values** are entries in the dataset where no valid measurement was recorded for a given feature of a given instance.
+
+> **Formal definition:** A missing value is the absence of a recorded observation for a variable in a given instance of a dataset.
 
 **Why it matters** — Most ML algorithms cannot process empty/undefined values directly — they will error out or silently bias the model if ignored.
 
@@ -208,13 +220,15 @@ flowchart LR
 
 ### 2.2 Handling Non-Numeric Data
 
-**Meaning** — Plain: most ML algorithms only understand numbers, so text/category columns (like "locality": Downtown, Suburb, Rural) must be converted to numeric form. Technical: this conversion is called **categorical encoding**.
+**Meaning** — Most ML algorithms only understand numbers, so text/category columns (like "locality": Downtown, Suburb, Rural) must be converted to numeric form — this conversion is called **categorical encoding**.
 
-**Why it matters** — Without encoding, a model cannot mathematically process a text category at all.
+> **Formal definition:** Categorical encoding is the process of converting categorical (non-numeric) variables into a numeric representation that a machine learning algorithm can process.
 
 #### 2.2.1 One-Hot Encoding
 
 **Meaning** — Creates one new binary (0/1) column per category value; a `1` marks which category that row belongs to, all others are `0`.
+
+> **Formal definition:** One-hot encoding represents a categorical variable with $k$ levels as $k$ binary columns, where exactly one column is set to 1 to indicate the category of each observation.
 
 **Example** — "Locality" with values {Downtown, Suburb, Rural} becomes three columns `Locality_Downtown`, `Locality_Suburb`, `Locality_Rural`; a Downtown house gets `(1, 0, 0)`.
 
@@ -224,6 +238,8 @@ flowchart LR
 
 **Meaning** — Assigns each category a single integer code (0, 1, 2, …), with no new columns created.
 
+> **Formal definition:** Label encoding assigns a unique integer to each category of a categorical variable, replacing the category with that integer code.
+
 **Example** — Downtown → 0, Suburb → 1, Rural → 2.
 
 **Important details** — Risk: the model may wrongly assume an order/magnitude relationship (Rural > Suburb > Downtown numerically) where none exists in reality — suitable mainly for **ordinal** data or tree-based models that don't assume numeric order.
@@ -231,6 +247,8 @@ flowchart LR
 #### 2.2.3 Ordinal Encoding
 
 **Meaning** — Like label encoding (each category → an integer), but the integers are deliberately assigned to **match a real, meaningful order** in the data.
+
+> **Formal definition:** Ordinal encoding assigns integers to categories such that the numeric order of the codes reflects a genuine, meaningful rank among the categories.
 
 **Example** — House condition {Poor, Average, Good, Excellent} → {0, 1, 2, 3}, where the order genuinely reflects increasing quality.
 
@@ -250,7 +268,9 @@ The central difference: one-hot avoids implying any order at the cost of extra c
 
 ### 2.3 Normalization and Transformation
 
-**Meaning** — Plain: putting all numeric features on a similar scale so no single feature dominates just because its numbers are bigger. Technical: **normalization/scaling** transforms feature values into a defined range or distribution, without changing the relationships within the data.
+**Meaning** — Putting all numeric features on a similar scale so no single feature dominates just because its numbers are bigger — **normalization/scaling** transforms feature values into a defined range or distribution, without changing the relationships within the data.
+
+> **Formal definition:** Normalization (feature scaling) is the process of rescaling numeric feature values onto a common range or distribution so that no feature dominates a model purely due to its scale.
 
 **Why it matters** — In the house dataset, "area" might range in thousands (sq. ft.) while "number of rooms" ranges 1–5. Many algorithms (especially those using distance or gradient descent) would let "area" unfairly dominate unless scaled.
 
@@ -272,13 +292,17 @@ The central difference: one-hot avoids implying any order at the cost of extra c
 
 ### 2.4 Outlier Detection / Removal
 
-**Meaning** — Plain: an outlier is a data point that looks unusually far from the rest, e.g., a house priced ₹5 crore when most are ₹20–80 lakh. Technical: an **outlier** is an observation that deviates markedly from the rest of the dataset's distribution, possibly due to a data-entry error or a genuinely rare case.
+**Meaning** — An outlier is a data point that looks unusually far from the rest, e.g., a house priced ₹5 crore when most are ₹20–80 lakh — an **outlier** is an observation that deviates markedly from the rest of the dataset's distribution, possibly due to a data-entry error or a genuinely rare case.
+
+> **Formal definition:** An outlier is an observation that lies an abnormal distance from other values in a dataset's distribution.
 
 **Why it matters** — Outliers can heavily distort statistics (mean, standard deviation) and mislead models — especially regression, which is sensitive to extreme values.
 
 #### 2.4.1 Boxplot method
 
 **Meaning** — A **boxplot** visually displays a feature's median, quartiles, and "whiskers"; points plotted beyond the whiskers are flagged as outliers.
+
+> **Formal definition:** A boxplot is a graphical summary of a feature's distribution using its quartiles and whiskers, in which points beyond the whiskers are flagged as potential outliers.
 
 ##### Diagram
 
@@ -298,6 +322,8 @@ flowchart LR
 
 **Meaning** — A numeric rule based on the same quartiles shown in the boxplot, used to calculate outlier boundaries precisely instead of just reading them off a chart.
 
+> **Formal definition:** The Interquartile Range (IQR) method flags any observation below $Q_1 - 1.5 \times IQR$ or above $Q_3 + 1.5 \times IQR$ as an outlier, where $IQR = Q_3 - Q_1$.
+
 **Formula** — **Essential**
 **Formula** — $IQR = Q_3 - Q_1$; Lower bound $= Q_1 - 1.5 \times IQR$; Upper bound $= Q_3 + 1.5 \times IQR$
 **Where** — $Q_1$: 25th percentile of the feature; $Q_3$: 75th percentile; any value outside [Lower bound, Upper bound] is an outlier.
@@ -308,6 +334,8 @@ flowchart LR
 
 **Meaning** — Uses the standardization formula from Section 2.3 to measure how many standard deviations a value is from the mean; values beyond a chosen threshold (commonly $|z| > 3$) are flagged as outliers.
 
+> **Formal definition:** The Z-score method flags an observation as an outlier if the absolute value of its standardized score, $z = (x-\mu)/\sigma$, exceeds a chosen threshold (commonly 3).
+
 **Example** — Using Section 2.3's Z-score formula, if a house's price gives $z = 4.2$, it is far beyond the common $|z| > 3$ threshold and is flagged as an outlier.
 
 **Important details** — This method assumes the feature is roughly normally distributed; it is less reliable on skewed data (like raw house prices), where the IQR method is usually preferred.
@@ -315,6 +343,8 @@ flowchart LR
 #### 2.4.4 Scatter plot method
 
 **Meaning** — A **scatter plot** plots two features (or a feature against the target) as points; outliers appear visually as points far away from the main cluster/trend of the data.
+
+> **Formal definition:** A scatter plot is a graph of two variables as plotted points, used to visually identify observations (outliers) that deviate from the main trend or cluster formed by the rest of the data.
 
 **Example** — Plotting area (x-axis) vs price (y-axis): most points follow a rising trend, but one house with very small area and very high price stands far off the trend line — a visual outlier.
 
@@ -338,7 +368,9 @@ The central difference: boxplot/IQR/Z-score examine a single feature's own distr
 
 ### 2.5 Introduction to Feature Engineering
 
-**Meaning** — Plain: creating better, more useful input columns from the raw data instead of using it as-is. Technical: **feature engineering** is the process of using domain knowledge to create, transform, or select features that improve a model's ability to learn the target.
+**Meaning** — Creating better, more useful input columns from the raw data instead of using it as-is — **feature engineering** is the process of using domain knowledge to create, transform, or select features that improve a model's ability to learn the target.
+
+> **Formal definition:** Feature engineering is the process of using domain knowledge to create, transform, or select input variables (features) that improve a machine learning model's predictive performance.
 
 **Why it matters** — A well-engineered feature can capture a pattern the raw data hides; good features often improve performance more than switching algorithms does.
 
@@ -356,7 +388,9 @@ The central difference: boxplot/IQR/Z-score examine a single feature's own distr
 
 ### 2.6 Train-Test Split
 
-**Meaning** — Plain: setting aside a portion of the cleaned data that the model never sees during learning, purely to check how well it performs on new, unseen houses. Technical: **train-test split** divides the dataset into a **training set** (used to fit the model's parameters, Section 1.3) and a **test set** (used only for evaluation, Section 1.6 step 6).
+**Meaning** — Setting aside a portion of the cleaned data that the model never sees during learning, purely to check how well it performs on new, unseen houses — **train-test split** divides the dataset into a **training set** (used to fit the model's parameters, Section 1.3) and a **test set** (used only for evaluation, Section 1.6 step 6).
+
+> **Formal definition:** Train-test split is the practice of partitioning a dataset into a training subset, used to fit a model's parameters, and a held-out test subset, used only to evaluate the model's performance on unseen data.
 
 **Why it matters** — Evaluating a model on the same data it was trained on would hide overfitting (Section 1.3) — the model could simply be memorizing rather than generalizing. A held-out test set gives an honest estimate of real-world performance.
 

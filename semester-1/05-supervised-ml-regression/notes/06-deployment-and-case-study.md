@@ -22,7 +22,9 @@ flowchart TD
 
 ## 1. Create ML Pipeline (Foundation)
 
-**Meaning** — Plain: chaining every step of the model-building process — cleaning the data, engineering features, and fitting the model — into one single object, so all those steps run automatically, in the correct order, on any new data. Technical: an **ML pipeline** is a sequential wrapper of transformation and estimator steps that applies the same fitted preprocessing and model logic consistently to both training and new (unseen) data.
+**Meaning** — Chaining every step of the model-building process — cleaning the data, engineering features, and fitting the model — into one single object, so all those steps run automatically, in the correct order, on any new data. An **ML pipeline** is a sequential wrapper of transformation and estimator steps that applies the same fitted preprocessing and model logic consistently to both training and new (unseen) data.
+
+> **Formal definition:** An ML pipeline is a sequential composition of data transformation and estimator steps that applies identical, previously fitted preprocessing and modeling logic to both training and new data.
 
 **Why it matters** — Without a pipeline, each preprocessing step ([Session 1](01-introduction.md)'s missing-value handling, encoding, scaling; [Session 4](04-feature-engineering.md)'s extraction/transformation/selection) has to be manually repeated, in the exact right order, every time new data arrives — an easy place to introduce mistakes or, worse, **data leakage** (accidentally fitting scaling statistics on data that includes the test/new set, the exact caution raised in [Session 1 Section 2.6](01-introduction.md)). A pipeline enforces the fit/transform separation automatically.
 
@@ -56,7 +58,9 @@ flowchart TD
 
 ## 2. Serializing Machine Learning Models
 
-**Meaning** — Plain: saving a trained model (or, more usefully, the entire fitted pipeline from Section 1) to a file so it can be reloaded and reused later without retraining from scratch. Technical: **serialization** converts an in-memory fitted object — including all its learned coefficients and fitted preprocessing parameters — into a storable, transferable file format.
+**Meaning** — Saving a trained model (or, more usefully, the entire fitted pipeline from Section 1) to a file so it can be reloaded and reused later without retraining from scratch. **Serialization** converts an in-memory fitted object — including all its learned coefficients and fitted preprocessing parameters — into a storable, transferable file format.
+
+> **Formal definition:** Serialization is the process of converting an in-memory fitted model or pipeline object into a storable, transferable file format that can be reloaded without retraining.
 
 **Why it matters** — Training a model can be slow or resource-intensive; serialization lets you train once and reuse the *exact* fitted model repeatedly, including in a completely different program or environment (such as the API server in Section 4).
 
@@ -76,7 +80,9 @@ flowchart TD
 
 ## 3. Packaging for Reproducibility
 
-**Meaning** — Plain: bundling the serialized model (Section 2) together with everything else needed to run it identically anywhere — the exact library versions, the code, and configuration — so it behaves exactly the same regardless of where or when it runs. Technical: **packaging for reproducibility** ensures a deployed model's behavior is deterministic and consistent across environments and over time.
+**Meaning** — Bundling the serialized model (Section 2) together with everything else needed to run it identically anywhere — the exact library versions, the code, and configuration — so it behaves exactly the same regardless of where or when it runs. **Packaging for reproducibility** ensures a deployed model's behavior is deterministic and consistent across environments and over time.
+
+> **Formal definition:** Packaging for reproducibility is the practice of bundling a model together with its exact dependencies, code, and configuration so that its behavior is deterministic and consistent across environments and over time.
 
 **Why it matters** — A model trained with one version of a library can behave differently, or fail to even load, with a different library version later — a common and hard-to-debug real-world deployment failure if not addressed upfront.
 
@@ -96,7 +102,9 @@ flowchart TD
 
 ## 4. Exposing the Model through REST APIs
 
-**Meaning** — Plain: making the packaged model (Section 3) usable by other programs over a network, by wrapping it in a small web service that accepts input data and sends back a prediction. Technical: a **REST API** exposes an HTTP endpoint (e.g., `POST /predict`) that accepts feature values as input (commonly as JSON) and returns the model's prediction as a response.
+**Meaning** — Making the packaged model (Section 3) usable by other programs over a network, by wrapping it in a small web service that accepts input data and sends back a prediction. A **REST API** exposes an HTTP endpoint (e.g., `POST /predict`) that accepts feature values as input (commonly as JSON) and returns the model's prediction as a response.
+
+> **Formal definition:** A REST API is an HTTP-based interface that exposes an endpoint accepting input data and returning a model's prediction as a structured (commonly JSON) response.
 
 **Why it matters** — Most real applications (web apps, mobile apps, other backend services) need to request predictions remotely over a network, rather than running Python code directly — REST APIs are the standard way to expose that capability.
 
@@ -128,7 +136,9 @@ sequenceDiagram
 
 ## 5. Scaling the Model
 
-**Meaning** — Plain: making sure the deployed API (Section 4) keeps working reliably as more people or systems request predictions, instead of slowing down or failing under load. Technical: **scaling** means adjusting a deployment's resources or architecture to handle an increasing volume of prediction requests.
+**Meaning** — Making sure the deployed API (Section 4) keeps working reliably as more people or systems request predictions, instead of slowing down or failing under load. **Scaling** means adjusting a deployment's resources or architecture to handle an increasing volume of prediction requests.
+
+> **Formal definition:** Scaling is the practice of adjusting a deployed system's resources or architecture to reliably handle an increasing volume of requests.
 
 **Why it matters** — A model that responds instantly to one test request can become very slow, or fail outright, once hundreds or thousands of requests arrive at the same time — a gap between "it works" and "it works in production" that scaling addresses directly.
 

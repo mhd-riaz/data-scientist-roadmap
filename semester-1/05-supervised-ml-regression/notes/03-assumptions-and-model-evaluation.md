@@ -44,9 +44,13 @@ flowchart TD
 
 **Parent concept.** Ordinary Least Squares ([Session 2 Section 2.3.1](02-linear-regression.md)) will always produce *some* fitted line, no matter what the data looks like. But that line's coefficients are only trustworthy — unbiased, and valid for the slope-significance test in [Session 2 Section 2.6](02-linear-regression.md) — if the data and its residuals ($e_i = y_i - \hat y_i$) satisfy a set of conditions. These conditions are the **assumptions of linear regression**: the relationship is actually a straight line (1.1), residuals don't depend on each other (1.2), residuals spread out evenly (1.3), residuals follow a bell curve (1.4), and (for multiple regression) predictors aren't too similar to each other (1.5).
 
+> **Formal definition:** The assumptions of linear regression are the set of conditions — linearity, independence of errors, homoscedasticity, normality of residuals, and (for multiple predictors) no multicollinearity — that must hold for Ordinary Least Squares coefficient estimates and their significance tests to be valid.
+
 ### 1.1 Linearity
 
-**Meaning** — Plain: the true relationship between a predictor and the target must genuinely look like a straight line (or flat plane, for multiple predictors), not a curve. Technical: **linearity** requires $E[Y|X=x]$ to be a linear function of $x$.
+**Meaning** — The true relationship between a predictor and the target must genuinely look like a straight line (or flat plane, for multiple predictors), not a curve — **linearity** requires $E[Y|X=x]$ to be a linear function of $x$.
+
+> **Formal definition:** The linearity assumption states that the expected value of the dependent variable is a linear function of the independent variable(s).
 
 **Why it matters** — If the real relationship curves (e.g., price gain per extra 100 sq. ft. shrinks for very large houses), a straight-line fit will systematically over- or under-predict at different ranges of $x$, no matter how well OLS minimizes squared error.
 
@@ -58,7 +62,9 @@ flowchart TD
 
 ### 1.2 Independence of Errors
 
-**Meaning** — Plain: one data point's error shouldn't help you guess another point's error. Technical: **independence of errors** requires $Cov(e_i, e_j) = 0$ for all $i \neq j$.
+**Meaning** — One data point's error shouldn't help you guess another point's error — **independence of errors** requires $Cov(e_i, e_j) = 0$ for all $i \neq j$.
+
+> **Formal definition:** The independence-of-errors assumption states that the residuals of a regression model are uncorrelated with each other.
 
 **Why it matters** — If errors are correlated with each other, the standard error of the slope ($SE(b_1)$, [Session 2 Section 2.6](02-linear-regression.md)) is calculated wrong, making the significance test unreliable — you could wrongly conclude a predictor matters (or doesn't).
 
@@ -70,7 +76,9 @@ flowchart TD
 
 ### 1.3 Homoscedasticity
 
-**Meaning** — Plain: the "spread" of prediction errors should stay roughly the same size across all predictor values, not fan out or shrink. Technical: **homoscedasticity** requires $Var(e_i)$ to be constant across all values of $x$; its violation is called **heteroscedasticity**.
+**Meaning** — The "spread" of prediction errors should stay roughly the same size across all predictor values, not fan out or shrink — **homoscedasticity** requires $Var(e_i)$ to be constant across all values of $x$; its violation is called **heteroscedasticity**.
+
+> **Formal definition:** Homoscedasticity is the assumption that the variance of the regression model's residuals is constant across all values of the independent variable(s).
 
 **Why it matters** — Under heteroscedasticity, OLS coefficients ($b_0, b_1$) stay correct on average, but their standard errors are wrong, again making the significance test from [Section 2.6](02-linear-regression.md) unreliable.
 
@@ -96,7 +104,9 @@ flowchart TD
 
 ### 1.4 Normality of Residuals
 
-**Meaning** — Plain: when you plot all the leftover errors, they should roughly form a bell curve centered at zero. Technical: **normality of residuals** requires $e_i \sim N(0, \sigma^2)$.
+**Meaning** — When you plot all the leftover errors, they should roughly form a bell curve centered at zero — **normality of residuals** requires $e_i \sim N(0, \sigma^2)$.
+
+> **Formal definition:** The normality-of-residuals assumption states that the regression model's residuals are normally distributed with a mean of zero.
 
 **Why it matters** — The t-test used for slope inference ([Session 2 Section 2.6](02-linear-regression.md)) and confidence intervals around predictions rely on this assumption, especially with smaller sample sizes.
 
@@ -108,7 +118,9 @@ flowchart TD
 
 ### 1.5 No Multicollinearity
 
-**Meaning** — Plain: in multiple regression, the predictors themselves shouldn't be too strongly correlated with each other. Technical: **no multicollinearity** requires that no predictor $X_j$ can be closely predicted by a linear combination of the other predictors.
+**Meaning** — In multiple regression, the predictors themselves shouldn't be too strongly correlated with each other — **no multicollinearity** requires that no predictor $X_j$ can be closely predicted by a linear combination of the other predictors.
+
+> **Formal definition:** No multicollinearity is the assumption that, in a multiple regression model, the independent variables are not highly linearly correlated with one another.
 
 **Why it matters** — If two predictors move almost identically (e.g., area and number of rooms are near-duplicates in a dataset), OLS cannot reliably tell which one is actually driving the change in price — coefficients become unstable, and can even flip sign unexpectedly between similar datasets.
 
@@ -126,9 +138,13 @@ flowchart TD
 
 **Parent concept.** Each assumption in Section 1 needs an actual, checkable test applied to a fitted model's residuals — otherwise "assuming" linearity or normality is just a guess. The five tests below map one-to-one onto the five assumptions just introduced.
 
+> **Formal definition:** Assumption tests are formal statistical or graphical diagnostics applied to a fitted regression model's residuals to check whether a specific assumption (linearity, independence, homoscedasticity, normality, or no multicollinearity) holds.
+
 ### 2.1 Testing Linearity — Residual vs Fitted Plot
 
-**Meaning** — Plain: plot the residuals ($e_i$, y-axis) against the model's predicted values ($\hat y_i$, x-axis) and look for a pattern. Technical: a **residual-vs-fitted plot** is the standard diagnostic for checking linearity.
+**Meaning** — Plot the residuals ($e_i$, y-axis) against the model's predicted values ($\hat y_i$, x-axis) and look for a pattern — a **residual-vs-fitted plot** is the standard diagnostic for checking linearity.
+
+> **Formal definition:** A residual-vs-fitted plot is a diagnostic graph of a regression model's residuals against its fitted values, used to detect non-linearity or non-constant variance.
 
 **How it works** — 1. Fit the regression model and compute residuals. 2. Plot residuals against fitted values. 3. Interpret: random scatter around the zero line (no visible curve) means linearity holds; a clear curve (e.g., U-shape) means it's violated.
 
@@ -138,7 +154,9 @@ flowchart TD
 
 ### 2.2 Testing Independence — Durbin-Watson Test
 
-**Meaning** — Plain: a numeric test that checks whether consecutive errors are related. Technical: the **Durbin-Watson (DW) test** produces a statistic measuring autocorrelation between successive residuals.
+**Meaning** — A numeric test that checks whether consecutive errors are related — the **Durbin-Watson (DW) test** produces a statistic measuring autocorrelation between successive residuals.
+
+> **Formal definition:** The Durbin-Watson test is a statistical test that produces a value between 0 and 4 to detect the presence of autocorrelation among the residuals of a regression model.
 
 **Formula** — Exam-important
 **Formula** — $DW = \dfrac{\sum_{t=2}^{n}(e_t - e_{t-1})^2}{\sum_{t=1}^{n}e_t^2}$
@@ -150,7 +168,9 @@ flowchart TD
 
 ### 2.3 Testing Homoscedasticity — Breusch-Pagan Test
 
-**Meaning** — Plain: a numeric test for the "funnel shape" spotted visually in 1.3. Technical: the **Breusch-Pagan test** regresses the squared residuals ($e_i^2$) on the original predictors, then checks whether that regression is statistically significant.
+**Meaning** — A numeric test for the "funnel shape" spotted visually in 1.3 — the **Breusch-Pagan test** regresses the squared residuals ($e_i^2$) on the original predictors, then checks whether that regression is statistically significant.
+
+> **Formal definition:** The Breusch-Pagan test is a statistical test for heteroscedasticity that checks whether the squared residuals of a regression model are significantly related to its independent variables.
 
 **How it works** — 1. Fit the original regression and get residuals. 2. Regress $e_i^2$ on the same predictors $X$. 3. Test whether this second regression is significant (via a chi-square test). 4. A small p-value (< 0.05) means predictors do explain variation in the squared residuals → heteroscedasticity is present.
 
@@ -162,7 +182,9 @@ flowchart TD
 
 ### 2.4 Testing Normality — Q-Q Plot & Shapiro-Wilk Test
 
-**Meaning** — Plain: two ways — one visual, one numeric — to check if residuals form a bell curve. Technical: a **Q-Q (quantile-quantile) plot** plots the residuals' quantiles against the quantiles of a theoretical normal distribution; the **Shapiro-Wilk test** is a formal hypothesis test for normality.
+**Meaning** — Two ways — one visual, one numeric — to check if residuals form a bell curve: a **Q-Q (quantile-quantile) plot** plots the residuals' quantiles against the quantiles of a theoretical normal distribution; the **Shapiro-Wilk test** is a formal hypothesis test for normality.
+
+> **Formal definition:** A Q-Q plot graphically compares the quantiles of a sample against the quantiles of a theoretical normal distribution to assess normality; the Shapiro-Wilk test is a formal hypothesis test of the null hypothesis that a sample is drawn from a normally distributed population.
 
 **How it works (Q-Q plot)** — If residuals are normally distributed, the plotted points fall approximately on a straight diagonal line; systematic curving away from the line indicates non-normality.
 
@@ -174,7 +196,9 @@ flowchart TD
 
 ### 2.5 Testing Multicollinearity — Variance Inflation Factor (VIF)
 
-**Meaning** — Plain: a number that tells you how much a predictor's information is duplicated by the other predictors. Technical: the **Variance Inflation Factor (VIF)** measures how much a predictor's coefficient variance is "inflated" due to its correlation with the other predictors.
+**Meaning** — A number that tells you how much a predictor's information is duplicated by the other predictors — the **Variance Inflation Factor (VIF)** measures how much a predictor's coefficient variance is "inflated" due to its correlation with the other predictors.
+
+> **Formal definition:** The Variance Inflation Factor quantifies how much the variance of an estimated regression coefficient is increased due to collinearity with the other predictor variables.
 
 **Formula** — Essential
 **Formula** — $VIF_j = \dfrac{1}{1 - R_j^2}$
@@ -194,9 +218,13 @@ flowchart TD
 
 **Parent concept.** **Model evaluation metrics** quantify how far a model's predictions are from the actual values, in the target's own units — a different question from R² (Session 2 Section 2.5), which measures a *proportion* of variance explained rather than a plain error size. The two most common absolute-error metrics are the Mean Absolute Error (3.1) and the Mean/Root Squared Error family (3.2); R² and Adjusted R² (3.3) are then recapped by reference so all evaluation tools can be compared together.
 
+> **Formal definition:** Model evaluation metrics are quantitative measures used to assess how closely a regression model's predictions match observed values.
+
 ### 3.1 Mean Absolute Error (MAE)
 
-**Meaning** — Plain: the average size of the prediction mistakes, ignoring whether they were too high or too low. Technical: **MAE** is the mean of the absolute differences between actual and predicted values.
+**Meaning** — The average size of the prediction mistakes, ignoring whether they were too high or too low — **MAE** is the mean of the absolute differences between actual and predicted values.
+
+> **Formal definition:** The Mean Absolute Error is the average of the absolute differences between the predicted and actual values of the dependent variable.
 
 **Formula** — Essential
 **Formula** — $MAE = \dfrac{1}{n}\sum_{i=1}^{n}|y_i - \hat y_i|$
@@ -210,7 +238,9 @@ flowchart TD
 
 ### 3.2 Mean Squared Error (MSE) & Root Mean Squared Error (RMSE)
 
-**Meaning** — Plain: like MAE, but errors are squared first, so bigger mistakes count much more heavily; RMSE brings the result back to the target's original unit. Technical: **MSE** is the mean of squared residuals; **RMSE** is its square root.
+**Meaning** — Like MAE, but errors are squared first, so bigger mistakes count much more heavily; RMSE brings the result back to the target's original unit — **MSE** is the mean of squared residuals; **RMSE** is its square root.
+
+> **Formal definition:** The Mean Squared Error is the average of the squared differences between predicted and actual values; the Root Mean Squared Error is the square root of the Mean Squared Error, expressed in the same unit as the target variable.
 
 **Formula** — Essential
 **Formula** — $MSE = \dfrac{1}{n}\sum_{i=1}^{n}(y_i-\hat y_i)^2$, $\quad RMSE = \sqrt{MSE}$
@@ -248,9 +278,13 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 **Parent concept.** The multiple regression equation ([Session 2 Section 2.4](02-linear-regression.md)) only accepts numeric predictors ($x_1, x_2, \dots$), but real features like **locality** (Downtown / Suburb / Rural) are categories, not numbers. **Presence of categorical variable** covers how such a feature is still included in a regression model: by converting it to numeric dummy columns (4.1), while avoiding a specific trap that would break the no-multicollinearity assumption (4.2, from 1.5).
 
+> **Formal definition:** The presence of a categorical variable in a regression model requires converting its categories into numeric dummy variables before it can be used as a predictor.
+
 ### 4.1 Dummy Variable Encoding
 
-**Meaning** — Plain: turning a category like "locality" into a set of 0/1 columns so it can be plugged into the regression equation. Technical: **dummy variable encoding** reuses the one-hot encoding idea ([Session 1 Section 2.2.1](01-introduction.md)), but for regression, only $k-1$ dummy columns are created for a category with $k$ levels — one level is left out as the **baseline (reference) category**.
+**Meaning** — Turning a category like "locality" into a set of 0/1 columns so it can be plugged into the regression equation — **dummy variable encoding** reuses the one-hot encoding idea ([Session 1 Section 2.2.1](01-introduction.md)), but for regression, only $k-1$ dummy columns are created for a category with $k$ levels — one level is left out as the **baseline (reference) category**.
+
+> **Formal definition:** Dummy variable encoding represents a categorical predictor with $k$ levels using $k-1$ binary (0/1) variables, with one level omitted as the reference category against which the others are compared.
 
 **Formula** — Essential
 **Formula** — $\hat y = b_0 + b_1\,x_{area} + b_2\,D_{Suburb} + b_3\,D_{Rural}$
@@ -262,7 +296,9 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 ### 4.2 Dummy Variable Trap
 
-**Meaning** — Plain: the mistake of including a dummy column for *every* category (all $k$, instead of $k-1$). Technical: the **dummy variable trap** occurs because the $k$ dummy columns for one category always sum to exactly 1 for every row, making one dummy perfectly predictable from the others — a case of perfect multicollinearity (Section 1.5).
+**Meaning** — The mistake of including a dummy column for *every* category (all $k$, instead of $k-1$) — the **dummy variable trap** occurs because the $k$ dummy columns for one category always sum to exactly 1 for every row, making one dummy perfectly predictable from the others — a case of perfect multicollinearity (Section 1.5).
+
+> **Formal definition:** The dummy variable trap is a scenario of perfect multicollinearity that arises when all $k$ dummy variables for a categorical predictor with $k$ levels are included in a regression model instead of $k-1$.
 
 **Why it matters** — This directly violates the no-multicollinearity assumption; the regression's coefficients become unstable or mathematically undefined, since VIF (Section 2.5) for each of these dummies would be infinite.
 
@@ -278,7 +314,9 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 ## 5. Interaction Effect
 
-**Meaning** — Plain: sometimes one feature's effect on the target isn't the same for every group — e.g., area might matter more to price in the Suburb than in Downtown. Technical: an **interaction effect** exists when the effect of one predictor on the target depends on the value of another predictor; it is modeled by adding a product term of the two predictors to the regression equation.
+**Meaning** — Sometimes one feature's effect on the target isn't the same for every group — e.g., area might matter more to price in the Suburb than in Downtown. An **interaction effect** exists when the effect of one predictor on the target depends on the value of another predictor; it is modeled by adding a product term of the two predictors to the regression equation.
+
+> **Formal definition:** An interaction effect exists when the effect of one independent variable on the dependent variable depends on the level of another independent variable, and is modeled by including the product of the two variables as an additional predictor.
 
 **Why it matters** — The plain additive model in 4.1 assumes area's effect on price ($b_1$) is identical across all localities. If, in reality, larger houses command an extra premium specifically in the Suburb, an additive model cannot capture that — only an interaction term can.
 

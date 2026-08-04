@@ -25,7 +25,9 @@ flowchart TD
 
 ## 1. Feature Extraction
 
-**Meaning** — Plain: pulling out new, more useful features from raw or complex data, instead of using that raw data as-is. Technical: **feature extraction** is the process of deriving a new set of informative features from raw data, either through domain-based derivation (combining/deriving columns) or through statistical dimensionality-reduction techniques.
+**Meaning** — Pulling out new, more useful features from raw or complex data, instead of using that raw data as-is — **feature extraction** is the process of deriving a new set of informative features from raw data, either through domain-based derivation (combining/deriving columns) or through statistical dimensionality-reduction techniques.
+
+> **Formal definition:** Feature extraction is the process of transforming raw data into a new, reduced set of informative features, either through domain-driven derivation or through dimensionality-reduction techniques such as PCA.
 
 **Why it matters** — Raw data (a sale date, several correlated distance measurements, raw text) is often not directly usable, or not efficiently usable, by a regression algorithm. Extraction pulls out the useful signal in a more compact or model-ready form before any other feature-engineering step happens.
 
@@ -44,7 +46,9 @@ flowchart TD
 
 ## 2. Feature Transformation
 
-**Meaning** — Plain: changing the mathematical shape of a feature's values (not its range) to make it better suited for modeling. Technical: **feature transformation** applies a mathematical function to a feature to change its distribution shape, most often to reduce skew or to let a linear model capture a curved relationship.
+**Meaning** — Changing the mathematical shape of a feature's values (not its range) to make it better suited for modeling — **feature transformation** applies a mathematical function to a feature to change its distribution shape, most often to reduce skew or to let a linear model capture a curved relationship.
+
+> **Formal definition:** Feature transformation is the application of a mathematical function to a variable to change its distribution shape, commonly to reduce skewness or to model non-linear relationships within a linear framework.
 
 **Why it matters** — [Session 1 Section 2.3](01-introduction.md) noted that transformation is distinct from scaling: scaling only rescales range/spread, while transformation reshapes the distribution itself — needed, for example, to help satisfy the normality-of-residuals assumption ([Session 3 Section 1.4](03-assumptions-and-model-evaluation.md)) or to fix a linearity violation ([Session 3 Section 1.1](03-assumptions-and-model-evaluation.md)).
 
@@ -78,9 +82,13 @@ Feature scaling — bringing numeric features to a comparable range or spread �
 
 **Parent concept.** [Session 1 Section 2.5](01-introduction.md) introduced feature selection generally, as keeping only the features that genuinely help the model. **Feature Selection** here means the systematic algorithms used to make that choice, rather than guesswork. Too many features risk overfitting ([Session 1 Section 1.3](01-introduction.md)) and multicollinearity ([Session 3 Section 1.5](03-assumptions-and-model-evaluation.md)); too few risk underfitting ([Session 1 Section 1.3](01-introduction.md)). The four methods below (4.1–4.4) are different systematic strategies for finding a good balance, most of them built on the significance testing from [Session 2 Section 2.6](02-linear-regression.md) or Adjusted R² from [Session 2 Section 2.5](02-linear-regression.md).
 
+> **Formal definition:** Feature selection is the process of systematically choosing a subset of the available predictor variables that contribute most to a model's predictive performance, without creating any new features.
+
 ### 4.1 Forward Selection
 
-**Meaning** — Plain: start with nothing, and keep adding whichever remaining feature helps the most, one at a time. Technical: **forward selection** begins with an empty model and iteratively adds the single most significant remaining predictor until no further addition improves the model significantly.
+**Meaning** — Start with nothing, and keep adding whichever remaining feature helps the most, one at a time — **forward selection** begins with an empty model and iteratively adds the single most significant remaining predictor until no further addition improves the model significantly.
+
+> **Formal definition:** Forward selection is a stepwise feature selection method that starts with no predictors and iteratively adds the most statistically significant remaining predictor until no further addition significantly improves the model.
 
 **How it works — steps**
 
@@ -97,7 +105,9 @@ Feature scaling — bringing numeric features to a comparable range or spread �
 
 ### 4.2 Backward Elimination
 
-**Meaning** — Plain: start with everything, and keep removing whichever feature helps the least, one at a time. Technical: **backward elimination** begins with all candidate predictors in the model and iteratively removes the least significant one until all remaining predictors are significant.
+**Meaning** — Start with everything, and keep removing whichever feature helps the least, one at a time — **backward elimination** begins with all candidate predictors in the model and iteratively removes the least significant one until all remaining predictors are significant.
+
+> **Formal definition:** Backward elimination is a stepwise feature selection method that starts with all candidate predictors and iteratively removes the least statistically significant predictor until all remaining predictors are significant.
 
 **How it works — steps**
 
@@ -114,7 +124,9 @@ Feature scaling — bringing numeric features to a comparable range or spread �
 
 ### 4.3 Stepwise Selection/Regression
 
-**Meaning** — Plain: a mix of both previous methods — at each step, it can add a helpful feature *or* remove one that has since become unhelpful. Technical: **stepwise selection** performs a forward-selection step, but after each addition, re-checks all currently included features and removes any that have become statistically insignificant.
+**Meaning** — A mix of both previous methods — at each step, it can add a helpful feature *or* remove one that has since become unhelpful. **Stepwise selection** performs a forward-selection step, but after each addition, re-checks all currently included features and removes any that have become statistically insignificant.
+
+> **Formal definition:** Stepwise selection is a feature selection method that combines forward selection and backward elimination, adding significant predictors and removing any that subsequently become insignificant, at each iteration.
 
 **Why it matters** — Pure forward selection (4.1) can never undo an earlier choice: a feature added early might become redundant once a later feature is added (e.g., a newly revealed multicollinearity, [Session 3 Section 1.5](03-assumptions-and-model-evaluation.md)), but forward selection alone has no mechanism to remove it. Stepwise selection fixes exactly this gap.
 
@@ -126,7 +138,9 @@ Feature scaling — bringing numeric features to a comparable range or spread �
 
 ### 4.4 Recursive Feature Elimination (RFE)
 
-**Meaning** — Plain: start with every feature, repeatedly find and remove the least useful one, until only the desired number of features remains. Technical: **Recursive Feature Elimination (RFE)** fits a model on all current features, ranks them by an importance measure (e.g., coefficient magnitude), removes the least important one, and repeats.
+**Meaning** — Start with every feature, repeatedly find and remove the least useful one, until only the desired number of features remains. **Recursive Feature Elimination (RFE)** fits a model on all current features, ranks them by an importance measure (e.g., coefficient magnitude), removes the least important one, and repeats.
+
+> **Formal definition:** Recursive Feature Elimination is a feature selection method that repeatedly fits a model, ranks features by an importance measure, and removes the least important feature until a specified number of features remains.
 
 **How it works — steps**
 

@@ -28,7 +28,9 @@ flowchart TD
 
 ## 1. Bias and Variance (Foundation)
 
-**Meaning** — Plain: every prediction model can be wrong in two different ways — it can be *systematically* off in the same direction (bias), or it can *swing wildly* depending on which training data it happened to see (variance). Technical: **bias** is the error from a model's assumptions being too simple to capture the true pattern; **variance** is the error from a model being too sensitive to the specific training sample it was fit on.
+**Meaning** — Every prediction model can be wrong in two different ways — it can be *systematically* off in the same direction (bias), or it can *swing wildly* depending on which training data it happened to see (variance). **Bias** is the error from a model's assumptions being too simple to capture the true pattern; **variance** is the error from a model being too sensitive to the specific training sample it was fit on.
+
+> **Formal definition:** Bias is the error introduced by approximating a real-world relationship with a simplified model; variance is the error introduced by a model's sensitivity to fluctuations in the training sample.
 
 **Why it matters** — This is the actual mechanism behind the overfitting/underfitting vocabulary previewed in [Session 1 Section 1.3](01-introduction.md): understanding bias and variance explains *why* those two failure modes happen, and why fixing one often makes the other worse — the central tension in model optimization.
 
@@ -59,6 +61,8 @@ flowchart LR
 
 **Meaning** — [Session 1 Section 1.3](01-introduction.md) introduced these as vocabulary: **overfitting** is a model fitting the training data (including its noise) so closely that it performs poorly on new data; **underfitting** is a model too simple to capture the real pattern, performing poorly even on training data. Using Section 1's terms: overfitting is the practical symptom of **high variance** (and typically low bias); underfitting is the practical symptom of **high bias** (and typically low variance).
 
+> **Formal definition:** Overfitting occurs when a model learns the training data, including its noise, so closely that it fails to generalize to new data; underfitting occurs when a model is too simple to capture the underlying pattern, performing poorly even on training data.
+
 **Why it matters** — Recognizing which of the two a model suffers from tells you exactly which direction to adjust it — the opposite fixes are needed for each, so misdiagnosing one as the other makes a model worse, not better.
 
 **How it works — detection** — Compare training error against validation/test error (validation is formalized in Section 3): a large gap (low training error, much higher test error) signals overfitting; both errors being high and similar signals underfitting.
@@ -84,7 +88,9 @@ The central difference: overfitting shows a big gap between training and test er
 
 ## 3. Model Validation
 
-**Meaning** — Plain: a systematic way of checking a model's real-world performance using data it wasn't trained on, so overfitting/underfitting (Section 2) can actually be detected rather than assumed. Technical: **model validation** extends the train-test split ([Session 1 Section 2.6](01-introduction.md)) with more robust procedures such as **k-fold cross-validation**.
+**Meaning** — A systematic way of checking a model's real-world performance using data it wasn't trained on, so overfitting/underfitting (Section 2) can actually be detected rather than assumed. **Model validation** extends the train-test split ([Session 1 Section 2.6](01-introduction.md)) with more robust procedures such as **k-fold cross-validation**.
+
+> **Formal definition:** Model validation is the process of assessing a model's performance on data not used for training, in order to estimate how well it generalizes to unseen data.
 
 **Why it matters** — A single train-test split gives only one estimate of test performance, which can be misleading by chance (an unusually easy or hard test split) — especially risky with a small dataset. Cross-validation averages performance over several different splits for a more reliable estimate, and is also the standard tool used to compare hyperparameter choices (Section 6).
 
@@ -109,7 +115,9 @@ The central difference: overfitting shows a big gap between training and test er
 
 ## 4. Gradient Descent
 
-**Meaning** — Plain: instead of solving directly for the best-fit coefficients in one step (as OLS does), gradient descent starts with a guess and repeatedly nudges it in the direction that reduces error, gradually walking downhill toward the best fit. Technical: **gradient descent** is an iterative optimization algorithm that minimizes a cost function by repeatedly updating parameters in the direction opposite to the cost function's gradient.
+**Meaning** — Instead of solving directly for the best-fit coefficients in one step (as OLS does), gradient descent starts with a guess and repeatedly nudges it in the direction that reduces error, gradually walking downhill toward the best fit. **Gradient descent** is an iterative optimization algorithm that minimizes a cost function by repeatedly updating parameters in the direction opposite to the cost function's gradient.
+
+> **Formal definition:** Gradient descent is an iterative optimization algorithm that minimizes a differentiable cost function by repeatedly updating parameters in the direction of the negative gradient.
 
 **Why it matters** — Ordinary Least Squares' closed-form solution ([Session 2 Section 2.3.1](02-linear-regression.md)) works well for simple/multiple linear regression, but becomes computationally expensive or infeasible for very large datasets, many predictors, or more complex models. Gradient descent scales to these cases and is the general-purpose fitting method used across most of machine learning.
 
@@ -136,9 +144,13 @@ The central difference: overfitting shows a big gap between training and test er
 
 **Parent concept.** Regularization directly targets the **high-variance/overfitting** side of the bias-variance tradeoff (Section 1–2): it adds a penalty term to the cost function that discourages overly large coefficients, deliberately accepting a small increase in bias in exchange for a much larger reduction in variance — lowering total test error whenever the plain model was overfitting. Both variants below add a penalty to the same cost function ($\sum (y_i-\hat y_i)^2$, the quantity OLS minimizes, [Session 2 Section 2.3.1](02-linear-regression.md)), differing only in *what kind* of penalty is added.
 
+> **Formal definition:** Regularization is a technique that adds a penalty term to a model's cost function to discourage overly large coefficients, reducing variance/overfitting at the cost of a small increase in bias.
+
 ### 5.1 Ridge Regression (L2 Regularization)
 
-**Meaning** — Plain: fits the regression line as usual, but also penalizes coefficients for being large, so it shrinks all of them a little, smoothly, toward zero. Technical: **Ridge regression** adds an **L2 penalty** — the sum of squared coefficients — to the OLS cost function.
+**Meaning** — Fits the regression line as usual, but also penalizes coefficients for being large, so it shrinks all of them a little, smoothly, toward zero. **Ridge regression** adds an **L2 penalty** — the sum of squared coefficients — to the OLS cost function.
+
+> **Formal definition:** Ridge regression is a regularized linear regression technique that adds a penalty equal to the sum of squared coefficients (L2 penalty) to the OLS cost function, shrinking coefficients toward zero without eliminating them.
 
 **Formula** — Essential
 **Formula** — $J(b) = \sum_{i=1}^{n}(y_i - \hat y_i)^2 + \lambda\sum_{j=1}^{k} b_j^2$
@@ -152,7 +164,9 @@ The central difference: overfitting shows a big gap between training and test er
 
 ### 5.2 Lasso Regression (L1 Regularization)
 
-**Meaning** — Plain: like Ridge, but its penalty can shrink some coefficients all the way down to exactly zero, effectively dropping those predictors from the model entirely. Technical: **Lasso regression** ("Least Absolute Shrinkage and Selection Operator") adds an **L1 penalty** — the sum of absolute coefficient values — to the OLS cost function.
+**Meaning** — Like Ridge, but its penalty can shrink some coefficients all the way down to exactly zero, effectively dropping those predictors from the model entirely. **Lasso regression** ("Least Absolute Shrinkage and Selection Operator") adds an **L1 penalty** — the sum of absolute coefficient values — to the OLS cost function.
+
+> **Formal definition:** Lasso regression is a regularized linear regression technique that adds a penalty equal to the sum of absolute coefficient values (L1 penalty) to the OLS cost function, capable of shrinking some coefficients to exactly zero and thereby performing feature selection.
 
 **Formula** — Essential
 **Formula** — $J(b) = \sum_{i=1}^{n}(y_i - \hat y_i)^2 + \lambda\sum_{j=1}^{k} |b_j|$
@@ -184,9 +198,13 @@ The central difference: Ridge shrinks every coefficient a little; Lasso can shri
 
 **Parent concept.** [Session 1 Section 1.3](01-introduction.md) defined **hyperparameters** as settings chosen before training, not learned from data — examples introduced across this folder include Ridge/Lasso's $\lambda$ (Section 5), gradient descent's learning rate $\alpha$ (Section 4), and cross-validation's fold count $k$ (Section 3). **Hyperparameter tuning** is the systematic search for the values of these settings that give the best validation performance (Section 3), rather than guessing them manually. The three methods below differ only in *how* they search the space of possible hyperparameter values.
 
+> **Formal definition:** Hyperparameter tuning is the process of systematically searching for the combination of hyperparameter values that optimizes a model's validation performance.
+
 ### 6.1 Grid Search
 
-**Meaning** — Plain: try every possible combination from a fixed list of candidate values for each hyperparameter, and keep the best one. Technical: **grid search** exhaustively evaluates every combination in a predefined hyperparameter grid, scoring each via cross-validation (Section 3).
+**Meaning** — Try every possible combination from a fixed list of candidate values for each hyperparameter, and keep the best one. **Grid search** exhaustively evaluates every combination in a predefined hyperparameter grid, scoring each via cross-validation (Section 3).
+
+> **Formal definition:** Grid search is a hyperparameter tuning method that exhaustively evaluates every combination of values in a predefined hyperparameter grid, using cross-validation to score each combination.
 
 **Example** — For Ridge regression, try $\lambda \in \{0.01, 0.1, 1, 10\}$; run 5-fold cross-validation (Section 3) for each value, compare the average RMSE ([Session 3 Section 3.2](03-assumptions-and-model-evaluation.md)), and select the $\lambda$ with the lowest average RMSE.
 
@@ -196,7 +214,9 @@ The central difference: Ridge shrinks every coefficient a little; Lasso can shri
 
 ### 6.2 Random Search
 
-**Meaning** — Plain: instead of trying every combination, randomly sample a fixed number of combinations from the hyperparameter space and keep the best one found. Technical: **random search** samples a fixed number of random hyperparameter combinations (often from continuous ranges, not just a discrete grid) and evaluates each via cross-validation.
+**Meaning** — Instead of trying every combination, randomly sample a fixed number of combinations from the hyperparameter space and keep the best one found. **Random search** samples a fixed number of random hyperparameter combinations (often from continuous ranges, not just a discrete grid) and evaluates each via cross-validation.
+
+> **Formal definition:** Random search is a hyperparameter tuning method that evaluates a fixed number of randomly sampled hyperparameter combinations, using cross-validation to score each combination.
 
 **Example** — Instead of grid search's fixed list of 4 $\lambda$ values, randomly sample 20 $\lambda$ values from the continuous range $[0.001, 100]$, evaluate each with 5-fold cross-validation, and keep the best of the 20.
 
@@ -206,7 +226,9 @@ The central difference: Ridge shrinks every coefficient a little; Lasso can shri
 
 ### 6.3 Bayesian Optimization
 
-**Meaning** — Plain: a smarter search that learns from earlier trials to decide which hyperparameter values to try next, instead of trying everything (grid) or picking blindly at random (random search). Technical: **Bayesian optimization** builds a probabilistic model from past (hyperparameter value, validation score) pairs to predict which unexplored region of the hyperparameter space is likely to perform best, and focuses new trials there.
+**Meaning** — A smarter search that learns from earlier trials to decide which hyperparameter values to try next, instead of trying everything (grid) or picking blindly at random (random search). **Bayesian optimization** builds a probabilistic model from past (hyperparameter value, validation score) pairs to predict which unexplored region of the hyperparameter space is likely to perform best, and focuses new trials there.
+
+> **Formal definition:** Bayesian optimization is a hyperparameter tuning method that builds a probabilistic model of the objective function from past evaluations to guide the selection of the next hyperparameter combination to try.
 
 **How it works** — After each trial, the probabilistic model is updated with the new (hyperparameter, score) result, and the next hyperparameter value to try is chosen to balance exploring uncertain regions against exploiting regions already known to perform well.
 
