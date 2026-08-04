@@ -29,6 +29,8 @@ flowchart TD
 
 A **use case** is simply a real-world problem matched to one of the ML types (supervised/unsupervised/reinforcement) and solved with a trained model. Seeing real examples makes it easy to recognize whether a new problem is a regression, classification, or clustering task before picking a technique.
 
+> **Formal definition:** A machine learning use case is a real-world problem formulated as a supervised, unsupervised, or reinforcement learning task and solved using a model trained on relevant data.
+
 ### Examples (by ML type)
 
 | Domain         | Use case                                        | ML type                               | Target                          |
@@ -48,6 +50,8 @@ A **use case** is simply a real-world problem matched to one of the ML types (su
 
 Linear Regression is the first real supervised-learning technique in this roadmap. The diagram below is the big picture — keep it in mind while reading the formulas that follow, so each formula has a clear place in the workflow instead of feeling like a standalone equation.
 
+> **Formal definition:** Linear regression is a supervised learning technique that models the relationship between a dependent variable and one or more independent variables by fitting a linear equation to observed data, used to explain that relationship and to predict values of the dependent variable.
+
 ```mermaid
 flowchart LR
     A["1. Check the relationship<br/>(Correlation)"] --> B["2. Fit a line<br/>(OLS)"]
@@ -60,13 +64,20 @@ flowchart LR
 
 Before fitting any line, you first need to check whether two variables even move together. **Covariance** tells you the *direction* they move in (up together, or opposite). **Correlation** rescales that into a fixed $-1$ to $+1$ scale, so it's easy to judge strength at a glance:
 
+> **Formal definition:** Covariance is a measure of the joint variability of two random variables, indicating the direction of their linear association. The Pearson correlation coefficient is a normalized measure of the strength and direction of the linear relationship between two variables, defined as the ratio of their covariance to the product of their standard deviations, and bounded between $-1$ and $+1$.
+
 ```mermaid
 flowchart LR
     A["r = -1<br/>Perfect negative"] --- B["r = 0<br/>No relationship"] --- C["r = +1<br/>Perfect positive"]
 ```
 
-**Formula** — Essential
-$$Cov(X,Y) = \dfrac{\sum(x_i-\bar{x})(y_i-\bar{y})}{n-1} \qquad r = \dfrac{Cov(X,Y)}{\sigma_X \, \sigma_Y}$$
+**Formula (Covariance)** — Essential
+$$Cov(X,Y) = \dfrac{\sum(x_i-\bar{x})(y_i-\bar{y})}{n-1}$$
+
+**Formula (Correlation, r)** — Essential
+$$r = \dfrac{Cov(X,Y)}{\sigma_X \, \sigma_Y}$$
+
+**Where** — $x_i, y_i$: each house's area and price; $\bar{x}, \bar{y}$: their averages; $n$: number of houses; $\sigma_X, \sigma_Y$: standard deviations of $X$ and $Y$ (how spread out each variable is).
 
 **Worked example** — 4 houses, area (100 sq. ft.) $X=[10,15,20,25]$, price (lakh) $Y=[40,55,65,80]$. Working it out gives $Cov(X,Y) \approx 108.3$ and $r \approx 0.99$.
 
@@ -75,6 +86,8 @@ $$Cov(X,Y) = \dfrac{\sum(x_i-\bar{x})(y_i-\bar{y})}{n-1} \qquad r = \dfrac{Cov(X
 ### 2.2 Regression Analysis
 
 Correlation only tells you *how strong* a relationship is — it doesn't give you an equation. **Regression analysis** takes the next step: it fits an actual equation to the data so you can predict new values.
+
+> **Formal definition:** Regression analysis is a set of statistical techniques for estimating the relationship between a dependent variable and one or more independent variables, used both to explain that relationship and to predict the value of the dependent variable.
 
 ```mermaid
 flowchart LR
@@ -86,6 +99,8 @@ There are many kinds of regression (linear, polynomial, logistic); this folder f
 ### 2.3 Simple Linear Regression
 
 **Simple Linear Regression** draws the single best straight line through a scatter of one input against one output, then uses that line to predict:
+
+> **Formal definition:** Simple linear regression is a statistical method that models the relationship between a single independent variable and a continuous dependent variable by fitting a straight-line equation to observed data.
 
 ```mermaid
 flowchart LR
@@ -102,6 +117,8 @@ The line assumes the true relationship is roughly straight, and that the leftove
 
 Infinitely many lines could be drawn through the same scatter plot — OLS picks one precise "best" line: the one where the total *squared* vertical gap between actual points and the line is smallest.
 
+> **Formal definition:** Ordinary Least Squares is an estimation method that determines the regression coefficients by minimizing the sum of squared differences between the observed and predicted values of the dependent variable.
+
 ```mermaid
 flowchart TD
     A[Data points] --> B[Find mean of x and y]
@@ -112,6 +129,8 @@ flowchart TD
 
 **Formula** — Essential — $b_1 = \dfrac{Cov(X,Y)}{Var(X)}$, then $b_0 = \bar{y} - b_1\bar{x}$.
 
+**Where** — $Cov(X,Y)$: covariance from 2.1; $Var(X)$: variance of $X$, i.e. how spread out $X$ is on its own; $\bar{x}, \bar{y}$: means of $X$ and $Y$.
+
 **Example** — Using the same 4-house data as 2.1: $b_1 = 325/125 = 2.6$, $b_0 = 60 - 2.6(17.5) = 14.5$ → fitted line $\hat{y}=14.5+2.6x$.
 
 Squaring the residuals (rather than just adding them) stops positive and negative errors from cancelling out, and punishes big errors more than small ones.
@@ -119,6 +138,8 @@ Squaring the residuals (rather than just adding them) stops positive and negativ
 ### 2.4 Multiple Linear Regression
 
 Real predictions rarely depend on just one feature — house price depends on area *and* rooms *and* age together. **Multiple Linear Regression** is simple linear regression extended to several predictors at once:
+
+> **Formal definition:** Multiple linear regression is an extension of simple linear regression that models the relationship between a dependent variable and two or more independent variables by fitting a linear equation to observed data.
 
 ```mermaid
 flowchart LR
@@ -138,6 +159,8 @@ The coefficients are still fit by the same least-squares idea as 2.3.1 — only 
 
 Once a line is fitted, how good is it? **R-squared ($R^2$)** answers that with a single 0–1 score: the share of the target's total variation that the model actually explains.
 
+> **Formal definition:** The coefficient of determination ($R^2$) is a statistical measure representing the proportion of variance in the dependent variable that is explained by the independent variable(s) in a regression model. Adjusted $R^2$ is a modified version of $R^2$ that adjusts for the number of predictors in the model, increasing only when a new predictor improves the fit by more than would be expected by chance.
+
 ```mermaid
 pie showData
     title R-squared example (SS_tot = 500)
@@ -145,15 +168,21 @@ pie showData
     "Unexplained (residual)" : 20
 ```
 
-**Formula** — Essential — $R^2 = 1 - \dfrac{SS_{res}}{SS_{tot}}$. If $SS_{tot}=500$ and $SS_{res}=100$, $R^2 = 1 - 100/500 = 0.8$ → the model explains 80% of the variation in price.
+**Formula** — Essential — $R^2 = 1 - \dfrac{SS_{res}}{SS_{tot}}$
+
+**Where** — $SS_{res}$: sum of squared residuals, the leftover error the model couldn't explain; $SS_{tot}$: total variation in $Y$ if you ignored the model entirely. If $SS_{tot}=500$ and $SS_{res}=100$, $R^2 = 1 - 100/500 = 0.8$ → the model explains 80% of the variation in price.
 
 **Catch:** plain $R^2$ only ever goes up when you add *any* predictor, even a useless one. **Adjusted R²** fixes this by penalizing extra predictors that don't earn their place:
 
-**Formula** — Essential — $R^2_{adj} = 1 - \dfrac{(1-R^2)(n-1)}{n-k-1}$. With $R^2=0.8$, $n=100$, $k=4$: $R^2_{adj} \approx 0.792$ — slightly lower, since it charges a small penalty for each predictor used. Use Adjusted R² whenever comparing models with a different number of predictors.
+**Formula** — Essential — $R^2_{adj} = 1 - \dfrac{(1-R^2)(n-1)}{n-k-1}$
+
+**Where** — $n$: number of observations; $k$: number of predictors. With $R^2=0.8$, $n=100$, $k=4$: $R^2_{adj} \approx 0.792$ — slightly lower, since it charges a small penalty for each predictor used. Use Adjusted R² whenever comparing models with a different number of predictors.
 
 ### 2.6 Inferences about Slope
 
 A slope like $b_1=2.6$ was computed from just one sample — is it a real effect, or could it just be noise? A **hypothesis test on the slope** answers that:
+
+> **Formal definition:** A hypothesis test for the regression slope evaluates whether the population slope coefficient is significantly different from zero (i.e. tests $H_0: \beta_1=0$ against $H_1: \beta_1 \neq 0$), thereby determining whether a statistically significant linear relationship exists between the independent and dependent variables.
 
 ```mermaid
 flowchart TD
@@ -163,7 +192,9 @@ flowchart TD
     C -- No --> E["Not enough evidence of a relationship"]
 ```
 
-**Formula** — Exam-important — $t = \dfrac{b_1}{SE(b_1)}$. With $b_1=2.6$, $SE(b_1)=0.5$: $t=5.2$ — large and far from 0, so area is a statistically significant predictor of price (typically judged against p < 0.05).
+**Formula** — Exam-important — $t = \dfrac{b_1}{SE(b_1)}$
+
+**Where** — $b_1$: the OLS slope from 2.3.1; $SE(b_1)$: standard error of that slope, i.e. how much it would vary if you re-sampled the data. With $b_1=2.6$, $SE(b_1)=0.5$: $t=5.2$ — large and far from 0, so area is a statistically significant predictor of price (typically judged against p < 0.05).
 
 This completes the linear-regression workflow from the big-picture diagram at the top of Section 2: check the relationship → fit → judge → trust-check → predict. Next, Section 3 applies the same straight-line idea to data that arrives in **time order**.
 
@@ -173,12 +204,16 @@ This completes the linear-regression workflow from the big-picture diagram at th
 
 Instead of predicting a value from *other* features (area, rooms), **Autoregression (AR)** predicts a value from its **own past values** over time — useful when the data is just one series (a price index, temperature, stock price) with no separate predictor features at all.
 
+> **Formal definition:** An autoregressive model of order $p$, denoted AR(p), represents a time series as a linear function of its own $p$ previous values plus a stochastic error term.
+
 ```mermaid
 flowchart LR
     Y1["Y(t-3)"] --> Y2["Y(t-2)"] --> Y3["Y(t-1)"] --> Y4["Y(t) — predicted"]
 ```
 
 **Formula** — Exam-important — $Y_t = c + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \dots + \phi_p Y_{t-p} + \varepsilon_t$ (an AR(p) model), fit with the same least-squares idea as an ordinary regression, just using past values of $Y$ as the "predictors."
+
+**Where** — $Y_t$: value at the current time step; $Y_{t-1},\dots,Y_{t-p}$: the past $p$ values ("lags"); $\phi_1,\dots,\phi_p$: coefficients showing how much each lag influences today's value; $c$: constant/intercept; $\varepsilon_t$: random leftover error.
 
 **Example** — AR(1) for a monthly house price index: $Y_t = 5 + 0.9\,Y_{t-1}$. If last month's index was 200: $\hat{Y}_t = 5+0.9(200) = 185$ — driven mostly by last month's value (coefficient close to 1 = strong persistence).
 

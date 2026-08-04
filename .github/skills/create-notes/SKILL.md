@@ -82,7 +82,8 @@ Before explaining any child concept: define the parent, explain its purpose, exp
 
 For each concept, use `### [Section #] [Concept Name]` and include **only the subsections that add value** — don't apply all of them mechanically (e.g., a simple term may need just a definition + example; a formula needs intuition + derivation + calculation).
 
-- **Meaning** — plain-English explanation for a first-time learner, plus the technically correct definition/terminology. Keep as one combined subsection unless the technical definition genuinely adds information beyond the plain-English version.
+- **Meaning** — blend the plain-English explanation and the technically correct definition/terminology into one or two natural flowing sentences. Never label them literally as "Plain:" / "Technical:" — that split reads as two disconnected explanations of the same thing and distracts more than it helps. State it once, simply, without losing precision.
+- **Formal Definition** — required for every concept that a real exam could ask learners to "define" (i.e. most named concepts, not minor asides) — **this includes parent/umbrella concepts, not just their child subsections.** A parent concept (e.g. `## 2. Linear Regression`) gets its own Formal Definition immediately after its own intro paragraph, before its children are introduced — don't assume the children's definitions cover it. Immediately after Meaning, give the precise textbook/examiner wording as its own short callout: `> **Formal definition:** ...`. Keep it to 1–2 sentences, worded the way a textbook or examiner would state it — not the simplified teaching phrasing used in Meaning. This is written to be usable verbatim as a 2-mark answer. Don't explain or expand on it here; that's what Meaning/Why it matters are for.
 - **Why it matters** — the problem it solves, why it's studied, how it connects to later concepts.
 - **How it works** — mechanism/process, numbered steps if sequential, no skipped reasoning.
 - **Example** — one focused example (see Running Example, below).
@@ -108,7 +109,14 @@ Introduce every important term the first time it's used — plain meaning, techn
 
 Label each as **Essential**, **Exam-important**, or **Additional depth**. Never say "simply" or "obviously" where a step is actually needed. If a formula recurs later, reference its original section instead of re-deriving it.
 
-**Diagrams** — Represent every diagram (hierarchies, workflows, pipelines, input-process-output flows, timelines, decision flows, component relationships) as a **Mermaid diagram** in a fenced ```mermaid block — never plain-text ASCII art or box-drawing characters. Pick the type that fits: `flowchart TD`/`LR`for hierarchies, pipelines, and decision flows;`sequenceDiagram`for interactions between components;`classDiagram`or`erDiagram`for structural relationships;`stateDiagram-v2` for lifecycles/stages. Place each diagram immediately after the concept it illustrates. Don't reproduce it again in the revision section.
+**Formula labeling rules (non-negotiable):**
+
+- If a section introduces more than one named formula (e.g., covariance and correlation, R² and Adjusted R²), give each its own `**Formula (Name)**` heading and its own equation block. Never join two distinct formulas on one line (e.g., with `\qquad` or a comma) — a reader must never be able to mistake one formula for a variant of the other.
+- Every single formula, however short, must be immediately followed by a **Where** line that defines every symbol appearing in it — including symbols that seem obvious ($n$, $c$, $\varepsilon$) or that were defined for a similar formula earlier. A learner should never have to guess or backtrack to find what a symbol means.
+
+**Diagrams** — Represent every diagram (hierarchies, workflows, pipelines, input-process-output flows, timelines, decision flows, component relationships) as a **Mermaid diagram** in a fenced ```mermaid block — never plain-text ASCII art or box-drawing characters. Pick the type that fits: `flowchart TD`/`LR`for hierarchies, pipelines, and decision flows;`sequenceDiagram`for interactions between components;`classDiagram`or`erDiagram`for structural relationships;`stateDiagram-v2`for lifecycles/stages;`pie` for a proportion/breakdown (e.g., variance explained vs unexplained). Place each diagram immediately after the concept it illustrates. Don't reproduce it again in the revision section.
+
+Add a diagram generously, not just for structural hierarchies — a short `flowchart LR` mapping a formula's inputs to its output, a scale/spectrum diagram (e.g., a correlation-strength line from -1 to +1), or a small step-by-step flow for a fitting/testing procedure all count, and are especially valuable right where a concept risks feeling like "just another formula." When a parent section bundles several formula-heavy child concepts (e.g., a multi-step statistical workflow), open the parent section with one small `flowchart LR` showing the overall sequence of steps, so each child formula has a visible place in the bigger picture before the reader meets it in isolation.
 
 **Practical usage** — Fold real-world application into the relevant concept (problem → input → process/concept used → output → why it fits) rather than a separate repetitive section. Two or three meaningful applications for the whole topic is usually enough.
 
@@ -125,11 +133,15 @@ Label each as **Essential**, **Exam-important**, or **Additional depth**. Never 
 - No summary tacked onto every subsection, and no filler or motivational language.
 - Before finalizing, scan for and remove anything already explained elsewhere.
 
+## Keep Cross-References Light in the Teaching Flow
+
+Section-number cross-references (e.g., "Session 1 Section 1.4", "as covered in 2.3.1") are a tool for the exam-prep/practice/revision sections, not decoration for the main teaching narrative. Inside Sections 1, 2, 3... (the actual concept explanations), keep the prose self-contained and mention a prior section only when the reader genuinely needs to go back to follow the current step — not as a habitual citation after every sentence. A learner reading top-to-bottom should rarely feel sent elsewhere; a learner doing exam prep should find every reference they need in the closing sections.
+
 ## Output Sections (after the notes)
 
 ### Examination Preparation
 
-Definitions in this section — **Must remember** and **Model answers** especially — must use the precise, formal textbook/academic wording an examiner expects, **not** the simplified teaching phrasing used earlier in the notes. If the plain-English version differs from the standard formal definition, state the formal one here; you may add the plain-English version in parentheses only as a memory aid.
+Definitions in this section — **Must remember** and **Model answers** especially — must use the precise, formal textbook/academic wording an examiner expects, **not** the simplified teaching phrasing used earlier in the notes. Reuse the per-concept `**Formal Definition**` callouts by reference (e.g., "see the formal definition in Section 2.1") instead of retyping them; only restate one verbatim if the model answer needs to quote it directly.
 
 - **Must understand** — concepts needing real comprehension, referenced by section number.
 - **Must remember** — concise list of formal textbook definitions, technical terms, steps, rules, formulas, and key differences, worded the way a textbook or examiner would state them.
@@ -162,4 +174,4 @@ If the syllabus is large: split the notes into parts with continuous numbering, 
 
 ## Before Finalizing, Verify
 
-Parents precede children; every child sits under the right parent; prerequisites precede dependents; every supplied topic is covered; duplicates are merged; each concept is fully explained exactly once; every diagram is valid Mermaid syntax in a fenced block (no ASCII trees anywhere); math has all necessary steps; exam-prep definitions use formal textbook wording, not the simplified teaching language; exam prep and revision don't duplicate the detailed notes; the result is fit to save as permanent notes.
+Parents precede children; every child sits under the right parent; prerequisites precede dependents; every supplied topic is covered; duplicates are merged; each concept is fully explained exactly once; every named concept — parent/umbrella sections included, not just their children — has its own `**Formal Definition**` callout in addition to its simplified Meaning; every diagram is valid Mermaid syntax in a fenced block (no ASCII trees anywhere); math has all necessary steps; every distinct formula has its own labeled `**Formula (Name)**` block and its own **Where** line defining every symbol; no "Plain:"/"Technical:" style labels remain in Meaning subsections; cross-references inside the teaching narrative are minimal (heavier referencing is reserved for exam prep/practice/revision); exam-prep definitions use formal textbook wording, not the simplified teaching language; exam prep and revision don't duplicate the detailed notes; the result is fit to save as permanent notes.
