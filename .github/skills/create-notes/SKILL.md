@@ -142,7 +142,7 @@ Definitions in this section — **Must remember** and **Model answers** especial
 
 ### Practice Questions
 
-5 basic recall + 5 conceptual + 3 comparison (where applicable) + 3 scenario/application + 2 long-answer. All answerable from the generated notes. No answers unless the learner asks.
+5 basic recall + 5 conceptual + 3 comparison (where applicable) + 3 scenario/application + 2 long-answer. All answerable from the generated notes. No answers unless the learner asks — if they do, add a `**Answer:**` line directly beneath each question (same list item, indented), not a separate answer key section. Keep each answer concise: a direct answer plus a section reference (e.g., "(Section 2.3)"), reusing definitions/formulas already given rather than re-teaching them; for long-answer questions, point to the matching 10-mark model answer in Examination Preparation instead of duplicating it.
 
 ### Quick Revision
 

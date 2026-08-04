@@ -27,11 +27,9 @@ flowchart TD
 
 ## 1. Applications of Machine Learning: Use Cases
 
-**Meaning** — Plain: real situations where Machine Learning (Section 1.1 of [Session 1](01-introduction.md)) is actually put to use. Technical: an **application/use case** is a specific real-world problem mapped onto one of the ML types (supervised/unsupervised/reinforcement, Session 1 Section 1.4) and solved with a trained model.
+A **use case** is simply a real-world problem matched to one of the ML types (supervised/unsupervised/reinforcement) and solved with a trained model. Seeing real examples makes it easy to recognize whether a new problem is a regression, classification, or clustering task before picking a technique.
 
-**Why it matters** — Seeing real use cases makes the abstract lifecycle (Session 1 Section 1.6) concrete, and helps you correctly classify a new problem (regression vs classification vs clustering) before choosing a technique — the same skill practiced in Session 1 Section 1.5.
-
-### Examples (by ML type, using Session 1 Section 1.4's categories)
+### Examples (by ML type)
 
 | Domain         | Use case                                        | ML type                               | Target                          |
 | -------------- | ----------------------------------------------- | ------------------------------------- | ------------------------------- |
@@ -44,164 +42,149 @@ flowchart TD
 
 **Important details** — Use cases are grouped by ML type, not by industry — the same technique (e.g., regression) applies across very different domains (price, temperature, demand) whenever the target is continuous.
 
-**Exam focus** — A common question gives a scenario and asks you to name the ML type and justify it using the target-variable check from Session 1 Section 1.5 — practice this using the table above.
-
 ---
 
 ## 2. Linear Regression
 
-**Parent concept.** Linear Regression is the first concrete supervised-learning technique in this roadmap (the "Regression" branch introduced in Session 1 Section 1.4). Before defining it precisely, you need two foundations: how to measure the relationship between two numeric variables (2.1) and what "regression analysis" means as a general statistical idea (2.2). With those in place, the notes build up from the simplest case, one predictor (2.3, using the fitting method in 2.3.1), to many predictors (2.4), then to judging how good the fitted line is (2.5) and whether its slope is statistically meaningful (2.6).
+Linear Regression is the first real supervised-learning technique in this roadmap. The diagram below is the big picture — keep it in mind while reading the formulas that follow, so each formula has a clear place in the workflow instead of feeling like a standalone equation.
+
+```mermaid
+flowchart LR
+    A["1. Check the relationship<br/>(Correlation)"] --> B["2. Fit a line<br/>(OLS)"]
+    B --> C["3. Judge the fit<br/>(R-squared)"]
+    C --> D["4. Trust-check the slope<br/>(Significance test)"]
+    D --> E["5. Predict"]
+```
 
 ### 2.1 Covariance & Correlation (Foundation)
 
-**Meaning** — Plain: two ways to answer "do these two variables move together?" Technical: **covariance** measures the direction (and rough magnitude) of the joint variation of two variables; **correlation** rescales covariance into a fixed range so it can be compared across variables.
+Before fitting any line, you first need to check whether two variables even move together. **Covariance** tells you the *direction* they move in (up together, or opposite). **Correlation** rescales that into a fixed $-1$ to $+1$ scale, so it's easy to judge strength at a glance:
 
-**Why it matters** — Linear regression only makes sense between variables that actually move together in a straight-line pattern; covariance and correlation are how that "moving together" is measured and quantified before/while fitting a regression line.
+```mermaid
+flowchart LR
+    A["r = -1<br/>Perfect negative"] --- B["r = 0<br/>No relationship"] --- C["r = +1<br/>Perfect positive"]
+```
 
-**Formula (Covariance)** — Essential
-**Formula** — $Cov(X,Y) = \dfrac{\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y})}{n-1}$
-**Where** — $x_i, y_i$: individual data points; $\bar{x}, \bar{y}$: means of $X$ and $Y$; $n$: number of observations.
-**Example** — For 4 houses with area (in 100 sq. ft.) $X = [10, 15, 20, 25]$ and price (in lakh) $Y = [40, 55, 65, 80]$: $\bar{x}=17.5$, $\bar{y}=60$. $Cov(X,Y) = \dfrac{(-7.5)(-20)+(-2.5)(-5)+(2.5)(5)+(7.5)(20)}{3} = \dfrac{150+12.5+12.5+150}{3} = 108.3$.
-**Interpretation** — A positive covariance means area and price tend to increase together; the raw number (108.3) is hard to judge on its own since it depends on the units used — this is exactly why correlation is needed next.
+**Formula** — Essential
+$$Cov(X,Y) = \dfrac{\sum(x_i-\bar{x})(y_i-\bar{y})}{n-1} \qquad r = \dfrac{Cov(X,Y)}{\sigma_X \, \sigma_Y}$$
 
-**Formula (Correlation, Pearson's r)** — Essential
-**Formula** — $r = \dfrac{Cov(X,Y)}{\sigma_X \, \sigma_Y}$
-**Where** — $Cov(X,Y)$: covariance from above; $\sigma_X, \sigma_Y$: standard deviations of $X$ and $Y$; $r$ always lies between $-1$ and $+1$.
-**Example** — Continuing above: $\sum(x_i-\bar{x})^2 = 125$ and $\sum(y_i-\bar{y})^2 = 850$, so $\sigma_X = \sqrt{125/3} \approx 6.46$ and $\sigma_Y = \sqrt{850/3} \approx 16.83$. Then $r = \dfrac{108.3}{6.46 \times 16.83} \approx 0.99$.
-**Interpretation** — $r \approx 0.99$ (very close to $+1$) means a strong positive straight-line relationship — as area increases, price increases almost proportionally; close to $0$ means little to no straight-line relationship; close to $-1$ means a strong negative relationship.
+**Worked example** — 4 houses, area (100 sq. ft.) $X=[10,15,20,25]$, price (lakh) $Y=[40,55,65,80]$. Working it out gives $Cov(X,Y) \approx 108.3$ and $r \approx 0.99$.
 
-**Important details** — $r > 0$: positive relationship; $r < 0$: negative relationship; $|r|$ close to 1: strong relationship; $|r|$ close to 0: weak/no **linear** relationship (a strong *curved* relationship can still give a low $r$). Correlation does not imply causation — a common exam trap.
-
-**Exam focus** — Be ready to compute covariance and correlation from a small dataset, and to state the "correlation ≠ causation" caution.
+**Interpretation** — $r \approx 0.99$, almost $+1$, so as area goes up, price goes up almost proportionally. Remember: a low $r$ only rules out a *straight-line* relationship — a strong curved one can still exist. And correlation is never proof of causation.
 
 ### 2.2 Regression Analysis
 
-**Meaning** — Plain: regression analysis is the general toolbox for drawing the "best-fit line (or curve)" through data so you can predict one variable from another. Technical: **regression analysis** is a set of statistical techniques for estimating the relationship between a dependent variable (label, Session 1 Section 1.3) and one or more independent variables (features), used both to explain that relationship and to predict new values.
+Correlation only tells you *how strong* a relationship is — it doesn't give you an equation. **Regression analysis** takes the next step: it fits an actual equation to the data so you can predict new values.
 
-**Why it matters** — It formalizes the intuition built by correlation (2.1) — correlation only says *how strong* a straight-line relationship is, while regression analysis actually builds the *equation* of that line so it can be used for prediction.
+```mermaid
+flowchart LR
+    D[Historical data] --> S[Assume a line/plane shape] --> F[Estimate coefficients] --> P[Predict new values]
+```
 
-#### How it works — general idea
-
-1. Assume a mathematical form for the relationship (for linear regression, a straight line/plane).
-2. Use historical data to estimate the equation's coefficients (Section 2.3.1's Ordinary Least Squares is one such estimation method).
-3. Use the fitted equation to predict the target for new, unseen inputs.
-
-**Important details** — Regression analysis is a family with many members (linear, polynomial, logistic, etc.); this session and the rest of this folder focus specifically on **linear** regression, where the assumed relationship is a straight line (one predictor, 2.3) or a flat plane/hyperplane (multiple predictors, 2.4).
-
-**Exam focus** — Know the one-line definition and be able to state that regression predicts a continuous target, distinguishing it from classification (Session 1 Section 1.4).
+There are many kinds of regression (linear, polynomial, logistic); this folder focuses on **linear** regression, where the assumed shape is a straight line (2.3) or a flat plane when there are several predictors (2.4).
 
 ### 2.3 Simple Linear Regression
 
-**Meaning** — Plain: drawing the single best straight line through a scatter plot of one input (feature) against one output (label), then using that line to predict. Technical: **Simple Linear Regression** models a continuous target $Y$ as a straight-line function of exactly one predictor $X$.
+**Simple Linear Regression** draws the single best straight line through a scatter of one input against one output, then uses that line to predict:
 
-**Why it matters** — It is the simplest possible case of the general regression idea (2.2), so its formula and fitting method are the foundation the rest of this folder (multiple regression, polynomial regression, regularization) all extend.
+```mermaid
+flowchart LR
+    X["Input: Area (x)"] --> M["ŷ = b0 + b1·x"] --> Y["Predicted price (ŷ)"]
+```
 
-**Formula** — Essential
-**Formula** — $\hat{y} = b_0 + b_1 x$
-**Where** — $\hat{y}$: predicted value of the target; $x$: value of the single predictor; $b_0$: intercept (predicted $\hat{y}$ when $x=0$); $b_1$: slope (how much $\hat{y}$ changes for a one-unit increase in $x$).
-**Example** — Predicting house price ($\hat{y}$, in lakh) from area ($x$, in 100 sq. ft.) using a fitted equation $\hat{y} = 5 + 3x$: for a house with $x=20$ (2000 sq. ft.), $\hat{y} = 5 + 3(20) = 65$ lakh.
-**Interpretation** — $b_1=3$ means every extra 100 sq. ft. of area is associated with about ₹3 lakh more in predicted price; $b_0=5$ is the baseline predicted price at (a theoretical) zero area — how $b_0$ and $b_1$ are actually calculated from data is covered next in Section 2.3.1.
+**Formula** — Essential — $\hat{y} = b_0 + b_1 x$, where $b_0$ is the intercept (predicted value at $x=0$) and $b_1$ is the slope (change in $\hat{y}$ per unit increase in $x$).
 
-**Important details** — Simple linear regression assumes the true relationship is (approximately) a straight line, and that leftover differences between actual and predicted values (called **residuals**, $e_i = y_i - \hat{y}_i$) are small and patternless — a fuller treatment of these assumptions is in this folder's dedicated notes on regression assumptions (see this folder's topic list).
+**Example** — With a fitted line $\hat{y}=5+3x$, a house with area $x=20$ gets $\hat{y}=5+3(20)=65$ lakh. So $b_1=3$: every extra 100 sq. ft. adds about ₹3 lakh to the predicted price.
 
-**Exam focus** — Know the formula and what each symbol means; be ready to compute $\hat{y}$ given $b_0$, $b_1$, and $x$.
+The line assumes the true relationship is roughly straight, and that the leftover gaps between actual and predicted values (**residuals**, $e_i=y_i-\hat{y}_i$) are small and show no pattern.
 
-#### 2.3.1 Ordinary Least Squares Method
+#### 2.3.1 Ordinary Least Squares (OLS)
 
-**Meaning** — Plain: the standard way to pick the "best" line — the one where the total squared vertical distance between the actual points and the line is as small as possible. Technical: **Ordinary Least Squares (OLS)** is an estimation method that chooses $b_0, b_1$ to minimize the **sum of squared residuals**, $\sum_i (y_i - \hat{y}_i)^2$.
+Infinitely many lines could be drawn through the same scatter plot — OLS picks one precise "best" line: the one where the total *squared* vertical gap between actual points and the line is smallest.
 
-**Why it matters** — Without a defined "best," infinitely many lines could be drawn through the same scatter plot; OLS gives one precise, mathematically justified answer, and is the default fitting method used across simple and multiple linear regression.
+```mermaid
+flowchart TD
+    A[Data points] --> B[Find mean of x and y]
+    B --> C["Slope b1 = Cov(X,Y) / Var(X)"]
+    C --> D["Intercept b0 = mean(y) − b1·mean(x)"]
+    D --> E[Fitted line ŷ = b0 + b1·x]
+```
 
-**Formula (OLS slope and intercept)** — Essential
-**Formula** — $b_1 = \dfrac{\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y})}{\sum_{i=1}^{n}(x_i-\bar{x})^2} = \dfrac{Cov(X,Y)}{Var(X)}$, then $b_0 = \bar{y} - b_1\bar{x}$
-**Where** — $Cov(X,Y)$: covariance from Section 2.1; $Var(X)$: variance of $X$ (covariance of $X$ with itself); $\bar{x}, \bar{y}$: means of $X$ and $Y$.
-**Example** — Reusing Section 2.1's 4-house data ($\bar{x}=17.5$, $\bar{y}=60$, numerator of covariance sum $=325$): $\sum(x_i-\bar{x})^2 = (-7.5)^2+(-2.5)^2+(2.5)^2+(7.5)^2 = 56.25+6.25+6.25+56.25=125$. So $b_1 = 325/125 = 2.6$, and $b_0 = 60 - 2.6(17.5) = 60 - 45.5 = 14.5$.
-**Interpretation** — The OLS-fitted line for this tiny dataset is $\hat{y} = 14.5 + 2.6x$ — every extra 100 sq. ft. of area is associated with about ₹2.6 lakh more in price, computed directly from the data rather than assumed.
+**Formula** — Essential — $b_1 = \dfrac{Cov(X,Y)}{Var(X)}$, then $b_0 = \bar{y} - b_1\bar{x}$.
 
-**Important details** — "Least squares" specifically means squaring the residuals before summing — this makes both positive and negative residuals count as positive error, and penalizes large errors more heavily than small ones. OLS is the estimation method; Section 2.5's R-squared is how you judge the quality of the resulting fit.
+**Example** — Using the same 4-house data as 2.1: $b_1 = 325/125 = 2.6$, $b_0 = 60 - 2.6(17.5) = 14.5$ → fitted line $\hat{y}=14.5+2.6x$.
 
-**Exam focus** — Be ready to derive/compute $b_1$ and $b_0$ from small $(x,y)$ data, exactly as in the worked example; know that OLS minimizes the sum of squared residuals.
+Squaring the residuals (rather than just adding them) stops positive and negative errors from cancelling out, and punishes big errors more than small ones.
 
 ### 2.4 Multiple Linear Regression
 
-**Meaning** — Plain: the same idea as simple linear regression, but predicting from several features at once instead of just one. Technical: **Multiple Linear Regression** models a continuous target $Y$ as a linear function of two or more predictors $X_1, X_2, \dots, X_k$.
+Real predictions rarely depend on just one feature — house price depends on area *and* rooms *and* age together. **Multiple Linear Regression** is simple linear regression extended to several predictors at once:
 
-**Why it matters** — Real predictions rarely depend on just one feature — house price realistically depends on area *and* rooms *and* locality *and* age together; multiple regression lets all of them contribute simultaneously.
+```mermaid
+flowchart LR
+    X1[Area] --> M[Model]
+    X2[Rooms] --> M
+    X3[Age] --> M
+    M --> Y[Predicted price]
+```
 
-**Formula** — Essential
-**Formula** — $\hat{y} = b_0 + b_1x_1 + b_2x_2 + \dots + b_kx_k$
-**Where** — $x_1,\dots,x_k$: the $k$ predictors (e.g., area, rooms, age, locality); $b_1,\dots,b_k$: each predictor's own slope, showing its effect on $\hat{y}$ **holding the other predictors constant**; $b_0$: intercept.
-**Example** — Extending the running example: $\hat{y} = 10 + 2.6x_1 + 4x_2 - 0.5x_3$ where $x_1$=area (100 sq. ft.), $x_2$=number of rooms, $x_3$=age of house (years). For a house with area 20 (2000 sq. ft.), 3 rooms, age 5 years: $\hat{y} = 10 + 2.6(20) + 4(3) - 0.5(5) = 10+52+12-2.5 = 71.5$ lakh.
-**Interpretation** — Each coefficient is read "holding the others fixed" — e.g., $b_3=-0.5$ means, for two houses with the same area and rooms, each extra year of age is associated with about ₹0.5 lakh less predicted price.
+**Formula** — Essential — $\hat{y} = b_0 + b_1x_1 + b_2x_2 + \dots + b_kx_k$, one slope per predictor, each read "holding the other predictors constant."
 
-**Important details** — The coefficients $b_0,\dots,b_k$ are still fit using the same Ordinary Least Squares principle from Section 2.3.1 (minimizing summed squared residuals) — only the formula is extended to matrix form (commonly written $\boldsymbol{\beta} = (X^{T}X)^{-1}X^{T}y$) rather than the single-predictor formula; this matrix form is *additional depth* and not needed to understand the concept, only to compute it efficiently in code.
+**Example** — $\hat{y} = 10 + 2.6x_1 + 4x_2 - 0.5x_3$ (area, rooms, age). For area 20, 3 rooms, age 5: $\hat{y} = 10+52+12-2.5 = 71.5$ lakh. Here $b_3=-0.5$ means each extra year of age costs about ₹0.5 lakh, *for houses with the same area and rooms*.
 
-**Exam focus** — Know the general formula, how to interpret one coefficient "holding others constant," and that it is fit by the same least-squares principle as simple linear regression (2.3.1) — don't re-derive OLS here.
+The coefficients are still fit by the same least-squares idea as 2.3.1 — only the computation extends to matrix form, which is an implementation detail, not a new concept.
 
 ### 2.5 Measure of Variation: R-squared & Adjusted R-Squared
 
-**Meaning** — Plain: a score (0 to 1) telling you how much of the up-and-down pattern in the target your regression line actually explains. Technical: **R-squared ($R^2$)**, the **coefficient of determination**, is the proportion of the total variation in $Y$ that is explained by the fitted regression model.
+Once a line is fitted, how good is it? **R-squared ($R^2$)** answers that with a single 0–1 score: the share of the target's total variation that the model actually explains.
 
-**Why it matters** — After fitting a line with OLS (2.3.1), you need a number to judge *how good* that fit actually is — R² is the standard way to quantify this.
+```mermaid
+pie showData
+    title R-squared example (SS_tot = 500)
+    "Explained by model" : 80
+    "Unexplained (residual)" : 20
+```
 
-**Formula (R-squared)** — Essential
-**Formula** — $R^2 = 1 - \dfrac{SS_{res}}{SS_{tot}}$, where $SS_{res} = \sum_i (y_i-\hat{y}_i)^2$ and $SS_{tot} = \sum_i (y_i-\bar{y})^2$
-**Where** — $SS_{res}$: sum of squared residuals (unexplained variation, the same quantity OLS minimizes in 2.3.1); $SS_{tot}$: total variation of $Y$ around its own mean, ignoring the model entirely.
-**Example** — If $SS_{tot} = 500$ and the fitted model leaves $SS_{res} = 100$: $R^2 = 1 - 100/500 = 0.8$.
-**Interpretation** — 80% of the variation in house price is explained by the model's predictors; the remaining 20% is unexplained (noise or missing predictors).
+**Formula** — Essential — $R^2 = 1 - \dfrac{SS_{res}}{SS_{tot}}$. If $SS_{tot}=500$ and $SS_{res}=100$, $R^2 = 1 - 100/500 = 0.8$ → the model explains 80% of the variation in price.
 
-**Formula (Adjusted R-squared)** — Essential
-**Formula** — $R^2_{adj} = 1 - \dfrac{(1-R^2)(n-1)}{n-k-1}$
-**Where** — $n$: number of observations; $k$: number of predictors; $R^2$: from the formula above.
-**Example** — With $R^2=0.8$, $n=100$ houses, $k=4$ predictors: $R^2_{adj} = 1 - \dfrac{(0.2)(99)}{95} = 1 - 0.208 = 0.792$.
-**Interpretation** — Adjusted R² (0.792) is slightly lower than plain R² (0.8) — it penalizes the model a little for using 4 predictors, so it only rewards a predictor if it genuinely improves the fit.
+**Catch:** plain $R^2$ only ever goes up when you add *any* predictor, even a useless one. **Adjusted R²** fixes this by penalizing extra predictors that don't earn their place:
 
-**Important details** — Plain R² **always increases (or stays the same)** when you add any extra predictor, even a useless one — this makes it unsafe for comparing models with a different number of predictors (relevant once Section 2.4's multiple regression is used). Adjusted R² corrects for this by penalizing extra predictors that don't earn their place, making it the safer metric when comparing multiple-regression models of different sizes.
-
-**Exam focus** — Be ready to compute both R² and adjusted R² from given numbers, and to explain *why* adjusted R² is preferred over plain R² when comparing multiple-regression models (2.4) with different numbers of predictors.
+**Formula** — Essential — $R^2_{adj} = 1 - \dfrac{(1-R^2)(n-1)}{n-k-1}$. With $R^2=0.8$, $n=100$, $k=4$: $R^2_{adj} \approx 0.792$ — slightly lower, since it charges a small penalty for each predictor used. Use Adjusted R² whenever comparing models with a different number of predictors.
 
 ### 2.6 Inferences about Slope
 
-**Meaning** — Plain: checking whether the slope you calculated (2.3.1) is a real effect or could just be random noise from this particular sample. Technical: **inference about the slope** is a hypothesis test on the regression coefficient $b_1$, checking whether the true population slope $\beta_1$ is significantly different from zero.
+A slope like $b_1=2.6$ was computed from just one sample — is it a real effect, or could it just be noise? A **hypothesis test on the slope** answers that:
 
-**Why it matters** — A slope like $b_1=2.6$ (Section 2.3.1) is only computed from one sample of data; inference tells you whether that number is statistically trustworthy or could easily have been zero (no real relationship) just by chance.
+```mermaid
+flowchart TD
+    A["Assume: no real relationship (β1 = 0)"] --> B["Compute t = b1 / SE(b1)"]
+    B --> C{"Is |t| large / p-value small?"}
+    C -- Yes --> D["Reject assumption — relationship is real"]
+    C -- No --> E["Not enough evidence of a relationship"]
+```
 
-#### How it works — steps
+**Formula** — Exam-important — $t = \dfrac{b_1}{SE(b_1)}$. With $b_1=2.6$, $SE(b_1)=0.5$: $t=5.2$ — large and far from 0, so area is a statistically significant predictor of price (typically judged against p < 0.05).
 
-1. State the hypotheses: $H_0: \beta_1 = 0$ (no real linear relationship) vs $H_1: \beta_1 \neq 0$ (a real relationship exists).
-2. Compute the standard error of the slope, $SE(b_1)$ (an estimate of how much $b_1$ would vary across repeated samples).
-3. Compute a **t-statistic** for the slope.
-4. Compare the t-statistic to a critical value (or check its p-value) to decide whether to reject $H_0$.
-
-**Formula** — Exam-important
-**Formula** — $t = \dfrac{b_1 - 0}{SE(b_1)}$
-**Where** — $b_1$: the OLS-estimated slope from Section 2.3.1; $SE(b_1)$: standard error of the slope estimate; $t$: test statistic, compared against a t-distribution with $n-2$ degrees of freedom (simple regression) to get a p-value.
-**Example** — If $b_1 = 2.6$ and $SE(b_1) = 0.5$: $t = 2.6/0.5 = 5.2$ — a large t-value, far from 0.
-**Interpretation** — A large $|t|$ (and correspondingly small p-value, typically compared against 0.05) means it is very unlikely the true slope is actually zero — so area is judged a statistically significant predictor of price; a small $|t|$ would mean the observed slope could plausibly be due to chance alone.
-
-**Important details** — Rejecting $H_0$ (small p-value, e.g., < 0.05) means the predictor is a statistically significant contributor to the model; failing to reject $H_0$ means there isn't enough evidence that this predictor genuinely affects the target — it might be worth dropping in feature selection (Session 1 Section 2.5).
-
-**Exam focus** — Know the hypotheses ($H_0: \beta_1=0$), the t-statistic formula, and how to interpret a given t-value/p-value in terms of statistical significance.
-
-**Connection** — Sections 2.1–2.6 together take the running house-price example from "do area and price even move together?" (2.1) all the way to "here is the fitted equation (2.3/2.4), how good it is (2.5), and whether we can trust its slope (2.6)" — the complete linear regression workflow. Section 3 next extends the same straight-line idea to data that arrives in **time order**.
+This completes the linear-regression workflow from the big-picture diagram at the top of Section 2: check the relationship → fit → judge → trust-check → predict. Next, Section 3 applies the same straight-line idea to data that arrives in **time order**.
 
 ---
 
 ## 3. Linear Regression with Time Series Data: Autoregression
 
-**Meaning** — Plain: instead of predicting a value from *other* features (like area, rooms), predicting a value from its **own past values** over time. Technical: **Autoregression (AR)** is a linear regression model where the predictors are earlier (lagged) values of the same time-ordered variable, rather than separate features.
+Instead of predicting a value from *other* features (area, rooms), **Autoregression (AR)** predicts a value from its **own past values** over time — useful when the data is just one series (a price index, temperature, stock price) with no separate predictor features at all.
 
-**Why it matters** — Some data (monthly price index, daily temperature, stock prices) doesn't come with separate predictor features at all — the most useful information for predicting tomorrow's value is often simply what happened on recent past days; autoregression applies the same linear-regression machinery (2.2–2.3.1) to this self-referencing case.
+```mermaid
+flowchart LR
+    Y1["Y(t-3)"] --> Y2["Y(t-2)"] --> Y3["Y(t-1)"] --> Y4["Y(t) — predicted"]
+```
 
-**Formula** — Exam-important
-**Formula** — $Y_t = c + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \dots + \phi_p Y_{t-p} + \varepsilon_t$ (an AR(p) model)
-**Where** — $Y_t$: value at current time $t$; $Y_{t-1}, \dots, Y_{t-p}$: values at the previous $p$ time steps (the "lags"); $\phi_1,\dots,\phi_p$: coefficients (found via the same least-squares idea as Section 2.3.1, applied to lagged values instead of separate features); $c$: constant/intercept; $\varepsilon_t$: random error at time $t$.
-**Example** — An AR(1) model for the monthly house price index: $Y_t = 5 + 0.9\,Y_{t-1}$. If last month's index was $Y_{t-1}=200$: $\hat{Y}_t = 5 + 0.9(200) = 5 + 180 = 185$.
-**Interpretation** — The predicted index for this month is 185, driven mostly by last month's value (coefficient 0.9, close to 1, meaning strong persistence from one month to the next) plus a small constant drift of 5.
+**Formula** — Exam-important — $Y_t = c + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \dots + \phi_p Y_{t-p} + \varepsilon_t$ (an AR(p) model), fit with the same least-squares idea as an ordinary regression, just using past values of $Y$ as the "predictors."
 
-**Important details** — The number $p$ (how many past values/lags to use) is a hyperparameter (Session 1 Section 1.3), chosen using the data itself (e.g., by checking correlation between $Y_t$ and $Y_{t-k}$ for various lags $k$ — the same correlation idea from Section 2.1, now applied across time rather than across two different variables). Autoregression assumes the series is **stationary** (its statistical properties like mean and variance don't change over time) — a non-stationary series (e.g., one with a strong trend) usually needs differencing before an AR model is fit.
+**Example** — AR(1) for a monthly house price index: $Y_t = 5 + 0.9\,Y_{t-1}$. If last month's index was 200: $\hat{Y}_t = 5+0.9(200) = 185$ — driven mostly by last month's value (coefficient close to 1 = strong persistence).
 
-**Exam focus** — Know the AR(p) formula, that it regresses a variable on its own lagged values, and the stationarity assumption — a frequent conceptual question is "how does autoregression differ from ordinary multiple linear regression (2.4)?": the predictors are the series' own past values instead of separate, independently measured features.
+**Important details** — $p$ (how many past values to use) is chosen from the data, e.g. by checking correlation between $Y_t$ and $Y_{t-k}$ across lags. AR also assumes the series is **stationary** (mean/variance don't drift over time) — a trending series usually needs differencing first.
+
+**Exam focus** — Know the AR(p) formula and the stationarity assumption. A common question: *how does autoregression differ from multiple regression?* — the predictors are the series' own past values, not separate features.
 
 ---
 
