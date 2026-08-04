@@ -17,6 +17,7 @@ flowchart TD
     P1 --> C13[1.3 Homoscedasticity]
     P1 --> C14[1.4 Normality of Residuals]
     P1 --> C15[1.5 No Multicollinearity]
+    P1 --> C16[1.6 Additivity]
     P2 --> C21[2.1 Testing Linearity - Residual vs Fitted Plot]
     P2 --> C22[2.2 Testing Independence - Durbin-Watson Test]
     P2 --> C23[2.3 Testing Homoscedasticity - Breusch-Pagan Test]
@@ -27,6 +28,7 @@ flowchart TD
     C13 -.matches.-> C23
     C14 -.matches.-> C24
     C15 -.matches.-> C25
+    C16 -.fixed by.-> P5
     P3 --> C31[3.1 Mean Absolute Error - MAE]
     P3 --> C32[3.2 MSE & RMSE]
     P3 --> C33[3.3 R-Squared & Adjusted R-Squared - recap]
@@ -36,15 +38,17 @@ flowchart TD
 
 **Reordering note:** The learner's five topics are kept in their original order, but grouped so each "test" in Section 2 lines up one-to-one, in the same order, with the assumption it checks in Section 1 (1.1↔2.1, 1.2↔2.2, etc.) — this makes each test easier to connect to *why* it exists. **R-Squared & Adjusted R-Squared** (3.3) is included as required by the "Model evaluation Metrics" topic, but only recapped by reference to [Session 2 Section 2.5](02-linear-regression.md) — where it was fully derived — instead of re-explained, per the anti-repetition rule. No topic was dropped, merged, or added as a new prerequisite; every supplied item appears exactly once below.
 
+**GA-1 update (Aug 2026):** A sixth assumption, **Additivity** (1.6), has been added to bring Section 1 up to the standard six assumptions of linear regression expected for the GA-1 assessment. It deliberately has no matching numbered test in Section 2 — its violation is exactly what the pre-existing **Interaction Effect** topic (Section 5) diagnoses and fixes, so the dotted-line mapping in the Concept Hierarchy points 1.6 directly to Section 5 instead.
+
 **Running example used throughout:** continuing the **house price prediction** example from [Session 1](01-introduction.md) and [Session 2](02-linear-regression.md) — predicting a house's price ($\hat y$) from its area, number of rooms, age, and a newly introduced categorical feature, **locality** (Downtown / Suburb / Rural), used in Sections 4 and 5.
 
 ---
 
 ## 1. Assumptions of Linear Regression
 
-**Parent concept.** Ordinary Least Squares ([Session 2 Section 2.3.1](02-linear-regression.md)) will always produce *some* fitted line, no matter what the data looks like. But that line's coefficients are only trustworthy — unbiased, and valid for the slope-significance test in [Session 2 Section 2.6](02-linear-regression.md) — if the data and its residuals ($e_i = y_i - \hat y_i$) satisfy a set of conditions. These conditions are the **assumptions of linear regression**: the relationship is actually a straight line (1.1), residuals don't depend on each other (1.2), residuals spread out evenly (1.3), residuals follow a bell curve (1.4), and (for multiple regression) predictors aren't too similar to each other (1.5).
+**Parent concept.** Ordinary Least Squares ([Session 2 Section 2.3.1](02-linear-regression.md)) will always produce *some* fitted line, no matter what the data looks like. But that line's coefficients are only trustworthy — unbiased, and valid for the slope-significance test in [Session 2 Section 2.6](02-linear-regression.md) — if the data and its residuals ($e_i = y_i - \hat y_i$) satisfy a set of conditions. These conditions are the **assumptions of linear regression**: the relationship is actually a straight line (1.1), residuals don't depend on each other (1.2), residuals spread out evenly (1.3), residuals follow a bell curve (1.4), (for multiple regression) predictors aren't too similar to each other (1.5), and each predictor's effect on the target is separate from the others unless explicitly modeled otherwise (1.6).
 
-> **Formal definition:** The assumptions of linear regression are the set of conditions — linearity, independence of errors, homoscedasticity, normality of residuals, and (for multiple predictors) no multicollinearity — that must hold for Ordinary Least Squares coefficient estimates and their significance tests to be valid.
+> **Formal definition:** The assumptions of linear regression are the set of conditions — linearity, independence of errors, homoscedasticity, normality of residuals, (for multiple predictors) no multicollinearity, and additivity — that must hold for Ordinary Least Squares coefficient estimates and their significance tests to be valid.
 
 ### 1.1 Linearity
 
@@ -130,7 +134,21 @@ flowchart TD
 
 **Exam focus** — Know that this assumption applies only to multiple regression, unlike 1.1–1.4 which apply to simple regression too.
 
-**Connection** — These five conditions define what "valid" means for a fitted regression line. Section 2 next gives one concrete, checkable test for each assumption, in the same order.
+### 1.6 Additivity
+
+**Meaning** — The plain regression equation ([Section 4.1](03-assumptions-and-model-evaluation.md)) assumes each predictor's effect on the target is separate and simply adds up — one predictor's slope does not change depending on another predictor's value, unless an interaction term explicitly says otherwise. **Additivity** requires $E[Y|X_1,X_2] = b_0+b_1X_1+b_2X_2$, with no product term needed.
+
+> **Formal definition:** The additivity assumption states that the effect of each independent variable on the dependent variable is independent of the values of the other independent variables, i.e. their combined effect on the target is simply the sum of their individual effects.
+
+**Why it matters** — If violated, one predictor's real effect genuinely changes depending on another predictor's level (e.g., area matters more to price in the Suburb than Downtown), and a plain additive model will systematically mis-predict for at least one group, no matter how well its overall fit looks.
+
+**Example** — As shown in Section 5, area's effect on price is $b_1=3$ per unit in Downtown but $b_1+b_3=4.5$ per unit in Suburb — a plain additive model forces one shared slope and cannot represent this difference.
+
+**Important details** — Unlike 1.1–1.5, this assumption is not checked with a dedicated diagnostic plot or statistic in Section 2. Instead, it is fixed directly by adding an interaction term (Section 5), whose own coefficient significance (tested the same way as any slope, [Session 2 Section 2.6](02-linear-regression.md)) tells you whether additivity was actually violated.
+
+**Exam focus** — Know that the fix for violated additivity is an interaction term (Section 5), not one of the four numbered tests in Section 2.
+
+**Connection** — These six conditions define what "valid" means for a fitted regression line. Section 2 next gives one concrete, checkable test for each of the first five assumptions, in the same order; additivity (1.6) is instead checked and fixed directly in Section 5.
 
 ---
 
@@ -210,7 +228,7 @@ flowchart TD
 
 **Exam focus** — Be ready to compute VIF from a given $R_j^2$, and to state the common cutoff ($VIF > 5$ or $10$).
 
-**Connection** — With the model now checked for validity (Sections 1–2), the next question is different: not "is this model's fit trustworthy?" but "how good are its actual predictions?" — the subject of Section 3.
+**Connection** — With the model now checked for validity (Sections 1–2) — Additivity (1.6) aside, which is checked via the interaction term itself in Section 5 — the next question is different: not "is this model's fit trustworthy?" but "how good are its actual predictions?" — the subject of Section 3.
 
 ---
 
@@ -318,7 +336,7 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 > **Formal definition:** An interaction effect exists when the effect of one independent variable on the dependent variable depends on the level of another independent variable, and is modeled by including the product of the two variables as an additional predictor.
 
-**Why it matters** — The plain additive model in 4.1 assumes area's effect on price ($b_1$) is identical across all localities. If, in reality, larger houses command an extra premium specifically in the Suburb, an additive model cannot capture that — only an interaction term can.
+**Why it matters** — The plain additive model in 4.1 assumes area's effect on price ($b_1$) is identical across all localities. If, in reality, larger houses command an extra premium specifically in the Suburb, an additive model cannot capture that — only an interaction term can. This is precisely the case where the **additivity assumption (Section 1.6)** fails; the interaction term's coefficient is both the diagnostic (tested for significance the same way as any slope, [Session 2 Section 2.6](02-linear-regression.md)) and the fix.
 
 **Formula** — Exam-important
 **Formula** — $\hat y = b_0 + b_1\,x_{area} + b_2\,D_{Suburb} + b_3\,(x_{area} \times D_{Suburb})$
@@ -338,13 +356,14 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 - Why each assumption (Section 1) is needed for OLS coefficients/tests to be trustworthy, not just "for the fit to exist."
 - How each test in Section 2 maps to and checks its corresponding assumption in Section 1.
+- Why additivity (1.6) has no separate numbered test in Section 2 — its violation is diagnosed and fixed by the interaction term itself (Section 5).
 - Why RMSE reacts more strongly to outliers than MAE, and how both differ from R²/Adjusted R² (Section 3).
 - Why exactly $k-1$ dummy variables (not $k$) must be used for a $k$-level category (Section 4).
 - How an interaction term changes the interpretation of a predictor's slope across groups (Section 5).
 
 ### Must remember
 
-- Five assumptions: linearity, independence of errors, homoscedasticity, normality of residuals, no multicollinearity (1.1–1.5).
+- Six assumptions: linearity, independence of errors, homoscedasticity, normality of residuals, no multicollinearity, additivity (1.1–1.6).
 - Matching tests: residual-vs-fitted plot, Durbin-Watson, Breusch-Pagan, Q-Q plot/Shapiro-Wilk, VIF (2.1–2.5).
 - Durbin-Watson benchmark: $DW \approx 2$ is ideal (2.2).
 - VIF formula: $VIF_j = 1/(1-R_j^2)$; common cutoff $VIF > 5$ (2.5).
@@ -354,9 +373,9 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 ### Common question patterns
 
-- *2-mark:* Define linearity / homoscedasticity / multicollinearity / dummy variable trap / interaction effect.
+- *2-mark:* Define linearity / homoscedasticity / multicollinearity / additivity / dummy variable trap / interaction effect.
 - *5-mark:* Compare MAE and RMSE; explain the dummy variable trap and its fix; explain how the Durbin-Watson test checks independence of errors.
-- *10-mark:* Explain all assumptions of linear regression along with the test used to check each one; explain how categorical variables and interaction terms are incorporated into a multiple regression model, with a worked example.
+- *10-mark:* Explain all six assumptions of linear regression along with the test (or fix) used to check each one; explain how categorical variables and interaction terms are incorporated into a multiple regression model, with a worked example.
 
 ### Answer-writing guidance
 
@@ -370,14 +389,14 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 *5-mark:* "MAE (Mean Absolute Error) is the average of the absolute differences between actual and predicted values, treating every error equally regardless of size. RMSE (Root Mean Squared Error) instead squares each error before averaging and taking the square root, which means large mistakes are penalized far more heavily than small ones — the same principle behind why Ordinary Least Squares itself minimizes squared, not absolute, residuals. As a result, RMSE is always greater than or equal to MAE, and the gap between them widens whenever the model has even a few large prediction errors (outliers), making RMSE more sensitive to such outliers than MAE. Both are reported in the same unit as the target variable, unlike R-squared, which is a unit-free proportion of variance explained. In practice, MAE gives an easy-to-explain 'typical' error size, while RMSE better highlights whether a model is making some very large mistakes."
 
-*10-mark:* "Introduction: A fitted regression line is only as reliable as the assumptions behind it — violating them undermines the validity of its coefficients and significance tests. Definition: linear regression assumes linearity (a genuinely straight-line relationship), independence of errors (residuals don't depend on each other), homoscedasticity (constant residual variance), normality of residuals (errors follow a bell curve), and, for multiple regression, no multicollinearity (predictors aren't too correlated with each other). Diagram/workflow: fit model → compute residuals → check each assumption with its matching test → fix violations if found. Detailed explanation: linearity is checked with a residual-vs-fitted plot, looking for a curved pattern; independence is checked using the Durbin-Watson statistic, where a value near 2 indicates no autocorrelation; homoscedasticity is checked with the Breusch-Pagan test or the same residual-vs-fitted plot, looking instead for a funnel shape; normality is checked visually with a Q-Q plot or formally with the Shapiro-Wilk test; and multicollinearity is checked using the Variance Inflation Factor, $VIF_j = 1/(1-R_j^2)$, with values above about 5 signalling a problem. Example/application: in a house-price model, a Durbin-Watson value of 1.2 would signal positive autocorrelation, suggesting the independence assumption is violated, especially likely if the data is time-ordered. Advantages: checking assumptions upfront prevents drawing wrong conclusions from an invalid model. Limitations: some violations (like mild non-normality) matter less with large sample sizes, and fixes like transformation or dropping predictors can themselves introduce new trade-offs. Conclusion: verifying all five assumptions, using their matching tests, is essential before trusting a regression model's coefficients or using it for inference."
+*10-mark:* "Introduction: A fitted regression line is only as reliable as the assumptions behind it — violating them undermines the validity of its coefficients and significance tests. Definition: linear regression assumes linearity (a genuinely straight-line relationship), independence of errors (residuals don't depend on each other), homoscedasticity (constant residual variance), normality of residuals (errors follow a bell curve), additivity (each predictor's effect is separate unless an interaction term says otherwise), and, for multiple regression, no multicollinearity (predictors aren't too correlated with each other). Diagram/workflow: fit model → compute residuals → check each assumption with its matching test → fix violations if found. Detailed explanation: linearity is checked with a residual-vs-fitted plot, looking for a curved pattern; independence is checked using the Durbin-Watson statistic, where a value near 2 indicates no autocorrelation; homoscedasticity is checked with the Breusch-Pagan test or the same residual-vs-fitted plot, looking instead for a funnel shape; normality is checked visually with a Q-Q plot or formally with the Shapiro-Wilk test; and multicollinearity is checked using the Variance Inflation Factor, $VIF_j = 1/(1-R_j^2)$, with values above about 5 signalling a problem. Example/application: in a house-price model, a Durbin-Watson value of 1.2 would signal positive autocorrelation, suggesting the independence assumption is violated, especially likely if the data is time-ordered. Advantages: checking assumptions upfront prevents drawing wrong conclusions from an invalid model. Limitations: some violations (like mild non-normality) matter less with large sample sizes, and fixes like transformation or dropping predictors can themselves introduce new trade-offs. Conclusion: verifying all five assumptions, using their matching tests, is essential before trusting a regression model's coefficients or using it for inference."
 
 ## Practice Questions
 
 ### Basic recall
 
-1. List the five assumptions of linear regression.
-   **Answer:** Linearity, independence of errors, homoscedasticity, normality of residuals, no multicollinearity (Sections 1.1–1.5).
+1. List the six assumptions of linear regression.
+   **Answer:** Linearity, independence of errors, homoscedasticity, normality of residuals, no multicollinearity, additivity (Sections 1.1–1.6).
 2. Which test is used to check independence of errors, and what is the ideal value of its statistic?
    **Answer:** The Durbin-Watson test; a statistic near 2 indicates no autocorrelation (Section 2.2).
 3. Write the formula for the Variance Inflation Factor (VIF).
@@ -420,20 +439,20 @@ The central difference: MAE and RMSE report error size in the target's own unit 
 
 ### Long-answer
 
-1. Explain all five assumptions of linear regression, the test used to check each, and what action follows if a test reveals a violation.
-   **Answer:** See Sections 1.1–1.5 paired with their matching tests in 2.1–2.5, and the 10-mark model answer in Examination Preparation for the full worked explanation with fixes for each violation.
+1. Explain all six assumptions of linear regression, the test (or fix) used to check each, and what action follows if a violation is found.
+   **Answer:** See Sections 1.1–1.5 paired with their matching tests in 2.1–2.5, plus 1.6 (Additivity) whose check/fix is the interaction term in Section 5, and the 10-mark model answer in Examination Preparation for the full worked explanation with fixes for each violation.
 2. Explain how categorical variables are incorporated into a multiple regression model, the dummy variable trap, and how an interaction term extends this to capture group-specific effects — using a worked numeric example.
    **Answer:** See Sections 4.1 (dummy encoding), 4.2 (the trap and its fix), and 5 (interaction terms), which together walk through the worked locality/area house-price example end to end.
 
 ## Quick Revision
 
-- **One-sentence summary:** A linear regression model's coefficients are only trustworthy if its five assumptions hold (each checked using a matching test), its prediction quality is judged using absolute-error metrics (MAE, RMSE) alongside R²/Adjusted R², and it can be extended with dummy-encoded categorical predictors and interaction terms to capture group-specific effects.
+- **One-sentence summary:** A linear regression model's coefficients are only trustworthy if its six assumptions hold (five checked using a matching test, additivity checked via the interaction term), its prediction quality is judged using absolute-error metrics (MAE, RMSE) alongside R²/Adjusted R², and it can be extended with dummy-encoded categorical predictors and interaction terms to capture group-specific effects.
 - **Hierarchy:** see Concept Hierarchy above.
-- **Essential definitions:** linearity, independence, homoscedasticity, normality, no multicollinearity (1.1–1.5); their matching tests (2.1–2.5); MAE, MSE/RMSE (3.1–3.2); dummy variable encoding and the dummy variable trap (4.1–4.2); interaction effect (Section 5).
+- **Essential definitions:** linearity, independence, homoscedasticity, normality, no multicollinearity, additivity (1.1–1.6); their matching tests (2.1–2.5); MAE, MSE/RMSE (3.1–3.2); dummy variable encoding and the dummy variable trap (4.1–4.2); interaction effect (Section 5).
 - **Key formulas:** Durbin-Watson (2.2); VIF $=1/(1-R_j^2)$ (2.5); MAE, MSE, RMSE (3.1–3.2); dummy-variable regression equation (4.1); interaction regression equation (Section 5).
 - **Most important comparison:** MAE vs RMSE (Section 3) — governs how outlier-sensitive an evaluation is.
 - **5 exam keywords:** heteroscedasticity, Durbin-Watson, Variance Inflation Factor, dummy variable trap, interaction effect.
-- **5 common mistakes:** checking assumptions only visually and skipping the formal test; assuming a high R² means all assumptions hold; using all $k$ dummy columns instead of $k-1$; comparing MAE and RMSE values without noting RMSE penalizes outliers more; adding an interaction term without checking it actually improves Adjusted R² (Session 2 §2.5).
+- **6 common mistakes:** checking assumptions only visually and skipping the formal test; assuming a high R² means all assumptions hold; using all $k$ dummy columns instead of $k-1$; comparing MAE and RMSE values without noting RMSE penalizes outliers more; adding an interaction term without checking it actually improves Adjusted R² (Session 2 §2.5); assuming additivity holds without checking whether an interaction term is actually needed (1.6/Section 5).
 
 ## Topic Coverage
 

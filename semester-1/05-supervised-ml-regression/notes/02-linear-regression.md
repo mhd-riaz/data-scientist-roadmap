@@ -17,6 +17,8 @@ flowchart TD
     P2 --> C24[2.4 Multiple Linear Regression]
     P2 --> C25[2.5 Measure of Variation: R-squared & Adjusted R-Squared]
     P2 --> C26[2.6 Inferences about Slope]
+    P2 --> C27[2.7 Confidence Interval for Coefficients]
+    P2 --> C28[2.8 F-test for Overall Model Significance]
 ```
 
 **Reordering note:** Inside "Linear Regression", *Visiting basics: Covariance & Correlation* was moved to the front (2.1) and *Regression Analysis* placed right after it (2.2), because both are prerequisites for understanding *Simple Linear Regression* — you cannot define the regression line or its slope without first knowing what covariance/correlation measure and what "regression analysis" means in general. *Ordinary Least Squares Method* was nested as a child of *Simple Linear Regression* (2.3.1) because it is the specific method used to fit that line. No topic was dropped or merged — every supplied item appears exactly once below, and *Applications of Machine Learning: Use Cases* and *Linear Regression with Time Series Data: Autoregression* keep their original top-level positions as given in the input.
@@ -161,6 +163,17 @@ Once a line is fitted, how good is it? **R-squared ($R^2$)** answers that with a
 
 > **Formal definition:** The coefficient of determination ($R^2$) is a statistical measure representing the proportion of variance in the dependent variable that is explained by the independent variable(s) in a regression model. Adjusted $R^2$ is a modified version of $R^2$ that adjusts for the number of predictors in the model, increasing only when a new predictor improves the fit by more than would be expected by chance.
 
+Before computing $R^2$ itself, it helps to name the three building blocks it's made from — the **sum of squares decomposition**:
+
+> **Formal definition:** The Total Sum of Squares ($SST$) measures the total variation in the observed target values around their mean; the Regression Sum of Squares ($SSR$) measures the variation explained by the fitted model; the Error Sum of Squares ($SSE$) measures the leftover, unexplained variation — related by $SST = SSR + SSE$.
+
+**Formula** — Essential
+$$SST=\sum_{i=1}^n(y_i-\bar y)^2,\quad SSR=\sum_{i=1}^n(\hat y_i-\bar y)^2,\quad SSE=\sum_{i=1}^n(y_i-\hat y_i)^2$$
+
+**Where** — $y_i$: actual value; $\hat y_i$: predicted value; $\bar y$: mean of actual values. Note: this document also calls $SSE$ "$SS_{res}$" and $SST$ "$SS_{tot}$" below — same quantities, two common naming conventions.
+
+**Example** — If $SST=500$ and $SSE=100$, then $SSR=SST-SSE=400$ — the model explains 400 of the 500 total units of variation, leaving 100 unexplained.
+
 ```mermaid
 pie showData
     title R-squared example (SS_tot = 500)
@@ -196,7 +209,45 @@ flowchart TD
 
 **Where** — $b_1$: the OLS slope from 2.3.1; $SE(b_1)$: standard error of that slope, i.e. how much it would vary if you re-sampled the data. With $b_1=2.6$, $SE(b_1)=0.5$: $t=5.2$ — large and far from 0, so area is a statistically significant predictor of price (typically judged against p < 0.05).
 
-This completes the linear-regression workflow from the big-picture diagram at the top of Section 2: check the relationship → fit → judge → trust-check → predict. Next, Section 3 applies the same straight-line idea to data that arrives in **time order**.
+**Important details** — The same $t=b_i/SE(b_i)$ test applies to *each* coefficient in a multiple regression model (2.4), not just a single-predictor model — this is exactly the significance check used later to decide which features to keep or drop (feature selection, in the Feature Engineering session).
+
+### 2.7 Confidence Interval for Regression Coefficients
+
+A t-test (2.6) only gives a yes/no verdict on whether $b_1$ differs from zero. A **confidence interval** goes further, giving a range of plausible values for the true population slope $\beta_1$, at a chosen confidence level (commonly 95%).
+
+> **Formal definition:** A confidence interval for a regression coefficient is a range of values, computed from the sample estimate and its standard error, that is expected to contain the true population coefficient with a specified level of confidence.
+
+**Formula** — Exam-important — $b_1 \pm t_{\alpha/2,\,n-2}\times SE(b_1)$
+
+**Where** — $b_1$: the OLS slope (2.3.1); $SE(b_1)$: standard error of the slope (2.6); $t_{\alpha/2,\,n-2}$: the critical t-value at the chosen confidence level (e.g. $\alpha=0.05$ for 95% confidence) with $n-2$ degrees of freedom (simple regression) or $n-k-1$ (multiple regression, 2.4).
+
+**Example** — With $b_1=2.6$, $SE(b_1)=0.4$, and $n=30$ ($df=28$), the critical value $t_{0.025,28}\approx 2.048$. The 95% confidence interval is $2.6 \pm 2.048(0.4) = 2.6 \pm 0.82$, i.e. **(1.78, 3.42)**.
+
+**Interpretation** — We are 95% confident the true population slope for area lies between 1.78 and 3.42 (lakh per 100 sq. ft.). Since this interval does not contain 0, it agrees with the t-test's conclusion (2.6) that area is a significant predictor — the two tools are two views of the same underlying test.
+
+**Important details** — The same formula applies to the intercept $b_0$, using $SE(b_0)$ in place of $SE(b_1)$. A narrower interval (from a larger sample or smaller $SE$) indicates a more precise estimate of the true coefficient.
+
+**Exam focus** — Know that a confidence interval excluding 0 is equivalent to rejecting $H_0:\beta_1=0$ at the same confidence level — a common "explain the link" question.
+
+### 2.8 F-test for Overall Model Significance
+
+The t-test (2.6) and its confidence interval (2.7) each judge **one coefficient at a time**. But with several predictors (2.4), a different question arises: is the model **as a whole** better than predicting with no predictors at all? The **F-test** answers this in one shot.
+
+> **Formal definition:** The F-test for overall regression significance tests the null hypothesis that all population slope coefficients are simultaneously zero ($H_0:\beta_1=\beta_2=\dots=\beta_k=0$) against the alternative that at least one is non-zero, using the ratio of explained to unexplained variance.
+
+**Formula** — Exam-important — $F = \dfrac{SSR/k}{SSE/(n-k-1)} = \dfrac{MSR}{MSE}$
+
+**Where** — $SSR, SSE$: from the sum-of-squares decomposition (2.5); $k$: number of predictors; $n$: number of observations.
+
+**Example** — Reusing 2.5's numbers ($SST=500$, $SSE=100$, so $SSR=SST-SSE=400$), with $k=4$ predictors and $n=100$: $F = \dfrac{400/4}{100/(100-4-1)} = \dfrac{100}{1.053} \approx 95$.
+
+**Interpretation** — An $F$ this large (checked against an F-distribution table, or via its p-value) is almost certainly far beyond the critical value, so $H_0$ is rejected — the model, taken as a whole, explains a statistically significant share of the variation in price, over and above what would be expected by chance with 4 unrelated predictors.
+
+**Important details** — A significant F-test only confirms *some* predictor matters; it does not say *which* one — that is exactly what the individual t-tests (2.6) are for. A model can have a significant F-test even if one or two individual predictors are not significant themselves.
+
+**Exam focus** — Know the formula, that $SST=SSR+SSE$, and the practical distinction from the t-test: F-test = whole-model significance, t-test = one-coefficient significance.
+
+This completes the linear-regression workflow from the big-picture diagram at the top of Section 2: check the relationship → fit → judge → trust-check (t-test, confidence interval, F-test) → predict. Next, Section 3 applies the same straight-line idea to data that arrives in **time order**.
 
 ---
 
@@ -238,15 +289,18 @@ flowchart LR
 - Covariance and correlation formulas, and that $-1 \le r \le 1$ (2.1).
 - Simple linear regression equation $\hat{y}=b_0+b_1x$ (2.3) and OLS formulas for $b_1, b_0$ (2.3.1).
 - Multiple linear regression equation $\hat{y}=b_0+b_1x_1+\dots+b_kx_k$, coefficients read "holding others constant" (2.4).
+- $SST=SSR+SSE$, the sum-of-squares decomposition behind $R^2$ (2.5).
 - $R^2 = 1-SS_{res}/SS_{tot}$ and $R^2_{adj}=1-\frac{(1-R^2)(n-1)}{n-k-1}$ (2.5).
 - Slope hypothesis test: $H_0:\beta_1=0$, $t=b_1/SE(b_1)$ (2.6).
+- Confidence interval for a coefficient: $b_1 \pm t_{\alpha/2,n-2}\times SE(b_1)$ (2.7).
+- F-test for overall significance: $F=\dfrac{SSR/k}{SSE/(n-k-1)}$, tests $H_0:\beta_1=\dots=\beta_k=0$ (2.8).
 - AR(p) formula: $Y_t=c+\phi_1Y_{t-1}+\dots+\phi_pY_{t-p}+\varepsilon_t$, stationarity assumption (Section 3).
 
 ### Common question patterns
 
-- *2-mark:* Define regression analysis / correlation / R-squared / autoregression.
-- *5-mark:* Difference between simple and multiple linear regression; R² vs adjusted R²; why OLS minimizes squared (not absolute) residuals; how autoregression differs from multiple regression.
-- *10-mark:* Derive/explain the Ordinary Least Squares method with a worked numeric example; explain the full linear regression workflow from correlation to slope inference using a real example.
+- *2-mark:* Define regression analysis / correlation / R-squared / autoregression / F-test.
+- *5-mark:* Difference between simple and multiple linear regression; R² vs adjusted R²; why OLS minimizes squared (not absolute) residuals; how autoregression differs from multiple regression; difference between the t-test and F-test for significance.
+- *10-mark:* Derive/explain the Ordinary Least Squares method with a worked numeric example; explain the full linear regression workflow from correlation to slope inference using a real example, including confidence intervals and the F-test for overall significance.
 
 ### Answer-writing guidance
 
@@ -276,6 +330,12 @@ flowchart LR
    **Answer:** $R^2 = 1 - SS_{res}/SS_{tot}$ (Section 2.5).
 5. Write the general AR(p) autoregression equation.
    **Answer:** $Y_t = c + \phi_1Y_{t-1}+\dots+\phi_pY_{t-p}+\varepsilon_t$ (Section 3).
+6. Write the sum-of-squares relationship between SST, SSR, and SSE.
+   **Answer:** $SST = SSR + SSE$ (Section 2.5).
+7. Write the formula for a 95% confidence interval on a regression slope.
+   **Answer:** $b_1 \pm t_{0.025,n-2}\times SE(b_1)$ (Section 2.7).
+8. Write the F-test formula for overall model significance.
+   **Answer:** $F = \dfrac{SSR/k}{SSE/(n-k-1)}$ (Section 2.8).
 
 ### Conceptual
 
@@ -289,6 +349,8 @@ flowchart LR
    **Answer:** Autoregression assumes the series' statistical properties (mean, variance) don't change over time; a non-stationary series (e.g., with a strong trend) violates this and usually needs differencing first (Section 3).
 5. Why is each coefficient in multiple linear regression interpreted "holding other predictors constant"?
    **Answer:** Because several predictors influence the target simultaneously, each coefficient $b_i$ isolates that one predictor's own effect, assuming the values of all other predictors stay fixed (Section 2.4).
+6. How does the F-test differ from the t-test for a regression coefficient?
+   **Answer:** The t-test (Section 2.6) checks whether one specific coefficient is significantly different from zero; the F-test (Section 2.8) checks whether *all* coefficients are simultaneously zero, i.e. whether the model as a whole is significant. A model can pass the F-test overall while some individual predictors fail their own t-test.
 
 ### Comparison
 
@@ -319,8 +381,8 @@ flowchart LR
 
 - **One-sentence summary:** Linear Regression fits the best straight-line relationship between a continuous target and one or more predictors using Ordinary Least Squares, and its quality and reliability are checked using R-squared/Adjusted R-squared and slope-significance testing — the same straight-line idea also powers autoregression on time-ordered data.
 - **Hierarchy:** see Concept Hierarchy above.
-- **Essential definitions:** covariance/correlation (2.1), regression analysis (2.2), simple linear regression (2.3), OLS (2.3.1), multiple linear regression (2.4), R²/adjusted R² (2.5), slope inference (2.6), autoregression (Section 3).
-- **Key formulas:** covariance & correlation (2.1); OLS slope/intercept (2.3.1); R² and adjusted R² (2.5); slope t-statistic (2.6); AR(p) equation (Section 3).
+- **Essential definitions:** covariance/correlation (2.1), regression analysis (2.2), simple linear regression (2.3), OLS (2.3.1), multiple linear regression (2.4), SST/SSR/SSE & R²/adjusted R² (2.5), slope inference (2.6), confidence intervals for coefficients (2.7), F-test for overall significance (2.8), autoregression (Section 3).
+- **Key formulas:** covariance & correlation (2.1); OLS slope/intercept (2.3.1); SST/SSR/SSE and R²/adjusted R² (2.5); slope t-statistic (2.6); confidence interval for coefficients (2.7); F-test (2.8); AR(p) equation (Section 3).
 - **Most important comparison:** R² vs Adjusted R² (2.5) — governs safe model comparison when predictor count differs.
 - **5 exam keywords:** covariance, Ordinary Least Squares, residual, Adjusted R-squared, stationarity.
 - **5 common mistakes:** confusing covariance's raw scale with correlation's fixed [-1,1] scale; assuming a higher R² always means a better model regardless of predictor count; forgetting that OLS minimizes *squared* residuals, not absolute ones; misreading a multiple-regression coefficient without the "holding others constant" caveat; applying autoregression to a non-stationary series without differencing.
@@ -334,5 +396,8 @@ flowchart LR
 - Regression Analysis — Covered in Section 2.2
 - Ordinary Least Square Method — Covered in Section 2.3.1
 - Measure of Variation: R-squared & Adjusted R-Squared — Covered in Section 2.5
+- SST, SSR, SSE (Sum of Squares decomposition) — Covered in Section 2.5
 - Inferences about slope — Covered in Section 2.6
+- Confidence Interval for Regression Coefficients — Covered in Section 2.7
+- F-test for Overall Model Significance — Covered in Section 2.8
 - Linear Regression with time series data: Autoregression — Covered in Section 3
