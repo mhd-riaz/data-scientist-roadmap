@@ -1,6 +1,6 @@
 ---
-name: mtech-study-notes
-description: Generates hierarchical, exam-ready M.Tech-level study notes (with Mermaid diagrams and formal textbook definitions) from a topic and a list of subtopics. Use whenever the user asks for study notes, revision notes, or exam-prep material on a graduate-level Data Science, AI, Machine Learning, Computer Science, or Mathematics topic, or pastes a topic + subtopic list to be turned into notes.
+name: create-study-notes
+description: Generates study notes (with Mermaid diagrams and formal textbook definitions) from a topic and a list of subtopics, or from supplied source material such as chapters, session notes, slides, or transcripts. Use whenever the user asks for study notes, revision notes, or exam-prep material on a graduate-level Data Science, AI, Machine Learning, Computer Science, or Mathematics topic, or pastes/attaches a topic + subtopic list or study files to be turned into notes.
 ---
 
 # M.Tech Study Notes Generator
@@ -32,7 +32,27 @@ Main Topic
 
 Input may mix bullets, numbers, indentation, headings, plain lines, or "o" as a bullet marker. Treat the first major item as the main topic (unless the structure clearly says otherwise) and every other item as a topic/subtopic to be covered.
 
-**Invocation:** treat the user's current message as the input. If it doesn't yet contain a topic and subtopics, ask them to provide one in the format above before proceeding.
+**Source material instead of (or alongside) a subtopic list** — the learner may attach or paste source files instead: chapters, session notes, slides, transcripts, PDFs, question banks, or any mix of these. In that case derive the topic and subtopic list from the material itself using the extraction rules below, then continue with the normal workflow. If both a subtopic list and source files are given, the list sets the scope and the files supply the detail — cover everything in the list, and pull in material-only items that fall inside that scope.
+
+**Invocation:** treat the user's current message (plus any attached files) as the input. If it contains neither a topic/subtopic list nor source material, ask them to provide one in the format above before proceeding.
+
+## Working From Source Material
+
+Apply this section only when the learner supplies files or pasted material. Skip it entirely for a plain topic + subtopic list.
+
+**Process every file.** Don't stop after the first one and don't skip any file, page, section, sidebar, caption, footnote, diagram label, worked example, or exercise because it looks minor. Open the response with a one-line confirmation of how many files were processed and their names, so the learner can verify nothing was missed.
+
+**Extract exhaustively.** From each file pull every topic, concept, key term, definition, formula, named example, practice question or exercise, diagram/figure (with a one-line note on what it shows), and important date or fact. Recursively decompose each item — topic → subtopic → concept → keyword/term — until reaching something that can't be meaningfully split further. When unsure whether something counts as a concept, include it; completeness matters more than brevity.
+
+**Track sources.** Record where each item came from (file/chapter/session name, plus page or section when available). Carry that attribution into the notes: cite it in the concept's section when it helps the learner find the original, and record it for every entry in the closing Topic Coverage list.
+
+**Merge, don't duplicate.** After processing all files, consolidate into one hierarchy. A concept appearing in several files becomes a single entry listing every source it came from. Order the merged hierarchy so prerequisites precede the concepts that depend on them, exactly as in Step 1 below.
+
+**Stay inside the material.** Don't invent content the sources don't contain. When a source is ambiguous or incomplete, say so rather than filling the gap with plausible-sounding detail.
+
+**Flag prerequisite gaps.** If the material relies on a concept it never actually explains, flag it as a gap rather than quietly teaching it from outside knowledge — unless it's a small prerequisite the notes genuinely can't proceed without, in which case add it as a labelled "Prerequisite" section _and_ still list it as a gap. Report all gaps in a short **Gaps to Look Up** list at the end of Topic Coverage, one line each explaining why the concept is needed and where it was referenced.
+
+**Incremental input.** If files arrive across separate messages, keep the running hierarchy and re-merge each new file into it — never restart from scratch — and re-state the cumulative file count and names each time.
 
 ## Workflow
 
@@ -47,6 +67,7 @@ Rules:
 - Reorder the learner's input if it improves understanding, but cover every supplied topic — never silently drop one.
 - Don't add unrelated concepts. Add a missing prerequisite only if genuinely necessary, and label it "Foundation" or "Prerequisite."
 - Merge duplicate/overlapping topics and note the merge in the closing coverage checklist.
+- Make prerequisite relationships explicit: for each concept, know what must be understood before it makes sense, and let that drive the ordering.
 
 ### Step 2 — Build the concept hierarchy
 
@@ -162,7 +183,9 @@ One-sentence topic summary, compact hierarchy (reference the Mermaid diagram fro
 
 ### Topic Coverage
 
-List every supplied topic with its status: _Covered in Section [#]_, _Merged with [topic] in Section [#]_, or _Added as prerequisite in Section [#]_. No re-explanation here.
+List every supplied topic with its status: _Covered in Section [#]_, _Merged with [topic] in Section [#]_, or _Added as prerequisite in Section [#]_. When the input was source material, append the originating file/chapter (and page or section, if known) to each entry, listing all sources for a merged concept. No re-explanation here.
+
+When working from source material, close with **Gaps to Look Up** — concepts the material relies on but never explains, one line each on why it's needed and where it was referenced. Omit this list entirely if there are no gaps.
 
 ## Writing Style
 
@@ -174,4 +197,4 @@ If the syllabus is large: split the notes into parts with continuous numbering, 
 
 ## Before Finalizing, Verify
 
-Parents precede children; every child sits under the right parent; prerequisites precede dependents; every supplied topic is covered; duplicates are merged; each concept is fully explained exactly once; every named concept — parent/umbrella sections included, not just their children — has its own `**Formal Definition**` callout in addition to its simplified Meaning; every diagram is valid Mermaid syntax in a fenced block (no ASCII trees anywhere); math has all necessary steps; every distinct formula has its own labeled `**Formula (Name)**` block and its own **Where** line defining every symbol; no "Plain:"/"Technical:" style labels remain in Meaning subsections; cross-references inside the teaching narrative are minimal (heavier referencing is reserved for exam prep/practice/revision); exam-prep definitions use formal textbook wording, not the simplified teaching language; exam prep and revision don't duplicate the detailed notes; the result is fit to save as permanent notes.
+Parents precede children; every child sits under the right parent; prerequisites precede dependents; every supplied topic is covered; every supplied file was processed and named in the opening confirmation, with nothing extracted from outside the material; duplicates are merged; each concept is fully explained exactly once; every named concept — parent/umbrella sections included, not just their children — has its own `**Formal Definition**` callout in addition to its simplified Meaning; every diagram is valid Mermaid syntax in a fenced block (no ASCII trees anywhere); math has all necessary steps; every distinct formula has its own labeled `**Formula (Name)**` block and its own **Where** line defining every symbol; no "Plain:"/"Technical:" style labels remain in Meaning subsections; cross-references inside the teaching narrative are minimal (heavier referencing is reserved for exam prep/practice/revision); exam-prep definitions use formal textbook wording, not the simplified teaching language; exam prep and revision don't duplicate the detailed notes; the result is fit to save as permanent notes.
