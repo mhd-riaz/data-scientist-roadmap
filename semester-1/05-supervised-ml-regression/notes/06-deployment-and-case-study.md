@@ -14,158 +14,290 @@ flowchart TD
     P4 --> P5[5. Scaling the Model]
 ```
 
-**Reordering note:** **Create ML Pipeline** is moved to the front and labelled a **Foundation**, since it is the single artifact (bundling every preprocessing step from [Session 1](01-introduction.md), the feature engineering from [Session 4](04-feature-engineering.md), and the fitted model from [Session 2](02-linear-regression.md)/[Session 5](05-model-optimization.md)) that all four later topics — serializing (2), packaging (3), exposing via API (4), and scaling (5) — actually operate on. The remaining four topics are kept in the natural deployment order: save the pipeline (2), package it so it runs identically elsewhere (3), expose it over the network (4), then handle real-world load (5). No topic was dropped, merged, or added as a new prerequisite — every supplied item appears exactly once below.
+**Reordering note:** **Create ML Pipeline** is moved to the front and labelled a **Foundation**, because it is the single object that all four remaining topics act upon — the thing that gets serialized, packaged, served and scaled. The other four keep the natural deployment order: save it, make it run identically elsewhere, expose it over a network, then survive real load. No topic was dropped, merged, or added.
 
-**Running example used throughout:** completing the **house price prediction** case study built across [Session 1](01-introduction.md)–[Session 5](05-model-optimization.md) — the fully preprocessed, feature-engineered, regularized regression model is now bundled, saved, packaged, served, and scaled for real use.
+**Running example used throughout:** the **house price prediction** case built across Sessions 1 to 5 — a preprocessed, feature-engineered, regularized regression model that now has to leave the notebook and answer real requests.
+
+**Analogy family used throughout:** a **kitchen serving the public**. Session 1 stood at the back door where the raw produce arrives; this session stands at the front, where dishes go out to customers who never see the kitchen at all. Every section is one step of getting from "it works when I cook it" to "it works when a hundred strangers order it at once".
 
 ---
 
 ## 1. Create ML Pipeline (Foundation)
 
-**Meaning** — Chaining every step of the model-building process — cleaning the data, engineering features, and fitting the model — into one single object, so all those steps run automatically, in the correct order, on any new data. An **ML pipeline** is a sequential wrapper of transformation and estimator steps that applies the same fitted preprocessing and model logic consistently to both training and new (unseen) data.
+### Picture this
+
+Two ways to make coffee. In the first, a bench holds five separate tools — grinder, scale, tamper, kettle, press — and you use each in the correct order, from memory, every single time. It works beautifully when you are paying attention. In the second, one machine has all five stages bolted together behind a single button. Press it and the grind, dose, tamp and brew happen in the fixed order they were built in. And critically, the machine was calibrated once, at setup, against a known bag of beans; it does not re-measure and re-calibrate itself against your cup as it pours.
+
+### Mapping
+
+| Analogy element                                 | What it really is                                               |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| Each separate tool on the bench                 | One preprocessing step performed manually                       |
+| Remembering the correct order every time        | The manual sequencing that eventually goes wrong                |
+| The single machine with stages bolted together  | The ML pipeline object                                          |
+| Pressing the one button                         | Calling `pipeline.predict(new_data)`                            |
+| Calibrating once at setup                       | Fitting the pipeline on the training data                       |
+| The stored calibration settings                 | Fitted preprocessing parameters — means, min/max, categories    |
+| Not re-calibrating against the cup being poured | Not re-fitting on incoming data, which is what prevents leakage |
+
+### Meaning
+
+An ML pipeline chains every preprocessing step together with the fitted model into one object, so that identical, already-fitted logic is applied in a fixed order to training data and to every piece of new data thereafter.
 
 > **Formal definition:** An ML pipeline is a sequential composition of data transformation and estimator steps that applies identical, previously fitted preprocessing and modeling logic to both training and new data.
 
-**Why it matters** — Without a pipeline, each preprocessing step ([Session 1](01-introduction.md)'s missing-value handling, encoding, scaling; [Session 4](04-feature-engineering.md)'s extraction/transformation/selection) has to be manually repeated, in the exact right order, every time new data arrives — an easy place to introduce mistakes or, worse, **data leakage** (accidentally fitting scaling statistics on data that includes the test/new set, the exact caution raised in [Session 1 Section 2.6](01-introduction.md)). A pipeline enforces the fit/transform separation automatically.
+### Why it matters
 
-**How it works — typical stages (in order)**
+Two failures are prevented, and only one of them is obvious. The obvious one is human error: without a pipeline, someone must reapply imputation, encoding, scaling and feature construction in exactly the right order, by hand, every time new data arrives. The subtle one is **data leakage** — the temptation to recompute a scaling mean or an imputation value from the new data, which is the sealed-portion mistake from Session 1 reappearing in production. The pipeline enforces the separation structurally: fitting happens once, applying happens always.
 
-1. Missing value imputation ([Session 1 Section 2.1](01-introduction.md)).
-2. Categorical encoding, e.g., dummy variables ([Session 1 Section 2.2](01-introduction.md), [Session 3 Section 4.1](03-assumptions-and-model-evaluation.md)).
-3. Feature scaling ([Session 1 Section 2.3](01-introduction.md)).
-4. Feature engineering — extraction, transformation, selection ([Session 4](04-feature-engineering.md)).
-5. The fitted model itself, e.g., a regularized regression ([Session 5 Section 5](05-model-optimization.md)).
-
-#### Diagram — pipeline flow
+### How it works
 
 ```mermaid
 flowchart TD
-    A[Raw new house data] --> B[1. Impute missing values]
-    B --> C[2. Encode categoricals]
-    C --> D[3. Scale features]
-    D --> E[4. Feature engineering]
-    E --> F[5. Trained model]
+    A[Raw new house record] --> B["1. Impute missing values"]
+    B --> C["2. Encode categoricals"]
+    C --> D["3. Scale features"]
+    D --> E["4. Apply engineered features"]
+    E --> F["5. Fitted regression model"]
     F --> G[Predicted price]
 ```
 
-**Example** — Once built, calling `pipeline.predict(new_house_data)` on a raw new house record (with a missing "age" value and a text "locality" column) automatically imputes the missing age, encodes the locality into dummies, scales the numeric features, applies the chosen engineered features, and returns a price prediction — all in one call.
+The stages, in the order established across the earlier sessions: missing value imputation, categorical encoding, feature scaling, the engineering and selection decisions from Session 4, and finally the fitted model from Session 5.
 
-**Important details** — When the pipeline is fitted (`pipeline.fit(...)`) on training data, each step's own fitting (e.g., computing the mean for imputation, or $x_{min}/x_{max}$ for scaling) happens only on that training data; when later used on new data (`pipeline.predict(...)`), those already-fitted values are reused, never recomputed — this is exactly the mechanism that prevents the data leakage risk from [Session 1 Section 2.6](01-introduction.md).
+**Example** — A raw record arrives with a blank age field and a text locality of `"Suburb"`. One call runs the whole chain: age is filled with the median computed from the training data, locality becomes the dummy columns fixed at training time, the numeric columns are scaled by the training statistics, the engineered features are constructed, and the regularized regression returns a price.
 
-**Exam focus** — Know the definition of an ML pipeline and, specifically, why bundling preprocessing and modeling together prevents data leakage.
+**Important details** — The mechanism worth stating precisely: fitting the pipeline computes and *stores* each step's parameters from the training data alone, and predicting *reuses* those stored values without recomputing anything. That is the whole of leakage prevention in one sentence. Where the analogy breaks down: a coffee machine's calibration stays correct indefinitely, whereas a pipeline's fitted statistics slowly stop describing reality as the world changes — which is the drift that step 9 of Session 1's lifecycle exists to catch.
+
+### Core takeaway
+
+A pipeline prevents leakage not by being careful but by making the careless version impossible, since there is no longer a separate step for anyone to perform on the wrong data.
+
+### Exam focus
+
+Define the pipeline and, specifically, explain why bundling preprocessing with the model prevents data leakage. The fit-once, apply-always mechanism is the answer.
 
 ---
 
 ## 2. Serializing Machine Learning Models
 
-**Meaning** — Saving a trained model (or, more usefully, the entire fitted pipeline from Section 1) to a file so it can be reloaded and reused later without retraining from scratch. **Serialization** converts an in-memory fitted object — including all its learned coefficients and fitted preprocessing parameters — into a storable, transferable file format.
+### Picture this
+
+The dish is cooked and it is good. Cooking it took three hours. Nobody is going to spend three hours again every time someone orders it, so it goes into a vacuum-sealed pack in the freezer — not the recipe, the actual finished dish, with every reduction and adjustment already in it. Reheating takes two minutes and produces exactly what came out of the pan, because it *is* what came out of the pan.
+
+### Mapping
+
+| Analogy element                         | What it really is                                        |
+| --------------------------------------- | -------------------------------------------------------- |
+| The three hours of cooking              | Training the pipeline                                    |
+| The finished dish                       | The fitted pipeline object in memory                     |
+| Everything already adjusted inside it   | Learned coefficients and fitted preprocessing parameters |
+| Vacuum-sealing it                       | Serializing to a file                                    |
+| The freezer                             | Disk or object storage                                   |
+| Reheating in two minutes                | Loading the file back into memory                        |
+| Accepting a sealed pack from a stranger | Loading a serialized file from an untrusted source       |
+
+### Meaning
+
+Serialization converts a fitted in-memory pipeline — coefficients, preprocessing parameters and structure together — into a file that can be stored, transferred and loaded back into a different process without any retraining.
 
 > **Formal definition:** Serialization is the process of converting an in-memory fitted model or pipeline object into a storable, transferable file format that can be reloaded without retraining.
 
-**Why it matters** — Training a model can be slow or resource-intensive; serialization lets you train once and reuse the *exact* fitted model repeatedly, including in a completely different program or environment (such as the API server in Section 4).
+### Why it matters
 
-**How it works — common formats**
+Training and serving are different activities that happen in different places and at different times. Training is expensive, happens occasionally, and needs the full dataset; serving is cheap, happens constantly, and needs only the fitted object. Serialization is what lets them be separated at all — and note that what should be saved is the whole pipeline, not merely the model, since a set of coefficients without its preprocessing is unusable on raw input.
 
-- **Pickle** — Python's built-in general-purpose serialization format.
-- **Joblib** — optimized for objects containing large numpy arrays, the common choice for scikit-learn-style models/pipelines.
-- **ONNX** — a cross-platform, language-independent format, useful when the model must be loaded outside Python (e.g., in a Java or C++ service).
+### How it works
 
-**Example** — After fitting the Ridge regression pipeline ([Session 5 Section 5.1](05-model-optimization.md)) on the house-price data, `joblib.dump(pipeline, "house_price_model.pkl")` saves it to disk; later, `joblib.load("house_price_model.pkl")` restores the exact fitted pipeline instantly, without recomputing any coefficients or fitted preprocessing statistics.
+Three formats cover the common cases.
 
-**Important details** — **Security caution:** never load a pickle/joblib file from an untrusted source — deserializing such files can execute arbitrary code, since Python's pickle format supports reconstructing arbitrary objects. This is a genuine OWASP-relevant risk in ML deployment, not just a style preference; ONNX is generally a safer choice when a model file's origin cannot be fully trusted.
+- **Pickle** — Python's general-purpose serialization, able to store almost any object.
+- **Joblib** — optimised for objects holding large numeric arrays, and the usual choice for scikit-learn pipelines.
+- **ONNX** — a language-independent format, used when the model must run outside Python, for instance inside a Java or C++ service.
 
-**Exam focus** — Know why serialization exists (avoid retraining) and be able to name at least one format, along with the untrusted-source security caution.
+**Example** — After fitting the Ridge pipeline from Session 5, `joblib.dump(pipeline, "house_price_model.pkl")` writes it to disk. Later, in a completely separate process, `joblib.load("house_price_model.pkl")` restores the identical fitted object with no recomputation.
+
+**Important details** — **Security caution, and this is a genuine vulnerability rather than a style preference.** Loading a pickle or joblib file executes code contained in that file by design, because the format reconstructs arbitrary Python objects. A malicious model file will therefore run arbitrary commands on your server the moment it is loaded — this is the insecure-deserialization class of vulnerability. Never load a serialized model from a source you do not control. Treat model files with the same suspicion as executables: check their integrity, restrict who can write to the location they are loaded from, and prefer ONNX when the provenance of a file cannot be guaranteed. Where the analogy breaks down: a suspicious frozen meal can at worst make you ill, whereas a malicious pickle file compromises the machine that opens it.
+
+### Core takeaway
+
+Serialization exists to separate the expensive act of training from the frequent act of predicting, and its convenience is exactly why the file it produces has to be treated as trusted code.
+
+### Exam focus
+
+Why serialization exists, at least one format by name, and the untrusted-source security caution — the last is asked more often than students expect.
 
 ---
 
 ## 3. Packaging for Reproducibility
 
-**Meaning** — Bundling the serialized model (Section 2) together with everything else needed to run it identically anywhere — the exact library versions, the code, and configuration — so it behaves exactly the same regardless of where or when it runs. **Packaging for reproducibility** ensures a deployed model's behavior is deterministic and consistent across environments and over time.
+### Picture this
+
+You post the recipe to a friend and it comes out wrong. Nothing was mistyped. Their oven runs twenty degrees hot, their flour is milled differently, and where your recipe said "gas mark 6" their dial only goes up to 5. The instructions were perfect and the surroundings were not. The only reliable fix is to stop sending instructions and start sending the whole kitchen.
+
+### Mapping
+
+| Analogy element                        | What it really is                                |
+| -------------------------------------- | ------------------------------------------------ |
+| The recipe                             | The prediction code                              |
+| The frozen dish posted alongside it    | The serialized pipeline from Section 2           |
+| Their oven running hot                 | A different library version behaving differently |
+| Their differently milled flour         | A different underlying system library            |
+| A dial that does not reach gas mark 6  | A dependency that is missing entirely            |
+| Writing exact temperatures and timings | Pinning dependency versions                      |
+| Sending the whole kitchen in a crate   | Containerisation                                 |
+
+### Meaning
+
+Packaging for reproducibility bundles the model together with the exact code, dependency versions and configuration it was built with, so that it behaves identically wherever and whenever it runs.
 
 > **Formal definition:** Packaging for reproducibility is the practice of bundling a model together with its exact dependencies, code, and configuration so that its behavior is deterministic and consistent across environments and over time.
 
-**Why it matters** — A model trained with one version of a library can behave differently, or fail to even load, with a different library version later — a common and hard-to-debug real-world deployment failure if not addressed upfront.
+### Why it matters
 
-**How it works — common practices**
+This is the failure that wastes the most time in practice, because it presents as a mystery: the same model file, the same input, a different answer — or no answer at all, because the file will not load. A library that changed a default between versions produces predictions that are subtly and silently different, with nothing anywhere reporting an error.
 
-1. **Pin dependency versions** — record exact library versions (e.g., in a `requirements.txt` or `environment.yml`) used at training time.
-2. **Containerize** — package the operating system, libraries, code, and the serialized model file together (e.g., using Docker), so the whole environment is reproducible, not just the code.
-3. **Version-control code and data** — track the exact training code (and ideally the dataset version) alongside the serialized model, so any past model can be traced back to exactly how it was produced.
+### How it works
 
-**Example** — A Dockerfile that installs the exact scikit-learn version used during training, then copies in the serialized pipeline file (Section 2) and the API code (Section 4), ensures the model behaves identically on any machine that runs the resulting container.
+1. **Pin dependency versions** — record the exact versions used at training time in a `requirements.txt` or equivalent, so the environment can be reconstructed rather than approximated.
+2. **Containerise** — package the operating system, system libraries, Python libraries, code and serialized model together, using a tool such as Docker, so that the entire environment travels rather than just the code.
+3. **Version-control code and data** — track the training code and, ideally, the dataset version alongside the model, so any past prediction can be traced back to exactly what produced it.
 
-**Important details** — Reproducibility must cover the **entire pipeline** from Section 1, not just the final model's coefficients — since the preprocessing logic (imputation values, scaling statistics, encoding scheme) must also match exactly, or predictions on new data will silently differ from what was intended.
+**Example** — A Dockerfile that installs the exact scikit-learn version used at training, copies in the serialized pipeline from Section 2 and the API code from Section 4, and fixes the entry point. The resulting image behaves identically on a laptop, a build server and a production cluster.
 
-**Exam focus** — Know that reproducibility failures often come from mismatched library versions, and that containerization addresses this by packaging the whole environment, not just the code.
+**Important details** — Reproducibility must cover the whole pipeline, not just the model's coefficients, because the preprocessing carries fitted parameters too — an imputation median, a scaling range, a category ordering. A model reproduced without its preprocessing is a model reproduced without most of what it does. Note also the difference in strength between the three practices: pinning versions reconstructs the Python environment but not the operating system beneath it, which is precisely the gap containerisation closes.
+
+### Core takeaway
+
+Reproducibility fails silently rather than loudly, which is why it has to be built in beforehand instead of debugged afterwards.
+
+### Exam focus
+
+Know that mismatched library versions are the usual cause, and that containerisation addresses it by shipping the environment rather than only the code.
 
 ---
 
 ## 4. Exposing the Model through REST APIs
 
-**Meaning** — Making the packaged model (Section 3) usable by other programs over a network, by wrapping it in a small web service that accepts input data and sends back a prediction. A **REST API** exposes an HTTP endpoint (e.g., `POST /predict`) that accepts feature values as input (commonly as JSON) and returns the model's prediction as a response.
+### Picture this
+
+A hatch in the wall between the kitchen and the street. Customers never come inside — they pass an order through the hatch in an agreed form, and a plate comes back out. Whether the kitchen is one cook or twenty, whether it was rebuilt last night, none of it is the customer's concern. What matters is that the hatch is always in the same place and always takes orders in the same form.
+
+### Mapping
+
+| Analogy element                                      | What it really is                                 |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| The hatch                                            | The HTTP endpoint, e.g. `POST /predict`           |
+| The customer outside                                 | The calling application                           |
+| The agreed order form                                | The JSON request schema                           |
+| The plate handed back                                | The JSON response containing the prediction       |
+| Never entering the kitchen                           | The caller not needing Python or the model itself |
+| The kitchen already staffed before opening           | The pipeline loaded once at server startup        |
+| Skipping the preparation and plating raw ingredients | Applying the model formula without the pipeline   |
+
+### Meaning
+
+A REST API exposes the packaged model over HTTP as an endpoint that accepts feature values in a structured request and returns the model's prediction in a structured response.
 
 > **Formal definition:** A REST API is an HTTP-based interface that exposes an endpoint accepting input data and returning a model's prediction as a structured (commonly JSON) response.
 
-**Why it matters** — Most real applications (web apps, mobile apps, other backend services) need to request predictions remotely over a network, rather than running Python code directly — REST APIs are the standard way to expose that capability.
+### Why it matters
 
-**How it works — steps**
+The systems that need predictions — a web front end, a mobile app, another backend service — are usually not written in Python and should not be coupled to the model's internals. An HTTP endpoint is the standard boundary: the model can be retrained, re-tuned or replaced entirely without a single caller changing, as long as the hatch keeps its shape.
 
-1. Load the serialized pipeline (Section 2) once, when the API server starts.
-2. Define an endpoint (e.g., `POST /predict`) that accepts a request body containing feature values (area, rooms, age, locality).
-3. Inside the endpoint, pass the input through the loaded pipeline's `predict()` method — reusing the exact same preprocessing from Section 1, not just the final regression formula.
-4. Return the prediction as a JSON response.
+### How it works
 
-#### Diagram — request/response flow
+1. Load the serialized pipeline **once**, at server startup, not per request — loading it on every call would add the reload cost to every prediction.
+2. Define an endpoint such as `POST /predict` that accepts a request body of feature values.
+3. Validate the incoming values before using them: check that required fields are present, that numbers are numbers, and that they fall in plausible ranges. Input arriving over a network is untrusted by definition.
+4. Pass the validated input through the loaded pipeline's `predict()` method.
+5. Return the prediction as a JSON response.
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant API Server
-    Client->>API Server: POST /predict {"area":2000,"rooms":3, ...}
-    API Server->>API Server: pipeline.predict(input)
-    API Server-->>Client: {"predicted_price": 78.0}
+    participant API as API server
+    Client->>API: POST /predict {"area":2000,"rooms":3,"age":5,"locality":"Suburb"}
+    API->>API: validate input
+    API->>API: pipeline.predict(input)
+    API-->>Client: {"predicted_price": 78.0}
 ```
 
 **Example** — Sending `{"area": 2000, "rooms": 3, "age": 5, "locality": "Suburb"}` to `POST /predict` returns `{"predicted_price": 78.0}`.
 
-**Important details** — Common frameworks for building this in Python: Flask, FastAPI. The endpoint must run the raw input through the **entire pipeline** (Section 1), including imputation, encoding, and scaling — not just apply the fitted regression coefficients directly to raw values — otherwise predictions won't match what the model was actually trained on.
+**Important details** — Flask and FastAPI are the usual Python frameworks. The single most important correctness point is that the endpoint must run raw input through the **entire pipeline**, not apply the fitted regression coefficients directly: the model was trained on imputed, encoded, scaled data, so feeding it raw values produces a confidently wrong number rather than an error. Two operational points are worth adding: the endpoint should never return a raw stack trace to the caller, since these leak internal detail, and any real deployment needs authentication, since an open prediction endpoint is both a cost and an information exposure.
 
-**Exam focus** — Know the request/response flow, and specifically that the API must apply the full pipeline, not just the model's final formula.
+### Core takeaway
+
+The API's job is to be a stable boundary, which is why everything variable — the model, its version, its preprocessing — must sit behind it rather than be reimplemented in front of it.
+
+### Exam focus
+
+The request-response flow, and specifically that the API must apply the full pipeline rather than the model formula alone.
 
 ---
 
 ## 5. Scaling the Model
 
-**Meaning** — Making sure the deployed API (Section 4) keeps working reliably as more people or systems request predictions, instead of slowing down or failing under load. **Scaling** means adjusting a deployment's resources or architecture to handle an increasing volume of prediction requests.
+### Picture this
+
+One hatch, one cook, and it is fine — until one o'clock, when eighty people arrive at once. The kitchen has not broken. Every dish still takes the same time it always did. What has changed is that the queue now grows faster than it clears, and the eightieth customer is waiting an hour for a dish that takes four minutes.
+
+### Mapping
+
+| Analogy element                                | What it really is                         |
+| ---------------------------------------------- | ----------------------------------------- |
+| One order                                      | One prediction request                    |
+| Time to cook one dish                          | Latency per request                       |
+| Orders arriving per minute                     | Request throughput                        |
+| The queue at the hatch                         | Requests waiting to be served             |
+| A faster cook with a bigger stove              | Vertical scaling                          |
+| More hatches, with someone directing customers | Horizontal scaling behind a load balancer |
+| Popular dishes pre-made and kept warm          | Caching                                   |
+| Cooking a hundred portions overnight           | Batch prediction                          |
+
+### Meaning
+
+Scaling adjusts a deployment's resources or architecture so that prediction requests continue to be served reliably and promptly as their volume grows.
 
 > **Formal definition:** Scaling is the practice of adjusting a deployed system's resources or architecture to reliably handle an increasing volume of requests.
 
-**Why it matters** — A model that responds instantly to one test request can become very slow, or fail outright, once hundreds or thousands of requests arrive at the same time — a gap between "it works" and "it works in production" that scaling addresses directly.
+### Why it matters
 
-**How it works — common approaches**
+A model that answers one test request instantly can become unusable under real traffic without anything in it being wrong. The gap between "it works" and "it works at one o'clock" is not a modelling problem at all, which is why it is so often discovered late.
 
-1. **Vertical scaling** — give the existing server more resources (more CPU/RAM) to handle more load on the same machine.
-2. **Horizontal scaling** — run multiple copies (replicas) of the API behind a **load balancer**, which distributes incoming requests across them.
-3. **Caching** — store and reuse predictions for repeated, identical inputs instead of recomputing them every time.
-4. **Batch prediction** — process many prediction requests together in one pass, instead of one at a time, when an immediate real-time response isn't required for every request.
+### How it works
 
-**Example** — If the house-price API starts receiving thousands of requests per minute, running 5 replica instances behind a load balancer (horizontal scaling) distributes the load, instead of every request queuing up at a single overloaded server.
+Four approaches, and the useful distinction is that the first two add capacity while the last two reduce the work.
+
+1. **Vertical scaling** — give the existing server more CPU and memory. Simple, requires no architectural change, and eventually hits a hardware ceiling.
+2. **Horizontal scaling** — run several replicas of the API behind a **load balancer** that distributes requests among them. Scales far further, and requires the API to be **stateless** so that any replica can serve any request.
+3. **Caching** — store the prediction for an input and reuse it when the identical input arrives again, skipping the computation entirely.
+4. **Batch prediction** — process many inputs together on a schedule rather than one at a time on demand, when an immediate response is not required.
+
+**Example** — The house-price API begins receiving thousands of requests per minute. Running five replicas behind a load balancer spreads the load, instead of every request queuing behind a single overloaded process.
 
 #### Comparison: Scaling Approaches
 
-| Aspect          | Vertical Scaling                    | Horizontal Scaling                             | Caching                                      | Batch Prediction                                         |
-| --------------- | ----------------------------------- | ---------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
-| Meaning         | More resources on one server        | More server replicas + load balancer           | Reuse past results for repeated inputs       | Process many requests together, not one-by-one           |
-| Best suited for | Simple setups, moderate load growth | High, unpredictable load                       | Frequently repeated identical requests       | Non-real-time, high-volume scenarios                     |
-| Limitation      | Hits a hardware ceiling eventually  | Needs a load balancer and stateless API design | Only helps for repeated inputs, not new ones | Not suitable when each request needs an instant response |
+| Aspect                         | Vertical Scaling               | Horizontal Scaling                        | Caching                              | Batch Prediction                            |
+| ------------------------------ | ------------------------------ | ----------------------------------------- | ------------------------------------ | ------------------------------------------- |
+| What it changes                | More resources on one machine  | More machines, plus a load balancer       | Reuses past results                  | Groups many requests into one pass          |
+| Adds capacity or reduces work? | Adds capacity                  | Adds capacity                             | Reduces work                         | Reduces work                                |
+| Best suited for                | Simple setups, moderate growth | High or unpredictable real-time load      | Frequently repeated identical inputs | High volume with no real-time requirement   |
+| Limitation                     | Hits a hardware ceiling        | Needs a load balancer and a stateless API | Useless for inputs never seen before | Unsuitable when responses must be immediate |
 
-The central difference: vertical and horizontal scaling add raw serving capacity (on one machine vs many), while caching and batching reduce the actual computation needed per request. Choose horizontal scaling for unpredictable, high real-time load; caching when many users request the same prediction; and batch prediction when responses don't need to be instantaneous.
+The central difference is between serving more and computing less: vertical and horizontal scaling buy capacity, while caching and batching remove work that did not need doing. Choose horizontal scaling for unpredictable real-time load, caching when the same inputs recur often, and batch prediction when the answer is not needed this second — and note that these combine rather than compete, since a cache sitting in front of a horizontally scaled service is a common arrangement.
 
-**Important details** — The choice between **real-time serving** (Section 4's REST API, one request at a time, low latency) and **batch serving** (scheduled, many predictions computed together) depends on the use case — a common case-study-style exam question asks you to justify this choice for a given scenario.
+**Important details** — The underlying choice is between **real-time serving**, the low-latency one-request-at-a-time model of Section 4, and **batch serving**, where many predictions are computed on a schedule. Caching also carries a correctness obligation that is easy to overlook: when the model is retrained, cached predictions from the previous version become stale and must be invalidated, or the service will keep confidently serving answers from a model that no longer exists. Where the analogy breaks down: a kitchen's capacity is fixed by its walls, whereas cloud infrastructure can add replicas automatically in response to load — but that autoscaling has to be configured deliberately, and a stateless API is the precondition for it.
 
-**Exam focus** — Know all four scaling approaches, and be ready to recommend one (with justification) for a given load scenario.
+### Core takeaway
 
-**Connection** — This completes the full journey from [Session 1](01-introduction.md)'s raw house-sale data through preprocessing, linear regression, assumption-checking, feature engineering, and model optimization, to a pipeline (1) that is serialized (2), packaged reproducibly (3), exposed via a REST API (4), and scaled for real-world load (5) — the complete lifecycle promised back in [Session 1 Section 1.6](01-introduction.md)'s steps 8–9 (Deployment, Monitoring).
+Scaling problems are queueing problems rather than model problems, which is why the effective responses are either more servers or less work, never a better model.
+
+### Exam focus
+
+Know all four approaches and be ready to recommend one, with justification, for a described load scenario. The real-time versus batch distinction is the usual framing.
+
+**Connection** — This closes the journey begun with raw sales records in Session 1: through preprocessing, linear regression, assumption checking, feature engineering and optimization, to a pipeline that is serialized, packaged reproducibly, exposed over HTTP and scaled to real load — steps 8 and 9 of the lifecycle first sketched in Session 1.
 
 ---
 
@@ -173,104 +305,126 @@ The central difference: vertical and horizontal scaling add raw serving capacity
 
 ### Must understand
 
-- Why bundling preprocessing and modeling into a pipeline prevents data leakage (Section 1).
-- Why a REST API endpoint must run input through the entire pipeline, not just the final regression formula (Section 4).
-- Why reproducibility must cover the whole pipeline (preprocessing + model), not just the model's coefficients (Section 3).
-- How to choose among vertical scaling, horizontal scaling, caching, and batch prediction for a given load scenario (Section 5).
+- Why bundling preprocessing with the model into a pipeline prevents data leakage structurally rather than by care (Section 1).
+- Why a serialized model file must be treated as executable code (Section 2).
+- Why reproducibility must cover the whole pipeline and the whole environment, not just the coefficients (Section 3).
+- Why an API endpoint must apply the full pipeline rather than the fitted formula (Section 4).
+- How to choose among vertical scaling, horizontal scaling, caching and batch prediction for a given load pattern (Section 5).
 
 ### Must remember
 
-- Pipeline stages in order: imputation → encoding → scaling → feature engineering → model (Section 1).
-- Serialization formats: pickle, joblib, ONNX; untrusted-source security caution (Section 2).
-- Packaging practices: pinned dependencies, containerization, version-controlled code/data (Section 3).
-- REST API flow: load pipeline once → accept JSON input at an endpoint → pipeline.predict() → return JSON response (Section 4).
-- Four scaling approaches: vertical scaling, horizontal scaling, caching, batch prediction (Section 5).
+- Pipeline stages in order: imputation, encoding, scaling, feature engineering, model — with fitting once and applying always (Section 1).
+- Serialization formats: pickle, joblib, ONNX; loading an untrusted file executes arbitrary code (Section 2).
+- Reproducibility practices: pin dependency versions, containerise, version-control code and data (Section 3).
+- REST flow: load the pipeline once at startup, validate input, call `predict()`, return JSON (Section 4).
+- Four scaling approaches: vertical, horizontal, caching, batch prediction — the first two add capacity, the last two reduce work (Section 5).
 
 ### Common question patterns
 
-- *2-mark:* Define ML pipeline / serialization / containerization / horizontal scaling.
-- *5-mark:* Why must an API apply the full pipeline and not just the model formula; compare vertical and horizontal scaling; explain the security risk of loading an untrusted serialized model.
-- *10-mark:* Explain the complete deployment lifecycle for a trained regression model, from pipeline creation through to scaling, with a worked example at each stage.
+- _2-mark:_ Define an ML pipeline, serialization, containerisation, or horizontal scaling.
+- _5-mark:_ Why an API must apply the full pipeline; compare vertical and horizontal scaling; explain the security risk of loading an untrusted serialized model.
+- _10-mark:_ Explain the complete deployment lifecycle for a trained regression model, from pipeline creation to scaling, with an example at each stage.
 
 ### Answer-writing guidance
 
-- *2-mark:* definition + one supporting example.
-- *5-mark:* definition, main explanation, key points, example/formula/small diagram.
-- *10-mark:* introduction, technical definition, diagram/workflow, detailed explanation, example/application, advantages/limitations, conclusion.
+- _2-mark:_ the formal definition stated precisely, plus one supporting example.
+- _5-mark:_ formal definition, main explanation, key points, and one example or small diagram.
+- _10-mark:_ introduction, formal technical definition, Mermaid diagram or workflow, detailed explanation, worked example, advantages and limitations, conclusion.
 
 ### Model answers
 
-*2-mark:* "Serialization is the process of saving a trained model (or pipeline) to a file so it can be reloaded and reused later without retraining. Example: using joblib.dump() to save a fitted house-price regression pipeline to a .pkl file."
+_2-mark:_ "Serialization is the process of converting an in-memory fitted model or pipeline object into a storable, transferable file format that can be reloaded without retraining. For example, `joblib.dump()` writes a fitted house-price pipeline to a file, which a separate serving process can later load with `joblib.load()` and use immediately."
 
-*5-mark:* "A REST API endpoint for a deployed regression model must apply the model's entire preprocessing pipeline to incoming raw data, not just its final fitted coefficients. This is because the model was trained on data that had already been imputed for missing values, encoded from categorical form, and scaled — applying only the regression formula to raw, unprocessed input would produce incorrect predictions, since the input would no longer match the form the model actually learned from. By loading the full serialized pipeline (covering imputation, encoding, scaling, and the model itself) at server startup and calling its predict() method inside the endpoint, the API guarantees that every incoming request is processed through exactly the same steps used during training, keeping predictions consistent and correct."
+_5-mark:_ "A REST API endpoint serving a deployed regression model must apply the model's entire preprocessing pipeline to incoming raw data, not merely its fitted coefficients. The reason lies in what the model was trained on: the training data had already had its missing values imputed, its categorical columns encoded into dummy variables and its numeric columns scaled, so the coefficients were estimated against transformed values rather than raw ones. Applying those coefficients directly to raw input therefore evaluates the equation at the wrong point entirely — a text locality has no numeric value at all, and an unscaled area is orders of magnitude away from the scaled value the coefficient expects. Critically, this produces no error; it produces a confident and wrong number, which is far harder to detect than a failure. The correct arrangement is to serialize the full pipeline, covering imputation, encoding, scaling, feature engineering and the model together, load it once when the server starts, and call its `predict()` method inside the endpoint. This guarantees that every request is processed through exactly the steps used during training, with the parameters fitted at training time, which additionally prevents data leakage since nothing is recomputed from the incoming data."
 
-*10-mark:* "Introduction: once a regression model has been built, validated, and optimized, it must be deployed so it can generate real predictions for real users — this is the final stage of the machine learning lifecycle. Definition: deployment covers bundling the model into a pipeline, saving it, packaging it for consistent behavior across environments, exposing it over a network, and scaling it to handle real load. Diagram/workflow: raw new data → pipeline (impute → encode → scale → feature engineer → predict) → serialized file → packaged environment (e.g., Docker container) → REST API endpoint → scaled deployment (replicas/load balancer). Detailed explanation: a pipeline chains every preprocessing step with the fitted model so both training and new data are processed identically, preventing data leakage; the resulting pipeline is serialized (e.g., via joblib) so it can be reloaded without retraining, with the caution that pickle-based files should never be loaded from an untrusted source due to arbitrary code execution risk; packaging for reproducibility, often via containerization, ensures the exact library versions and code used at training time are preserved so the model behaves identically wherever it runs; a REST API then exposes an endpoint that loads this pipeline once and applies it to every incoming request, returning predictions as JSON; finally, scaling techniques — vertical scaling, horizontal scaling with a load balancer, caching repeated requests, and batch prediction for non-real-time cases — keep the API responsive under real-world load. Example/application: a house-price API receiving a sudden surge of requests could be scaled horizontally by running multiple replica instances behind a load balancer, while frequently repeated identical queries could additionally be served from a cache. Advantages: this pipeline-based deployment approach guarantees consistency between training and serving, and scales cleanly as demand grows. Limitations: containerized, horizontally scaled deployments add infrastructure complexity and cost compared to a single-server setup, and caching or batch prediction are only appropriate for certain kinds of requests. Conclusion: reliable deployment requires treating the whole pipeline, not just the model, as the unit that must be saved, packaged, served, and scaled consistently."
+_10-mark:_ "Introduction: once a regression model has been built, validated and optimized, it must be deployed before it produces any value, and deployment is a sequence of distinct engineering steps rather than a single act. Definition: deployment covers composing the model into a pipeline, serializing it, packaging it for consistent behaviour across environments, exposing it over a network, and scaling it to handle real load. Diagram: raw request, then pipeline of impute, encode, scale, engineer and predict, then the serialized file, then the packaged container, then the REST endpoint, then the scaled deployment behind a load balancer. Detailed explanation: an ML pipeline chains every preprocessing step to the fitted model so that both training and serving apply identical logic, with each step's parameters fitted once on training data and reused thereafter, which prevents data leakage structurally rather than by discipline. The fitted pipeline is then serialized, using joblib or pickle for Python-only deployments or ONNX where the model must be loaded outside Python, so that training and serving are separated and no retraining is needed to serve; because pickle-based formats reconstruct arbitrary objects, loading such a file from an untrusted source permits arbitrary code execution and must be avoided. Packaging for reproducibility then pins the exact dependency versions and, more robustly, containerises the whole environment, since a differing library version can silently change predictions rather than raise an error. A REST API loads the packaged pipeline once at startup, validates incoming JSON, applies the full pipeline to it and returns the prediction, thereby giving non-Python callers a stable interface that survives model retraining. Finally, scaling keeps the service responsive under load through vertical scaling, horizontal scaling behind a load balancer, caching of repeated identical requests, and batch prediction where immediate responses are unnecessary. Example: a house-price API facing a traffic surge could run five replicas behind a load balancer while additionally serving frequently repeated queries from a cache, with the cache invalidated whenever the model is retrained. Advantages: this arrangement guarantees consistency between training and serving and scales without changing the model. Limitations: containerisation and orchestration add operational complexity, cached results become stale on retraining, and none of these steps addresses model drift, which requires the separate monitoring stage of the lifecycle. Conclusion: deployment converts a validated model into a dependable service, and its central principle is that whatever was fitted during training must be reused unchanged during serving."
 
 ## Practice Questions
 
 ### Basic recall
 
 1. List the typical stages of an ML pipeline in order.
-   **Answer:** Missing value imputation → categorical encoding → feature scaling → feature engineering → the fitted model (Section 1).
-2. Name two common model serialization formats.
-   **Answer:** Pickle and Joblib (also ONNX for cross-platform use) (Section 2).
-3. What is the security caution associated with loading a serialized model file?
-   **Answer:** Never load a pickle/joblib file from an untrusted source, since deserializing it can execute arbitrary code (Section 2).
-4. What HTTP method and endpoint pattern is commonly used to expose a model for prediction?
+   **Answer:** Missing value imputation, categorical encoding, feature scaling, feature engineering, the fitted model (Section 1).
+2. Name two common serialization formats.
+   **Answer:** Pickle and joblib, with ONNX for cross-platform use (Section 2).
+3. What is the security caution associated with loading a serialized model?
+   **Answer:** Loading a pickle or joblib file can execute arbitrary code, so a file from an untrusted source must never be loaded (Section 2).
+4. What HTTP method and endpoint pattern typically exposes a model for prediction?
    **Answer:** `POST /predict` (Section 4).
-5. Name the four scaling approaches covered in this session.
+5. Name the four scaling approaches.
    **Answer:** Vertical scaling, horizontal scaling, caching, batch prediction (Section 5).
 
 ### Conceptual
 
-1. Why does bundling preprocessing steps into a pipeline prevent data leakage?
-   **Answer:** Each step's fitting (e.g., computing scaling statistics) happens only on training data when the pipeline is fit; when used on new data, those already-fitted values are reused rather than recomputed, so no information from new/test data leaks into training (Section 1).
-2. Why must a REST API apply the full pipeline rather than just the fitted regression formula?
-   **Answer:** The model was trained on data that had already been imputed, encoded, and scaled; applying only the raw regression formula to unprocessed input would produce incorrect predictions, since the input wouldn't match the form the model actually learned from (Section 4).
-3. Why can pinning library versions alone be insufficient for full reproducibility, and what does containerization add?
-   **Answer:** Pinning versions doesn't guarantee the same operating system, system libraries, or environment configuration; containerization (e.g., Docker) packages the entire environment together, ensuring identical behavior anywhere (Section 3).
-4. Why is caching only useful for some kinds of prediction requests but not others?
-   **Answer:** Caching only helps when identical inputs are requested repeatedly; it provides no benefit for unique, never-before-seen inputs, which still require full computation (Section 5).
+1. Why does bundling preprocessing into a pipeline prevent data leakage?
+   **Answer:** Each step's parameters are computed once, from training data alone, and stored; at prediction time those stored values are reused rather than recomputed, so nothing from the new data can influence the transformation (Section 1).
+2. Why must a REST API apply the full pipeline rather than the fitted regression formula?
+   **Answer:** The coefficients were estimated against imputed, encoded and scaled values, so applying them to raw input evaluates the equation at the wrong point and returns a confidently wrong number with no error raised (Section 4).
+3. Why is pinning library versions insufficient for full reproducibility, and what does containerisation add?
+   **Answer:** Pinning reconstructs the Python environment but not the operating system, system libraries or configuration beneath it; a container packages the whole environment so behaviour is identical anywhere (Section 3).
+4. Why does caching help some workloads and not others?
+   **Answer:** A cache only returns a result for an input it has already seen, so it helps when identical requests recur frequently and does nothing for a stream of unique inputs (Section 5).
+5. Why should the serialized artefact be the whole pipeline rather than just the model?
+   **Answer:** The preprocessing steps carry fitted parameters of their own — imputation values, scaling statistics, category orderings — and a set of coefficients without them cannot be applied to raw input at all (Sections 1 to 3).
+6. Why must a horizontally scaled API be stateless?
+   **Answer:** A load balancer may route consecutive requests from the same caller to different replicas, so no replica can rely on state left behind by a previous request (Section 5).
 
 ### Comparison
 
-1. Compare Vertical Scaling and Horizontal Scaling.
-   **Answer:** Vertical scaling adds more resources (CPU/RAM) to one server; horizontal scaling runs multiple replicas behind a load balancer. Vertical scaling hits a hardware ceiling; horizontal scaling handles high, unpredictable load better but needs a stateless API design (Section 5).
-2. Compare Caching and Batch Prediction as approaches to handling load.
-   **Answer:** Caching reuses results for repeated identical inputs; batch prediction processes many different requests together when an instant real-time response isn't required (Section 5).
-3. Compare Pickle/Joblib and ONNX as serialization formats.
-   **Answer:** Pickle/Joblib are Python-specific and convenient for scikit-learn-style objects but pose a security risk if loaded from an untrusted source; ONNX is a cross-platform, language-independent format, generally safer when a model file's origin can't be fully trusted (Section 2).
+1. Compare vertical and horizontal scaling.
+   **Answer:** Vertical scaling adds resources to one machine and eventually meets a hardware ceiling; horizontal scaling adds replicas behind a load balancer, scales much further, and requires a stateless API (Section 5).
+2. Compare caching and batch prediction.
+   **Answer:** Caching reuses a stored result for a repeated identical input; batch prediction computes many different predictions together on a schedule when immediate responses are not required (Section 5).
+3. Compare pickle/joblib with ONNX.
+   **Answer:** Pickle and joblib are Python-specific, convenient for scikit-learn objects, and unsafe to load from untrusted sources because they reconstruct arbitrary objects; ONNX is language-independent and generally safer where provenance cannot be guaranteed (Section 2).
 
 ### Scenario / application
 
-1. A deployed model behaves differently on a colleague's machine than it did during training — which section's practice was most likely skipped, and what should be done?
-   **Answer:** Packaging for reproducibility (Section 3) was likely skipped — pin dependency versions and/or containerize the environment so it runs identically everywhere.
-2. An API needs to serve predictions to a mobile app in real time, with unpredictable traffic spikes — which scaling approach fits best, and why?
-   **Answer:** Horizontal scaling (Section 5), since running multiple replicas behind a load balancer handles unpredictable, high real-time load better than a single, vertically-scaled server.
-3. A company needs to generate price estimates for 100,000 houses overnight, with no real-time requirement — which serving approach from Section 5 fits best?
-   **Answer:** Batch prediction (Section 5), since responses don't need to be instantaneous and processing many requests together is more efficient.
+1. A deployed model behaves differently on a colleague's machine than it did during training. Which practice was skipped, and what should be done?
+   **Answer:** Packaging for reproducibility (Section 3). Pin the exact dependency versions and, better, containerise the environment so it runs identically anywhere.
+2. An API must serve a mobile app in real time with unpredictable traffic spikes. Which scaling approach fits?
+   **Answer:** Horizontal scaling (Section 5) — replicas behind a load balancer absorb unpredictable load far better than a single larger server, provided the API is stateless.
+3. A company needs price estimates for 100,000 houses overnight, with no real-time requirement.
+   **Answer:** Batch prediction (Section 5), since responses need not be immediate and processing the whole set in one pass is far more efficient than 100,000 individual HTTP requests.
+4. A team is handed a pre-trained `.pkl` model file downloaded from a public forum and asks whether to load it on the production server.
+   **Answer:** No. Loading a pickle file executes code contained within it, so an untrusted file can compromise the server (Section 2). Retrain from trusted data, or obtain the model in ONNX form from a verified source with an integrity check.
 
 ### Long-answer
 
 1. Explain how an ML pipeline is built and why it prevents data leakage, using the house-price example.
-   **Answer:** See Section 1 and its worked example — the pipeline chains imputation, encoding, scaling, feature engineering, and the model, fitting each step's parameters only on training data and reusing them (never recomputing) on new data.
-2. Explain the complete deployment workflow from serialization through to scaling, including the risks addressed at each stage.
-   **Answer:** See Sections 2–5 and the 10-mark model answer in Examination Preparation, which walks through serialization's untrusted-source risk, packaging's reproducibility risk, the API's full-pipeline requirement, and scaling's load-handling tradeoffs.
+   **Answer:** See Section 1 — the pipeline chains imputation, encoding, scaling, feature engineering and the model, fitting each step's parameters once on training data and reusing them unchanged thereafter.
+2. Explain the complete deployment workflow from serialization to scaling, including the risk addressed at each stage.
+   **Answer:** See Sections 2 to 5 and the 10-mark model answer in Examination Preparation, which covers serialization's untrusted-file risk, packaging's silent-divergence risk, the API's full-pipeline requirement, and scaling's load tradeoffs.
 
 ## Quick Revision
 
-- **One-sentence summary:** Deploying a regression model means bundling its preprocessing and fitting logic into a pipeline, serializing that pipeline, packaging it for reproducible behavior everywhere, exposing it through a REST API, and scaling the deployment to handle real-world load.
-- **Hierarchy:** see Concept Hierarchy above.
-- **Essential definitions:** ML pipeline (1); serialization, pickle/joblib/ONNX (2); packaging/containerization (3); REST API/endpoint (4); vertical/horizontal scaling, caching, batch prediction (5).
-- **Key formulas:** none — this session is process/architecture-focused rather than formula-based; see diagrams in Sections 1 and 4.
-- **Most important comparison:** the four scaling approaches (Section 5 table) — governs which fits a given load scenario.
-- **5 exam keywords:** data leakage, joblib, containerization, REST endpoint, load balancer.
-- **5 common mistakes:** applying only the regression formula to raw input instead of the full pipeline; loading a serialized model file from an untrusted source; assuming pinned library versions alone guarantee reproducibility; assuming vertical scaling can grow indefinitely; using caching for requests that are rarely repeated.
+- **One-sentence summary:** Deploying a regression model means chaining its preprocessing and fitting logic into one pipeline, serializing that pipeline, packaging it so it behaves identically everywhere, exposing it behind a stable HTTP endpoint, and scaling that endpoint to survive real traffic.
+- **Hierarchy:** see the Concept Hierarchy diagram at the top of this file.
+- **Essential definitions:** ML pipeline (1); serialization and its formats (2); packaging and containerisation (3); REST API and endpoint (4); vertical scaling, horizontal scaling, caching, batch prediction (5).
+- **Key formulas:** none — this session is architectural rather than mathematical; the diagrams in Sections 1, 4 and 5 carry the content.
+- **Most important comparison:** the four scaling approaches (Section 5 table), because it decides the response to a given load pattern.
+- **5 exam keywords:** data leakage, joblib, containerisation, REST endpoint, load balancer.
+- **5 common mistakes:** applying the model formula to raw input instead of the full pipeline; loading a serialized file from an untrusted source; assuming pinned library versions alone guarantee reproducibility; assuming vertical scaling can grow indefinitely; caching without invalidating on retraining.
+
+### Mental Models
+
+- **1. ML pipeline** — one coffee machine instead of five separate tools, calibrated once at setup; it prevents leakage by making the careless version impossible.
+- **2. Serialization** — vacuum-sealing the finished dish rather than the recipe; convenience is why the file must be treated as trusted code.
+- **3. Packaging** — posting the whole kitchen instead of the recipe, because their oven runs hot; it fails silently, so it must be built in beforehand.
+- **4. REST API** — a hatch in the wall that customers never step through; the boundary stays fixed so everything behind it can change.
+- **5. Scaling** — the one o'clock rush at a single hatch; queueing problems are answered with more servers or less work, never a better model.
 
 ## Topic Coverage
 
-- Serializing machine learning models — Covered in Section 2
-- Exposing the model through Rest APIs — Covered in Section 4
-- Packaging for reproducibility — Covered in Section 3
-- Create ML pipeline — Covered in Section 1
-- Scaling the model — Covered in Section 5
+- Create ML pipeline — Covered in Section 1 as a labelled Foundation (source: `06-deployment-and-case-study.md`, Session 6)
+- Serializing machine learning models — Covered in Section 2 (source: `06-deployment-and-case-study.md`, Session 6)
+- Packaging for reproducibility — Covered in Section 3 (source: `06-deployment-and-case-study.md`, Session 6)
+- Exposing the model through REST APIs — Covered in Section 4 (source: `06-deployment-and-case-study.md`, Session 6)
+- Scaling the model — Covered in Section 5 (source: `06-deployment-and-case-study.md`, Session 6)
+
+### Gaps to Look Up
+
+- **HTTP and REST fundamentals** — Section 4 uses methods, endpoints, request bodies and status handling as known concepts, without introducing them. Needed to implement rather than merely describe the endpoint.
+- **Docker and containerisation mechanics** — Section 3 names containerisation as the robust answer to reproducibility and references a Dockerfile, but never explains images, layers or the build process.
+- **Load balancers and statelessness** — Section 5 relies on both, and the material states the requirement without explaining how a load balancer distributes requests or what makes a service stateless.
+- **Model monitoring and drift detection** — Session 1's lifecycle listed monitoring as step 9 and this session's closing note refers to it, but no session in the material actually covers how drift is detected or what triggers retraining.
