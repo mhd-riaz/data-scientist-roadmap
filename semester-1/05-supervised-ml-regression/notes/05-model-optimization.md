@@ -15,12 +15,13 @@ flowchart TD
     S5 --> P6[6. Hyperparameter Tuning]
     P5 --> C51[5.1 Ridge Regression]
     P5 --> C52[5.2 Lasso Regression]
+    P5 --> C53[5.3 Elastic-Net Regression]
     P6 --> C61[6.1 Grid Search]
     P6 --> C62[6.2 Random Search]
     P6 --> C63[6.3 Bayesian Optimization]
 ```
 
-**Reordering note:** Under Regularization, **Ridge** is explained before **Lasso** (the supplied order was the reverse) because Ridge's penalty is the simpler case and Lasso is most easily understood as the same idea with a penalty that pulls differently near zero. **Bias and Variance** is labelled a **Foundation**: Session 1 introduced overfitting and underfitting only as vocabulary, and this session supplies the mechanism behind them before formally revisiting the terms in Section 2. No topic was dropped or merged; every supplied item appears exactly once.
+**Reordering note:** Under Regularization, **Ridge** is explained before **Lasso** (the supplied order was the reverse) because Ridge's penalty is the simpler case and Lasso is most easily understood as the same idea with a penalty that pulls differently near zero. **Bias and Variance** is labelled a **Foundation**: Session 1 introduced overfitting and underfitting only as vocabulary, and this session supplies the mechanism behind them before formally revisiting the terms in Section 2. No topic was dropped or merged; every supplied item appears exactly once. **Elastic-Net** (5.3) was added afterwards, since the source material names it as the third regularization variant but the original list omitted it.
 
 **Running example used throughout:** the **house price prediction** case from Sessions 1 to 4, using the engineered feature set from Session 4. The question has changed: not which features the model uses, but how it is fitted, checked and controlled.
 
@@ -56,7 +57,7 @@ Bias is the error that comes from a model's assumptions being too simple to repr
 
 This is the mechanism behind the overfitting and underfitting vocabulary from Session 1. It explains why the two failures need opposite corrections, and — more usefully — why reducing one usually increases the other, which is the central tension in every decision that follows in this session.
 
-**Feel for the quantity** — Squared bias measures how far the *average* of many re-fitted models sits from the truth, so it stays exactly the same however much data you gather with the same model form. Variance measures how far individual fits sit from that average, so it shrinks as the sample grows. A high-bias, low-variance model is the first archer; a low-bias, high-variance model is the second.
+**Feel for the quantity** — Squared bias measures how far the _average_ of many re-fitted models sits from the truth, so it stays exactly the same however much data you gather with the same model form. Variance measures how far individual fits sit from that average, so it shrinks as the sample grows. A high-bias, low-variance model is the first archer; a low-bias, high-variance model is the second.
 
 **Formula (Bias-variance decomposition of expected test error)** — **Essential**
 $$E\big[(y - \hat f(x))^2\big] = \big[\text{Bias}(\hat f(x))\big]^2 + \text{Var}(\hat f(x)) + \sigma^2$$
@@ -135,7 +136,7 @@ Notice that test error alone cannot distinguish them. A test error of 12 could b
 | Typical cause  | Too complex, too many features, too little data       | Too simple, too few features, over-regularised      |
 | Typical repair | Regularisation (Section 5), more data, fewer features | More features, more complexity, less regularisation |
 
-The central difference is the *gap*, not the level: overfitting shows a wide gap between training and test error, underfitting shows both high and together. Diagnose from the pair of numbers, then apply the matching repair from the table — never the other one.
+The central difference is the _gap_, not the level: overfitting shows a wide gap between training and test error, underfitting shows both high and together. Diagnose from the pair of numbers, then apply the matching repair from the table — never the other one.
 
 **Example** — A tenth-degree polynomial on a few hundred house records reaches near-zero training error and a very large test error: the first student. A model that predicts the average price for every house, ignoring area entirely, has high error on both: the second.
 
@@ -205,7 +206,7 @@ $$\text{CV score} = \frac{1}{k}\sum_{i=1}^{k} \text{metric}_i$$
 
 **Example** — With 800 house records and $k = 5$, each fold holds 160 records. Five rounds of training on 640 and validating on 160 give RMSE values of $[3.9, 4.1, 3.7, 4.3, 4.0]$, so the CV score is $20.0/5 = 4.0$ lakh.
 
-**Interpretation** — A cross-validated RMSE of 4.0 lakh is a substantially more reliable estimate than any single one of those five figures, because it averages away the effect of which particular houses landed in the held-out portion. The *spread* of the five is informative too: values from 3.7 to 4.3 indicate a stable model, whereas 1.2 to 8.5 would indicate one whose performance depends heavily on the sample.
+**Interpretation** — A cross-validated RMSE of 4.0 lakh is a substantially more reliable estimate than any single one of those five figures, because it averages away the effect of which particular houses landed in the held-out portion. The _spread_ of the five is informative too: values from 3.7 to 4.3 indicate a stable model, whereas 1.2 to 8.5 would indicate one whose performance depends heavily on the sample.
 
 **Important details** — **Leave-One-Out Cross-Validation (LOOCV)** is the extreme case where $k$ equals the number of observations, so each round holds out a single row; it extracts the most from a very small dataset at a correspondingly high computational cost. One structural point carries over from Session 1: every preprocessing step fitted from data — scaling statistics, imputation values — must be re-fitted inside each fold on that fold's training portion, not once on the whole dataset beforehand, or the sealed paper has been read. Where the analogy breaks down: past papers are genuinely independent, whereas folds drawn from time-ordered data are not, and time series require ordered splitting rather than random folds.
 
@@ -259,7 +260,7 @@ Ordinary Least Squares from Session 2 solves the same problem exactly and in one
 
 **Formula (Gradient descent update rule)** — **Essential**
 $$b_j := b_j - \alpha \frac{\partial J}{\partial b_j}$$
-**Where** — $b_j$: the coefficient being updated; $:=$ : assignment, meaning the new value replaces the old at each iteration; $\alpha$: the learning rate, a hyperparameter setting the step size, itself tuned in Section 6; $J$: the cost function being minimised, such as MSE from Session 3; $\frac{\partial J}{\partial b_j}$: the partial derivative of the cost with respect to $b_j$, i.e. the slope of the cost surface in that coefficient's direction; the minus sign: the step that makes the move *downhill*, since the gradient itself points uphill.
+**Where** — $b_j$: the coefficient being updated; $:=$ : assignment, meaning the new value replaces the old at each iteration; $\alpha$: the learning rate, a hyperparameter setting the step size, itself tuned in Section 6; $J$: the cost function being minimised, such as MSE from Session 3; $\frac{\partial J}{\partial b_j}$: the partial derivative of the cost with respect to $b_j$, i.e. the slope of the cost surface in that coefficient's direction; the minus sign: the step that makes the move _downhill_, since the gradient itself points uphill.
 
 **Example** — Take the toy one-parameter cost $J(b) = (b-4)^2$, whose minimum is plainly at $b = 4$. Starting at $b = 0$ with $\alpha = 0.1$: the gradient is $2(b-4) = 2(0-4) = -8$, so $b := 0 - 0.1(-8) = 0.8$. Recomputing at $b = 0.8$ gives a gradient of $-6.4$, so the next step is $b := 0.8 + 0.64 = 1.44$.
 
@@ -308,7 +309,7 @@ It is the direct instrument for the high-variance side of Section 1's tradeoff. 
 
 ### How it works
 
-Both variants below leave the fitting procedure and the squared-error term exactly as Session 2 had them and add one more term to the quantity being minimised. They differ only in how the elastic behaves — and that single difference produces two qualitatively different outcomes.
+Both variants below leave the fitting procedure and the squared-error term exactly as Session 2 had them and add one more term to the quantity being minimised. They differ only in how the elastic behaves — and that single difference produces two qualitatively different outcomes, with the third variant simply attaching both kinds of elastic at once.
 
 ### Core takeaway
 
@@ -352,26 +353,53 @@ $$J(b) = \sum_{i=1}^{n}(y_i - \hat y_i)^2 + \lambda\sum_{j=1}^{k} \left|b_j\righ
 
 **Interpretation** — Because a coefficient of exactly zero means the predictor contributes nothing, Lasso performs **feature selection** as a by-product of fitting — an alternative to, or a complement of, the explicit selection algorithms from Session 4, with the difference that Lasso decides while fitting rather than in a separate search.
 
-**Important details** — Lasso has a known weakness under strong multicollinearity: given several near-identical predictors it tends to keep one arbitrarily and zero the rest, which produces a sparse model but an unstable choice of which predictor survives. Ridge, by contrast, shares the effect between them. This is exactly why the two are chosen for different situations, and why combining both penalties is a recognised third option. Feature scaling is required here for the same reason as Ridge. Where the analogy breaks down: a real elastic band would snap rather than hold a coefficient pinned at exactly zero, whereas L1's constant pull does hold it there against small opposing forces from the data.
+**Important details** — Lasso has a known weakness under strong multicollinearity: given several near-identical predictors it tends to keep one arbitrarily and zero the rest, which produces a sparse model but an unstable choice of which predictor survives. Ridge, by contrast, shares the effect between them. This is exactly why the two are chosen for different situations, and why combining both penalties is a recognised third option, taken up in 5.3. Feature scaling is required here for the same reason as Ridge. Where the analogy breaks down: a real elastic band would snap rather than hold a coefficient pinned at exactly zero, whereas L1's constant pull does hold it there against small opposing forces from the data.
 
 **Core takeaway** — Lasso can zero a coefficient because its pull does not fade near zero, which turns regularization into selection.
 
-**Exam focus** — The L1 cost function and the reason Lasso can zero coefficients while Ridge cannot. Being able to explain *why* — the behaviour of the penalty near zero — distinguishes a strong answer from a memorised one.
+**Exam focus** — The L1 cost function and the reason Lasso can zero coefficients while Ridge cannot. Being able to explain _why_ — the behaviour of the penalty near zero — distinguishes a strong answer from a memorised one.
 
-#### Comparison: Ridge vs Lasso
+### 5.3 Elastic-Net Regression (L1 + L2)
 
-| Aspect                      | Ridge (L2)                                            | Lasso (L1)                                                   |
-| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
-| Penalty                     | Sum of squared coefficients, $\lambda\sum b_j^2$      | Sum of absolute coefficients, $\lambda\sum \lvert b_j\rvert$ |
-| Behaviour near zero         | Pull weakens, approaching zero without reaching it    | Pull stays constant, so zero is reachable and held           |
-| Effect on coefficients      | Shrinks all smoothly                                  | Shrinks some to exactly zero                                 |
-| Performs feature selection? | No                                                    | Yes                                                          |
-| Under multicollinearity     | Shares the effect between correlated predictors       | Keeps one arbitrarily, zeroes the rest                       |
-| Best suited for             | Most predictors matter; correlated predictors present | Many predictors suspected irrelevant; sparsity wanted        |
+**Meaning** — Elastic-Net attaches both restraints to every coefficient at once — Ridge's spring and Lasso's constant pull — so the model keeps Lasso's ability to reach exactly zero while retaining Ridge's habit of sharing an effect between correlated predictors instead of picking one at random.
 
-The central difference is what the penalty does in the last stretch to zero, and every practical consequence follows from it. Choose Ridge when the predictors are correlated and you want them all retained in stabilised form; choose Lasso when you expect many predictors to be irrelevant and want a sparser, more interpretable model.
+> **Formal definition:** Elastic-Net regression is a regularized linear regression technique that adds a weighted combination of the L1 and L2 penalties to the OLS cost function, performing feature selection like Lasso while retaining Ridge's stable treatment of correlated predictors.
 
-**Connection** — Both variants leave one number unresolved: $\lambda$ itself. That number, along with gradient descent's $\alpha$ and cross-validation's $k$, is a setting rather than a learned parameter — which is the subject of the final section.
+**Feel for the quantity** — With only the L2 weight active the method is exactly Ridge; with only the L1 weight active it is exactly Lasso; in between, both restraints act on every coefficient at the same time — the constant pull finishes off the genuinely useless predictors, and the spring stops any surviving coefficient from growing unreasonably large.
+
+**Formula (Elastic-Net cost function, separate penalties)** — **Essential**
+$$J(b) = \sum_{i=1}^{n}(y_i - \hat y_i)^2 + \lambda_1\sum_{j=1}^{k}\left|b_j\right| + \lambda_2\sum_{j=1}^{k} b_j^2$$
+**Where** — $J(b)$: the total cost being minimised; $\sum(y_i - \hat y_i)^2$: the ordinary sum of squared residuals, the goodness-of-fit term, identical to Ridge's and Lasso's; $\lambda_1$: the strength of the L1 penalty, controlling how readily coefficients are driven to zero; $\sum|b_j|$: the L1 penalty, the sum of absolute coefficients; $\lambda_2$: the strength of the L2 penalty, controlling how heavily large coefficients are discouraged; $\sum b_j^2$: the L2 penalty, the sum of squared coefficients; $b_j$: the coefficient of predictor $j$; $k$: the number of predictors; $n$: the number of observations. As in 5.1 and 5.2, the intercept $b_0$ is excluded from both penalties.
+
+**Formula (Elastic-Net cost function, mixing-ratio form)** — **Exam-important**
+$$J(b) = \sum_{i=1}^{n}(y_i - \hat y_i)^2 + \lambda\left[\rho\sum_{j=1}^{k}\left|b_j\right| + (1-\rho)\sum_{j=1}^{k} b_j^2\right]$$
+**Where** — $J(b)$: the total cost; $\sum(y_i - \hat y_i)^2$: the sum of squared residuals; $\lambda$: the overall regularization strength, how hard both restraints pull together; $\rho$: the mixing ratio between the two penalties, taking values from 0 to 1, where $\rho = 1$ gives pure Lasso and $\rho = 0$ gives pure Ridge; $\sum|b_j|$: the L1 penalty; $\sum b_j^2$: the L2 penalty; $b_j$: the coefficient of predictor $j$; $k$: the number of predictors; $n$: the number of observations. Some texts and libraries write the mixing ratio as $\alpha$, which collides with the learning rate $\alpha$ from Section 4 — check which quantity a given source means before using its formula.
+
+**Example** — The house-price model carries three locality-derived features that overlap heavily, plus a genuinely irrelevant `house_id` column. Lasso zeroes `house_id` correctly but then keeps one locality feature arbitrarily and zeroes the other two, and which one survives changes if a few rows change. Ridge stabilises all three but leaves `house_id` in the model with a small non-zero coefficient. Elastic-Net at $\rho = 0.5$ zeroes `house_id` and keeps all three locality features together with shrunken, comparable coefficients.
+
+**Interpretation** — That behaviour has a name: the **grouping effect**. Correlated predictors are admitted or excluded as a group rather than individually, which is what makes Elastic-Net's selection reproducible across samples where Lasso's is not.
+
+**Important details** — The cost is a second dial. Where Ridge and Lasso each have one hyperparameter, Elastic-Net has two — $\lambda$ and $\rho$ — so the search in Section 6 becomes two-dimensional, which is precisely the situation where random search starts beating grid search. Feature scaling is required for the same reason as in 5.1 and 5.2, since both penalties act on raw coefficient size. The method is sometimes described as **two-stage**, because its original formulation applies the Ridge-style penalty first and the Lasso-style penalty to that result, then rescales to undo the double shrinkage. It is the standard choice when $k > n$ — more predictors than observations — where Lasso alone can select at most $n$ of them.
+
+**Core takeaway** — Elastic-Net exists because Lasso's ability to eliminate and Ridge's ability to share are complements rather than alternatives, and the price of having both is one extra hyperparameter to tune.
+
+**Exam focus** — The combined cost function in either form, the fact that $\rho = 0$ and $\rho = 1$ recover Ridge and Lasso exactly, and one sentence on when to prefer it: many predictors, heavily correlated, and many of them suspected irrelevant.
+
+#### Comparison: Ridge vs Lasso vs Elastic-Net
+
+| Aspect                      | Ridge (L2)                                            | Lasso (L1)                                                   | Elastic-Net (L1 + L2)                                            |
+| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Penalty                     | Sum of squared coefficients, $\lambda\sum b_j^2$      | Sum of absolute coefficients, $\lambda\sum \lvert b_j\rvert$ | Weighted sum of both penalties                                   |
+| Behaviour near zero         | Pull weakens, approaching zero without reaching it    | Pull stays constant, so zero is reachable and held           | Constant pull reaches zero; the spring still limits large values |
+| Effect on coefficients      | Shrinks all smoothly                                  | Shrinks some to exactly zero                                 | Shrinks all, and zeroes some                                     |
+| Performs feature selection? | No                                                    | Yes                                                          | Yes                                                              |
+| Under multicollinearity     | Shares the effect between correlated predictors       | Keeps one arbitrarily, zeroes the rest                       | Keeps or drops correlated predictors as a group                  |
+| Hyperparameters             | $\lambda$                                             | $\lambda$                                                    | $\lambda$ and the mixing ratio $\rho$                            |
+| Best suited for             | Most predictors matter; correlated predictors present | Many predictors suspected irrelevant; sparsity wanted        | Both at once, and the $k > n$ case                               |
+
+The central difference is what the penalty does in the last stretch to zero, and every practical consequence follows from it. Choose Ridge when the predictors are correlated and you want them all retained in stabilised form; choose Lasso when you expect many predictors to be irrelevant and want a sparser, more interpretable model; choose Elastic-Net when both conditions hold at once and you are prepared to tune a second hyperparameter for it.
+
+**Connection** — All three variants leave one number unresolved: $\lambda$ itself, joined in Elastic-Net's case by $\rho$. Those numbers, along with gradient descent's $\alpha$ and cross-validation's $k$, are settings rather than learned parameters — which is the subject of the final section.
 
 ---
 
@@ -402,7 +430,7 @@ Hyperparameter tuning is the systematic search for the combination of pre-set co
 
 ### Why it matters
 
-Session 1 defined hyperparameters as settings chosen rather than learned, and this folder has accumulated several: Ridge and Lasso's $\lambda$, gradient descent's learning rate $\alpha$, cross-validation's fold count $k$, and the polynomial degree from Session 4. Every one of them materially changes the result, and none of them is determined by the fitting procedure. Something has to choose them, and "a value that looked reasonable" is not a defensible answer.
+Session 1 defined hyperparameters as settings chosen rather than learned, and this folder has accumulated several: Ridge and Lasso's $\lambda$, Elastic-Net's mixing ratio $\rho$ alongside it, gradient descent's learning rate $\alpha$, cross-validation's fold count $k$, and the polynomial degree from Session 4. Every one of them materially changes the result, and none of them is determined by the fitting procedure. Something has to choose them, and "a value that looked reasonable" is not a defensible answer.
 
 ### How it works
 
@@ -420,7 +448,7 @@ The three methods differ only in how they choose where to look next, which is wh
 
 **Example** — For Ridge, try $\lambda \in \{0.01, 0.1, 1, 10\}$. Run 5-fold cross-validation at each value, compare the four average RMSEs, and keep the $\lambda$ with the lowest.
 
-**Important details** — Being exhaustive, it is guaranteed to find the best combination *within the grid you specified* — a guarantee that is weaker than it sounds, since the true optimum may sit between two of your notches, or outside the range entirely. Its real problem is growth: the number of trials multiplies with every hyperparameter added, so four values each for four hyperparameters is 256 trials, and each trial is a full cross-validation.
+**Important details** — Being exhaustive, it is guaranteed to find the best combination _within the grid you specified_ — a guarantee that is weaker than it sounds, since the true optimum may sit between two of your notches, or outside the range entirely. Its real problem is growth: the number of trials multiplies with every hyperparameter added, so four values each for four hyperparameters is 256 trials, and each trial is a full cross-validation.
 
 **Core takeaway** — Grid search's guarantee is only as good as the grid, and the grid is the thing that becomes unaffordable first.
 
@@ -478,10 +506,10 @@ The central difference is whether past results inform the next choice: grid and 
 ### Must understand
 
 - Why the bias-variance decomposition explains the overfitting and underfitting vocabulary from Session 1 (Section 1 into Section 2).
-- Why the diagnosis of overfitting requires the *gap* between two errors rather than the level of one (Section 2).
+- Why the diagnosis of overfitting requires the _gap_ between two errors rather than the level of one (Section 2).
 - Why cross-validation is more reliable than a single train-test split (Section 3).
 - Why gradient descent is needed at all when OLS already has a closed-form solution (Section 4).
-- Why Ridge and Lasso trade bias for variance, and why only Lasso reaches exactly zero (Section 5).
+- Why Ridge and Lasso trade bias for variance, why only Lasso reaches exactly zero, and what Elastic-Net gains by using both penalties (Section 5).
 - Why the three tuning methods diverge in cost as the number of hyperparameters grows (Section 6).
 
 ### Must remember
@@ -490,13 +518,13 @@ The central difference is whether past results inform the next choice: grid and 
 - Overfitting means high variance and low bias with a large train-test gap; underfitting means high bias and low variance with both errors high (Section 2).
 - $k$-fold cross-validation steps, and $\text{CV score} = \frac{1}{k}\sum_i \text{metric}_i$ (Section 3).
 - Gradient descent update rule $b_j := b_j - \alpha \frac{\partial J}{\partial b_j}$; too large an $\alpha$ diverges, too small converges slowly (Section 4).
-- Ridge penalty $\lambda\sum b_j^2$ shrinks without zeroing; Lasso penalty $\lambda\sum|b_j|$ can zero coefficients (Section 5).
+- Ridge penalty $\lambda\sum b_j^2$ shrinks without zeroing; Lasso penalty $\lambda\sum|b_j|$ can zero coefficients; Elastic-Net combines both and selects correlated predictors as a group (Section 5).
 - Grid search is exhaustive within its grid, random search samples, Bayesian optimization uses past trials to guide the next (Section 6).
 
 ### Common question patterns
 
 - _2-mark:_ Define bias, variance, overfitting, gradient descent, regularization, or grid search.
-- _5-mark:_ Compare overfitting and underfitting; compare Ridge and Lasso; explain the role of the learning rate; compare grid search and random search.
+- _5-mark:_ Compare overfitting and underfitting; compare Ridge, Lasso and Elastic-Net; explain the role of the learning rate; compare grid search and random search.
 - _10-mark:_ Explain the bias-variance tradeoff and connect it to overfitting, regularization and hyperparameter tuning as a complete optimization workflow.
 
 ### Answer-writing guidance
@@ -537,7 +565,7 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 3. Why is gradient descent needed when OLS has a closed-form solution?
    **Answer:** The closed form becomes computationally impractical for very large datasets or very many predictors, and does not exist at all for many other model families; gradient descent scales to both cases (Section 4).
 4. Why can Lasso zero a coefficient when Ridge cannot?
-   **Answer:** Ridge's squared penalty produces a pull that weakens as the coefficient approaches zero, leaving nothing to close the final gap; Lasso's absolute-value penalty produces a constant pull that persists at zero and holds the coefficient there (Section 5).
+   **Answer:** Ridge's squared penalty produces a pull that weakens as the coefficient approaches zero, leaving nothing to close the final gap; Lasso's absolute-value penalty produces a constant pull that persists at zero and holds the coefficient there (Section 5). Elastic-Net inherits this ability by including the L1 term (Section 5.3).
 5. Why does Bayesian optimization typically need fewer trials than grid search?
    **Answer:** It builds a model of the score surface from past trials and chooses each new point where the expected gain is greatest, whereas grid search evaluates a fixed list regardless of what it has already learned (Section 6.3).
 6. Why must hyperparameters be scored on validation data rather than training data?
@@ -549,8 +577,8 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 
 1. Compare overfitting and underfitting.
    **Answer:** See the comparison table in Section 2 — overfitting shows low training error and high test error with a wide gap, underfitting shows both errors high and close together, and the repairs are opposite.
-2. Compare Ridge and Lasso regression.
-   **Answer:** See the comparison table in Section 5 — L2 versus L1 penalty, smooth shrinkage versus exact zeroing, no feature selection versus feature selection, and different behaviour under multicollinearity.
+2. Compare Ridge, Lasso and Elastic-Net regression.
+   **Answer:** See the comparison table in Section 5 — L2 versus L1 versus both penalties combined, smooth shrinkage versus exact zeroing, no feature selection versus feature selection versus group-wise selection, and one hyperparameter against two.
 3. Compare grid search, random search and Bayesian optimization.
    **Answer:** See the comparison table in Section 6 — exhaustive but multiplicative, random but budget-bounded, and guided by past trials at the cost of being sequential.
 
@@ -559,7 +587,7 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 1. A model has near-zero training error and much higher test error. Which condition is this, and what would you do?
    **Answer:** Overfitting, i.e. high variance (Section 2). Apply regularization (Section 5), gather more data, or reduce the feature count using Session 4's selection methods.
 2. A dataset has many correlated predictors and you want to keep all of them but stabilise their coefficients. Ridge or Lasso?
-   **Answer:** Ridge (Section 5.1), because it shrinks all coefficients smoothly without zeroing any, distributing the shared effect stably between correlated predictors. Lasso would keep one arbitrarily and drop the rest.
+   **Answer:** Ridge (Section 5.1), because it shrinks all coefficients smoothly without zeroing any, distributing the shared effect stably between correlated predictors. Lasso would keep one arbitrarily and drop the rest. If some of those predictors were also suspected to be irrelevant, Elastic-Net (Section 5.3) would be the better choice, since it drops correlated predictors as a group rather than individually.
 3. You must tune five hyperparameters and each training run takes an hour. Which tuning method, and why?
    **Answer:** Bayesian optimization (Section 6.3), since expensive trials make minimising the number of trials the dominant concern, and it uses past results to do exactly that. If many machines were available in parallel, random search would become competitive despite needing more trials.
 4. A model's cost function increases with every gradient descent iteration instead of decreasing. What is the likely cause?
@@ -576,9 +604,9 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 
 - **One-sentence summary:** Model optimization manages the split of error into bias and variance — detecting the imbalance with cross-validation, fitting coefficients at scale with gradient descent, correcting excess variance with Ridge or Lasso regularization, and choosing every setting involved by systematic search.
 - **Hierarchy:** see the Concept Hierarchy diagram at the top of this file.
-- **Essential definitions:** bias and variance (1), overfitting and underfitting (2), $k$-fold cross-validation (3), gradient descent (4), Ridge and Lasso (5.1–5.2), grid search, random search and Bayesian optimization (6.1–6.3).
-- **Key formulas:** the bias-variance decomposition (1); the cross-validation score (3); the gradient descent update rule (4); the Ridge and Lasso cost functions (5.1–5.2).
-- **Most important comparison:** Ridge versus Lasso (Section 5), because it decides whether regularization also performs selection.
+- **Essential definitions:** bias and variance (1), overfitting and underfitting (2), $k$-fold cross-validation (3), gradient descent (4), Ridge, Lasso and Elastic-Net (5.1–5.3), grid search, random search and Bayesian optimization (6.1–6.3).
+- **Key formulas:** the bias-variance decomposition (1); the cross-validation score (3); the gradient descent update rule (4); the Ridge, Lasso and Elastic-Net cost functions (5.1–5.3).
+- **Most important comparison:** Ridge versus Lasso versus Elastic-Net (Section 5), because it decides whether regularization also performs selection, and how it behaves when predictors overlap.
 - **5 exam keywords:** bias-variance tradeoff, cross-validation, learning rate, L1 and L2 penalty, Bayesian optimization.
 - **5 common mistakes:** treating overfitting and underfitting as needing the same repair; judging a model from test error alone without the training error to compare against; assuming a too-large learning rate merely slows convergence rather than diverging; expecting Ridge to perform feature selection; regularising unscaled features and reading the penalty as fair.
 
@@ -591,6 +619,7 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 - **5. Regularization** — every coefficient tethered to zero by elastic; the fit it gives up was fitting noise.
 - **5.1 Ridge** — a spring whose pull fades near zero; shrinks everything, eliminates nothing.
 - **5.2 Lasso** — a constant pull that does not fade; turns regularization into selection.
+- **5.3 Elastic-Net** — both elastics tied to the same peg; correlated predictors leave or stay as a group.
 - **6. Hyperparameter tuning** — hunting a station on an analogue dial; the three methods differ only in where they turn next.
 
 ## Topic Coverage
@@ -602,6 +631,7 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 - Regularization — Covered in Section 5 (source: `05-model-optimization.md`, Session 5)
 - Ridge — Covered in Section 5.1 (source: `05-model-optimization.md`, Session 5)
 - Lasso — Covered in Section 5.2 (source: `05-model-optimization.md`, Session 5)
+- Elastic-Net — Covered in Section 5.3 (source: `Session_5 - ModelOptimization.pdf`, Regularization; added after the knowledge-map audit)
 - Hyperparameter Tuning — Covered in Section 6 (source: `05-model-optimization.md`, Session 5)
 - Grid Search — Covered in Section 6.1 (source: `05-model-optimization.md`, Session 5)
 - Random Search — Covered in Section 6.2 (source: `05-model-optimization.md`, Session 5)
@@ -611,5 +641,4 @@ _10-mark:_ "Introduction: a model's usefulness depends not on how well it fits t
 
 - **Partial derivatives** — the gradient descent update rule in Section 4 is written entirely in terms of $\partial J/\partial b_j$, which the material uses without explaining. Needed to compute a gradient rather than be handed one.
 - **The probabilistic surrogate model in Bayesian optimization** — Section 6.3 describes the method as building a probabilistic model of the objective and balancing exploration against exploitation, but never names or explains the surrogate (commonly a Gaussian process) or the acquisition function that makes the choice.
-- **ElasticNet** — the folder README lists it alongside Ridge and Lasso, and Section 5.2 notes that combining both penalties is a recognised option, but no session in the material actually covers it.
 - **Choosing $k$ for cross-validation** — Section 3 uses $k=5$ throughout and mentions LOOCV as the extreme, but gives no basis for choosing between them.

@@ -10,6 +10,8 @@ flowchart TD
     S1[Session 1: Basics of ML & Data Preprocessing] --> P1[1. Basics of Machine Learning]
     S1 --> P2[2. Data Preprocessing]
     P1 --> C11[1.1 Machine Learning Overview]
+    C11 --> C111[1.1.1 The AI / ML / DL Hierarchy]
+    C11 --> C112[1.1.2 Machine Learning Prerequisites]
     P1 --> C12[1.2 Traditional Programming vs Machine Learning]
     P1 --> C13[1.3 Basic Terms used in Machine Learning]
     P1 --> C14[1.4 Types of Machine Learning]
@@ -22,6 +24,8 @@ flowchart TD
     C22 --> C221[2.2.1 One-Hot Encoding]
     C22 --> C222[2.2.2 Label Encoding]
     C22 --> C223[2.2.3 Ordinal Encoding]
+    C22 --> C224[2.2.4 Frequency Encoding]
+    C22 --> C225[2.2.5 Target Encoding]
     P2 --> C23[2.3 Normalization and Transformation]
     P2 --> C24[2.4 Outlier Detection / Removal]
     C24 --> C241[2.4.1 Boxplot method]
@@ -32,7 +36,7 @@ flowchart TD
     P2 --> C26[2.6 Train-Test Split]
 ```
 
-**Reordering note:** Within "Basics of Machine Learning", _Basic Terms_ and _Types of Machine Learning_ sit before _Understanding the Problem and Data_ and _Steps in Machine Learning_, because the vocabulary and the categories are needed to describe the problem-understanding step and the lifecycle correctly. No topic was dropped, merged, or added as a new prerequisite — every supplied item appears exactly once below.
+**Reordering note:** Within "Basics of Machine Learning", _Basic Terms_ and _Types of Machine Learning_ sit before _Understanding the Problem and Data_ and _Steps in Machine Learning_, because the vocabulary and the categories are needed to describe the problem-understanding step and the lifecycle correctly. No supplied topic was dropped or merged — every one appears exactly once below. Four items present in the Session 1 source material but absent from the original list were added afterwards and are marked as such in Topic Coverage: the **AI / ML / DL hierarchy** (1.1.1), the **prerequisite fields** (1.1.2), and **frequency** and **target encoding** (2.2.4 and 2.2.5).
 
 **Running example used throughout:** predicting **house prices** from features like area, number of rooms, locality, and age of the house (a regression problem — the same worked scenario carries through every session in this folder).
 
@@ -85,6 +89,73 @@ Machine Learning exists because showing a system many correct answers is often f
 **Core takeaway** — Learning is only learning when more experience measurably improves performance — otherwise it is just a fixed program that happened to be built from data.
 
 **Exam focus** — Know Tom Mitchell's T/E/P definition verbatim; naming all three parts for a given scenario is a very common 2-mark question.
+
+#### 1.1.1 The AI / ML / DL Hierarchy
+
+**Picture this** — Go back to the fruit market, but this time stand at the entrance and look at the whole place. The market is the big thing. Inside it is a fruit section. Inside the fruit section is a single mango stall. Everything on that stall is fruit, and everything in the fruit section is in the market — but the man selling buckets by the gate is in the market and nowhere near the fruit. Walking inward, the goods get narrower and more specialised at every step.
+
+**Mapping**
+
+| Analogy element                                    | What it really is                                     |
+| -------------------------------------------------- | ----------------------------------------------------- |
+| The whole market                                   | Artificial Intelligence                               |
+| The fruit section inside it                        | Machine Learning                                      |
+| The single mango stall inside that section         | Deep Learning                                         |
+| The bucket seller by the gate                      | An AI system that is not ML — hand-coded expert rules |
+| Goods narrowing as you walk inward                 | Each layer is a narrower, more specialised subset     |
+| Mangoes still being fruit, and still in the market | Every DL system is ML, and every ML system is AI      |
+
+**Meaning** — Artificial Intelligence, Machine Learning and Deep Learning are three nested fields rather than three competing ones: AI is the broad goal of making machines behave intelligently, ML is the subset of AI that reaches that goal by learning from data, and DL is the subset of ML that learns using many-layered neural networks.
+
+> **Formal definition:** Artificial Intelligence is the broad field concerned with building machines capable of performing tasks that normally require human intelligence; Machine Learning is the subset of Artificial Intelligence in which systems learn rules from data rather than being explicitly programmed; Deep Learning is the subset of Machine Learning that uses multi-layered artificial neural networks, inspired by the human brain, to learn features directly from large volumes of data.
+
+**Why it matters** — The three terms are used interchangeably in ordinary speech and are not interchangeable at all. Knowing the nesting tells you immediately that a hand-written rule engine can be AI without being ML, that linear regression is genuinely ML without being anywhere near DL, and that this entire folder lives in the middle layer.
+
+**How it works**
+
+```mermaid
+flowchart TB
+    subgraph AI["Artificial Intelligence — machines performing tasks that need intelligence"]
+        RB["Rule-based and expert systems<br/>AI, but not ML"]
+        subgraph ML["Machine Learning — rules learned from data"]
+            CL["Linear regression, decision trees, k-NN<br/>ML, but not DL"]
+            subgraph DL["Deep Learning — many-layered neural networks"]
+                NN["CNNs, RNNs, transformers"]
+            end
+        end
+    end
+```
+
+Read the diagram from the outside in. Each box sits entirely inside the one around it, and each inner layer buys more capability at the cost of more data, more computation and less interpretability.
+
+**Example** — A chess program that follows rules a grandmaster wrote by hand is AI and nothing more. The house-price model in these notes learns its coefficients from past sales, so it is AI and ML. A network that reads photographs of a house and estimates its price from the pixels alone is AI, ML and DL, because nobody told it what a kitchen or a garden looks like — it worked those features out from the images itself.
+
+**Important details** — The practical dividing line between the middle and inner layer is **feature engineering**: classical machine learning expects a human to hand it useful columns, which is the whole of Section 2.5 and of Session 4, whereas deep learning derives its own features from raw input. Where the analogy breaks down: a market's sections have fixed walls, whereas these boundaries are conventions, and some methods sit awkwardly across them.
+
+**Core takeaway** — The three names describe nested circles rather than rival approaches, so every deep learning system is machine learning and every machine learning system is artificial intelligence, but never the reverse.
+
+**Exam focus** — "Differentiate AI, ML and DL" is a standard 5-mark question. Draw the nested diagram, give one example belonging to each layer but not the next one inward, and name feature engineering as the ML/DL dividing line.
+
+#### 1.1.2 Machine Learning Prerequisites
+
+**Meaning** — Machine learning is not a self-contained subject; it is assembled from four existing fields, and a working practical understanding of each is what lets you read a method rather than merely run it.
+
+> **Formal definition:** The prerequisites of machine learning are linear algebra, calculus, statistics and probability, and programming — the four disciplines that respectively supply its data representation, its optimization, its inference, and its implementation.
+
+**Why it matters** — Every formula in the sessions ahead comes from one of these four, so recognising which one a step belongs to tells you where to go when that step stops making sense. It also sets an honest expectation: none of them has to be mastered before starting, but each will be called on.
+
+| Field                          | What it supplies                                                           | Where it appears in this folder                                             |
+| ------------------------------ | -------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Linear algebra**             | Vectors and matrices — how a dataset and a set of coefficients are written | The coefficient vector of multiple regression (Session 2)                   |
+| **Calculus**                   | Derivatives and slopes — how a quantity is minimised                       | The gradient in gradient descent (Session 5)                                |
+| **Statistics and probability** | Means, variance, distributions, hypothesis tests                           | Scaling and outliers (2.3, 2.4); every significance test (Sessions 2 and 3) |
+| **Programming**                | Turning all of the above into something that actually runs                 | The whole pipeline, from preprocessing to deployment (Session 6)            |
+
+**Important details** — The depth required depends entirely on the goal. Designing a new algorithm demands the mathematics in full rigour; applying an existing one to a business problem demands only enough to recognise when a method's conditions have been violated — which is exactly what Session 3's assumption checks are for. Treat the four as a map of where to dig deeper, not as a gate to pass before starting.
+
+**Core takeaway** — Machine learning borrows all of its machinery from four older fields, so a step that feels impenetrable is almost always a gap in one identifiable prerequisite rather than in machine learning itself.
+
+**Exam focus** — Name all four and state what each contributes in one phrase; the pairing of calculus with optimization and of statistics with inference is the part usually being tested.
 
 ### 1.2 Traditional Programming vs Machine Learning
 
@@ -186,6 +257,15 @@ Three people are learning a new city. The first walks around with a local who co
 **Why it matters** — Choosing the wrong category makes every later decision wrong: you cannot fit a regression line if nobody recorded the prices, and you cannot cluster your way to a specific numeric prediction.
 
 **How it works** — Supervised learning splits further by the _kind_ of label: **regression** when the label is a continuous number (price), **classification** when it is a category (spam / not spam). This folder and the next are devoted to exactly those two. Unsupervised learning covers **clustering** (grouping similar houses without being told the groups) and **dimensionality reduction** (compressing many features into fewer while keeping most of the information). Reinforcement learning has an **agent** acting in an **environment**, collecting **rewards**, and learning a policy that maximises total reward over time.
+
+**Named clustering families** — Clustering itself divides in two, by whether the groups are produced as a nested tree or as one flat set. The wanderer either notices "these two streets belong together, and that pair of pairs forms a quarter", or simply declares three quarters outright.
+
+| Family                             | How the groups are formed                                                                    | Named algorithms                                                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hierarchical**                   | Builds a nested tree of groups, which can be cut at any level to give any number of clusters | **Agglomerative** — bottom-up: every point starts alone and the nearest pair merges repeatedly; **Divisive** — top-down: one group containing everything is split repeatedly          |
+| **Non-hierarchical (partitional)** | Produces one flat set of groups directly, with no tree                                       | **K-Means** — assigns points to $k$ centres and moves those centres until they settle; **DBSCAN** — grows clusters through dense regions and leaves sparse points unassigned as noise |
+
+The practical difference is that hierarchical methods do not need the number of clusters in advance but scale poorly, while K-Means demands that number up front and DBSCAN demands a density setting instead — and DBSCAN is the only one of the four willing to refuse a point altogether, which makes it a natural outlier detector as well.
 
 #### Comparison: Types of Machine Learning
 
@@ -379,7 +459,9 @@ Preprocessing is not tidying for its own sake — every step removes one specifi
 
 1. Inspect the unique values of every column and the plausible range of every numeric column.
 2. Convert anything meaning "missing" into a proper missing marker.
-3. Then choose treatment: **drop** the row or column when little data is affected or the column is unimportant, or **impute** — fill with the mean or median for numeric columns, the mode for categorical ones, or a model-based estimate.
+3. Then choose treatment, of which there are two families:
+   - **Drop** — remove the whole **column** when a large share of it is absent, the usual rule of thumb being **60–70% or more missing**, since too little is left to estimate the rest from. Remove the whole **row** when only a handful of rows are affected, accepting that every other value in those rows is discarded along with the gap — which is why row-dropping is a loss of information rather than a free repair.
+   - **Replace, or impute** — fill the gap with a statistic computed from the column: the **mean** for a numeric column, the **median** instead when that column contains outliers that would drag the mean (2.4), and the **most frequent value**, the mode, for a categorical column. A model-based estimate, predicting the missing column from the others, is the more elaborate option.
 
 **Example** — The "locality" column contains `"?"` for some rows. Until those are recognised as missing, `"?"` will be encoded (2.2) as a perfectly ordinary fourth locality, and the model will dutifully learn a price effect for it.
 
@@ -440,17 +522,38 @@ The supermarket checkout can only read barcodes. A customer arrives with a hand-
 
 **Important details** — Mechanically identical to label encoding; the difference is entirely in whether the order you imposed is true. It still assumes equal spacing between consecutive levels, which is a further claim worth checking.
 
+#### 2.2.4 Frequency Encoding
+
+**Meaning** — Frequency encoding replaces each category with how often it occurs in the data — a raw count, or the share of rows it accounts for — so the number written on the sack stops being arbitrary and starts carrying one real fact about the category.
+
+> **Formal definition:** Frequency encoding replaces each category of a categorical variable with the number, or the proportion, of observations belonging to that category.
+
+**Example** — Of 1,000 house records, 500 are Downtown, 300 Suburb and 200 Rural. The locality column becomes 0.5, 0.3 and 0.2 — one column, whatever the number of categories.
+
+**Important details** — Its advantage is width: a single column no matter how many levels, which makes it the practical answer to a **high-cardinality** column such as postcode, where one-hot would add hundreds of columns. Its cost is that it asserts an order by commonness, which helps only when commonness genuinely relates to the target, and that two categories occurring equally often collapse to the same code and become permanently indistinguishable to the model.
+
+#### 2.2.5 Target Encoding
+
+**Meaning** — Target encoding replaces each category with the average value of the target for the rows in that category, so the code itself states something about what the model is trying to learn — which is both why it is so effective and why it is the one encoding that can cheat.
+
+> **Formal definition:** Target encoding, also called mean encoding, replaces each category of a categorical variable with the mean of the target variable computed over the observations belonging to that category.
+
+**Example** — Mean sale price is ₹90 lakh for Downtown, ₹60 lakh for Suburb and ₹40 lakh for Rural. The locality column becomes 90, 60 and 40 — again one column, and one already aligned with price.
+
+**Important details** — Two cautions, and the first is serious. Because the code is computed **from the target**, a row's own price helps produce the very feature used to predict that price; done carelessly this is **data leakage** in its purest form, and the model looks excellent in training and collapses in production. The discipline is to compute the category means on the training rows only — the split from 2.6 — and, within training, from rows other than the one being encoded. Second, a category appearing in only two rows gets a mean built from two numbers, which is noise; the standard repair is **smoothing**, pulling each category's mean towards the overall mean by an amount that depends on how few rows support it.
+
 #### Comparison: Encoding Techniques
 
-| Aspect          | One-Hot Encoding                      | Label Encoding                           | Ordinal Encoding              |
-| --------------- | ------------------------------------- | ---------------------------------------- | ----------------------------- |
-| Output          | One binary column per category        | One integer column                       | One integer column            |
-| Assumes order?  | No                                    | No, but the model may infer one          | Yes, and intentionally        |
-| Best suited for | Nominal categories, few unique values | Tree-based models, quick default         | Genuinely ranked categories   |
-| Example column  | Locality                              | Locality, with caution                   | House condition               |
-| Limitation      | Many columns when categories are many | Can mislead models that assume magnitude | Wrong if the order is guessed |
+| Aspect             | One-Hot Encoding                      | Label Encoding                           | Ordinal Encoding              | Frequency Encoding                         | Target Encoding                                      |
+| ------------------ | ------------------------------------- | ---------------------------------------- | ----------------------------- | ------------------------------------------ | ---------------------------------------------------- |
+| Output             | One binary column per category        | One integer column                       | One integer column            | One numeric column                         | One numeric column                                   |
+| Code is built from | The category identity only            | An arbitrary index                       | The category's true rank      | How often the category occurs              | The target's mean inside the category                |
+| Assumes order?     | No                                    | No, but the model may infer one          | Yes, and intentionally        | Yes — by commonness                        | Yes — by the target itself                           |
+| Best suited for    | Nominal categories, few unique values | Tree-based models, quick default         | Genuinely ranked categories   | High-cardinality nominal columns           | High-cardinality columns where signal matters        |
+| Example column     | Locality                              | Locality, with caution                   | House condition               | Postcode                                   | Postcode                                             |
+| Limitation         | Many columns when categories are many | Can mislead models that assume magnitude | Wrong if the order is guessed | Equally common categories become identical | Leaks the target unless fitted on training rows only |
 
-The central difference is what each encoding implies about order: one-hot implies none at the cost of extra columns, while label and ordinal encoding both imply an order but only ordinal encoding's is real. Choose one-hot for unordered categories with few levels, ordinal when a genuine rank exists, and label encoding mainly as a lightweight default for tree-based algorithms.
+The central difference is what the number is made of: one-hot, label and ordinal encoding derive the code from the category's identity or rank alone, while frequency and target encoding put outside information into it — how common the category is, or how the target behaves within it — which is exactly why those two are the only ones that can leak. Choose one-hot for unordered categories with few levels, ordinal when a genuine rank exists, label encoding as a lightweight default for tree-based algorithms, frequency encoding when a nominal column has too many levels for one-hot, and target encoding when the extra signal is worth the leakage discipline it demands.
 
 **Core takeaway** — Encoding is not a format conversion but an assertion about order, and the only bad choice is the one whose assertion the data does not support.
 
@@ -668,16 +771,21 @@ A cook tasting his own dish while cooking is not a taste test — he already kno
 - The T/E/P framing and why all three must be named for a claim of "learning" to be testable (Section 1.1).
 - How to decide supervised, unsupervised or reinforcement for a given problem (Section 1.4), and regression versus classification within supervised (Section 1.5).
 - Why a numeric encoding is an assertion about order, and why label encoding's assertion is unsafe (Section 2.2).
+- Why target encoding is the only encoding that can leak the answer into its own input (Section 2.2.5).
 - Why the train-test split must precede the fitting of any preprocessing statistic (Section 2.6).
 
 ### Must remember
 
 - Tom Mitchell's definition — see the formal definition in Section 1.1.
+- AI ⊃ ML ⊃ DL, with one example belonging to each layer — see the formal definition in Section 1.1.1.
+- The four prerequisite fields and what each supplies — Section 1.1.2.
 - Feature versus label, parameters versus hyperparameters, overfitting versus underfitting — Section 1.3.
 - The three types of machine learning and their feedback signals — see the formal definition in Section 1.4.
+- Hierarchical (agglomerative, divisive) versus non-hierarchical (K-Means, DBSCAN) clustering — Section 1.4.
 - Lifecycle order: problem definition → data collection → preprocessing → model selection → training → evaluation → hyperparameter tuning → deployment → monitoring (Section 1.6).
 - Standard versus non-standard missing values — Sections 2.1.1 and 2.1.2.
-- One-hot, label and ordinal encoding, and what each implies about order — Section 2.2.
+- Drop a column at roughly 60–70% missing; impute with the mean, the median when outliers are present, or the mode for categorical columns — Section 2.1.2.
+- One-hot, label, ordinal, frequency and target encoding, and what each implies about order — Section 2.2.
 - Min-Max: $x' = \frac{x-x_{min}}{x_{max}-x_{min}}$; Standardization: $x' = \frac{x-\mu}{\sigma}$ (Section 2.3).
 - IQR bounds: $Q_1 - 1.5\,IQR$ and $Q_3 + 1.5\,IQR$ (Section 2.4.2).
 - Typical train-test ratio 70–80% / 20–30%, and the definition of data leakage (Section 2.6).
@@ -685,7 +793,7 @@ A cook tasting his own dish while cooking is not a taste test — he already kno
 ### Common question patterns
 
 - _2-mark:_ Define machine learning; feature versus label; overfitting versus underfitting; standard versus non-standard missing values; define an outlier.
-- _5-mark:_ Traditional programming versus machine learning; the three types of machine learning; the three encoding techniques; the four outlier detection methods.
+- _5-mark:_ Traditional programming versus machine learning; AI versus ML versus DL; the three types of machine learning; the five encoding techniques; the four outlier detection methods.
 - _10-mark:_ Explain the complete machine learning lifecycle with a diagram and a worked example; explain data preprocessing with all its sub-techniques applied to a sample dataset.
 
 ### Answer-writing guidance
@@ -759,16 +867,17 @@ _10-mark:_ "Introduction: Turning a real-world question into a working predictiv
 
 - **One-sentence summary:** Machine learning derives rules from examples instead of receiving them as code, and data preprocessing is the stage that removes every way raw data could quietly mislead those derived rules.
 - **Hierarchy:** see the Concept Hierarchy diagram at the top of this file.
-- **Essential definitions:** machine learning (1.1), traditional programming versus ML (1.2), core vocabulary (1.3), the three types (1.4), problem framing (1.5), the lifecycle (1.6), missing values (2.1), encoding (2.2), normalization (2.3), outlier (2.4), feature engineering (2.5), train-test split (2.6).
+- **Essential definitions:** machine learning (1.1), the AI/ML/DL nesting (1.1.1), the four prerequisites (1.1.2), traditional programming versus ML (1.2), core vocabulary (1.3), the three types (1.4), problem framing (1.5), the lifecycle (1.6), missing values (2.1), encoding (2.2), normalization (2.3), outlier (2.4), feature engineering (2.5), train-test split (2.6).
 - **Key workflow:** the nine-stage lifecycle (1.6), and within its third stage the preprocessing order missing values → encoding → scaling → outliers → feature engineering → split (Section 2).
-- **Most important comparison:** one-hot versus label versus ordinal encoding (2.2), because it determines what the model is told about order.
+- **Most important comparison:** the five encoding techniques (2.2), because the choice determines both what the model is told about order and whether the encoding can leak.
 - **Key formulas:** Min-Max and Standardization (2.3), IQR bounds (2.4.2).
 - **5 exam keywords:** overfitting, encoding, normalization, interquartile range, data leakage.
-- **5 common mistakes:** confusing feature with label; using label encoding on unordered categories; fitting scalers before splitting; trusting the Z-score rule on skewed data; engineering features before the data is clean.
+- **5 common mistakes:** confusing feature with label; using label encoding on unordered categories; fitting scalers — or target-encoding means — before splitting; trusting the Z-score rule on skewed data; engineering features before the data is clean.
 
 ### Mental Models
 
 - **1. Basics of ML** — a child learning ripe mangoes by example; showing many correct answers is often cheaper than knowing the rule that produced them.
+- **1.1.1 AI / ML / DL** — a market, its fruit section, and one mango stall inside it; nested circles, never rivals.
 - **1.2 Traditional programming vs ML** — a recipe card versus a cook who learned by tasting; the two differ in whether the rules are an input or an output.
 - **1.4 Types of ML** — three ways to learn a city: with a guide, by wandering, or by eating and remembering; the feedback you have decides the toolbox you may open.
 - **1.5 Problem understanding** — the doctor who asks before prescribing; the target's type, not the algorithm, decides the technique.
@@ -784,13 +893,15 @@ _10-mark:_ "Introduction: Turning a real-world question into a working predictiv
 ## Topic Coverage
 
 - Machine Learning Overview — Covered in Section 1.1 (source: `01-introduction.md`, Session 1)
+- The AI / ML / DL hierarchy — Covered in Section 1.1.1 (source: `Session_1 - Linear Regression.pdf`, Machine Learning Overview; added after the knowledge-map audit)
+- Machine Learning prerequisites — Covered in Section 1.1.2 (source: `Session_1 - Linear Regression.pdf`, Machine Learning Overview; added after the knowledge-map audit)
 - Traditional Programming vs Machine Learning — Covered in Section 1.2 (source: `01-introduction.md`, Session 1)
 - Basic Terms used in Machine Learning — Covered in Section 1.3 (source: `01-introduction.md`, Session 1)
-- Types of Machine Learning — Covered in Section 1.4 (source: `01-introduction.md`, Session 1)
+- Types of Machine Learning — Covered in Section 1.4, including the hierarchical and non-hierarchical clustering families (source: `01-introduction.md`, Session 1; clustering algorithms from `Session_1 - Linear Regression.pdf`, Types of Machine Learning)
 - Understanding the Problem and Data — Covered in Section 1.5 (source: `01-introduction.md`, Session 1)
 - Steps in Machine Learning — Covered in Section 1.6 (source: `01-introduction.md`, Session 1)
-- Missing Values (Standard, Non-Standard) — Covered in Section 2.1, with 2.1.1 and 2.1.2 (source: `01-introduction.md`, Session 1)
-- Handle Non-Numeric Data (One-Hot, Label, Ordinal Encoding) — Covered in Section 2.2, with 2.2.1 to 2.2.3 (source: `01-introduction.md`, Session 1)
+- Missing Values (Standard, Non-Standard) — Covered in Section 2.1, with 2.1.1 and 2.1.2; treatment by dropping or imputation is covered in 2.1.2 (source: `01-introduction.md`, Session 1; drop thresholds and imputation statistics from `Session_2 - DataPreprocessing.pdf`, Missing Values)
+- Handle Non-Numeric Data (One-Hot, Label, Ordinal, Frequency, Target Encoding) — Covered in Section 2.2, with 2.2.1 to 2.2.5 (source: `01-introduction.md`, Session 1; frequency and target encoding from `Session_2 - DataPreprocessing.pdf`, Handling Non-numeric Data)
 - Normalization and Transformation — Covered in Section 2.3 (source: `01-introduction.md`, Session 1)
 - Outlier Detection / Removal (Boxplot, IQR, Z-score, Scatter plot) — Covered in Section 2.4, with 2.4.1 to 2.4.4 (source: `01-introduction.md`, Session 1)
 - Introduction to Feature Engineering — Covered in Section 2.5 (source: `01-introduction.md`, Session 1)

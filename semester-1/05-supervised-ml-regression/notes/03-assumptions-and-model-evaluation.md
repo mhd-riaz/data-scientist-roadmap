@@ -22,7 +22,10 @@ flowchart TD
     P2 --> C22[2.2 Independence - Durbin-Watson Test]
     P2 --> C23[2.3 Homoscedasticity - Breusch-Pagan Test]
     P2 --> C24[2.4 Normality - Q-Q Plot & Shapiro-Wilk]
-    P2 --> C25[2.5 Multicollinearity - VIF]
+    P2 --> C25[2.5 Multicollinearity - Correlation Matrix, CN & VIF]
+    C25 --> C251[2.5.1 Correlation Matrix and Determinant]
+    C25 --> C252[2.5.2 Condition Number]
+    C25 --> C253[2.5.3 Variance Inflation Factor]
     C11 -.checked by.-> C21
     C12 -.checked by.-> C22
     C13 -.checked by.-> C23
@@ -233,9 +236,9 @@ Two witnesses give statements and both describe the same event in near-identical
 
 **Example** — Including both "area in square feet" and "area in square metres" as separate predictors. They are exact multiples of each other, so the model has infinitely many equally good ways to split the price effect between them.
 
-**Important details** — This assumption applies only where there are several predictors; a single-predictor model has nothing to be collinear with. Measured by the Variance Inflation Factor in 2.5 and repaired by dropping one of the offending predictors or combining them into a single engineered feature. Note the specific symptom: predictions stay fine while the *interpretation* falls apart, so a model used only for prediction can tolerate collinearity that a model used for explanation cannot.
+**Important details** — This assumption applies only where there are several predictors; a single-predictor model has nothing to be collinear with. Measured by the Variance Inflation Factor in 2.5 and repaired by dropping one of the offending predictors or combining them into a single engineered feature. Note the specific symptom: predictions stay fine while the _interpretation_ falls apart, so a model used only for prediction can tolerate collinearity that a model used for explanation cannot.
 
-**Core takeaway** — Multicollinearity is not a shortage of data but a shortage of *variation*, and no amount of fitting can separate two things that were never observed apart.
+**Core takeaway** — Multicollinearity is not a shortage of data but a shortage of _variation_, and no amount of fitting can separate two things that were never observed apart.
 
 **Exam focus** — Know that it applies only to multiple regression, and that it damages coefficient interpretation rather than predictive accuracy.
 
@@ -266,7 +269,7 @@ Two taps fill a bath. Turn on the first alone and it delivers ten litres a minut
 
 **Important details** — Unlike the first five assumptions, this one has no dedicated plot or statistic in Section 2. It is checked by fitting the interaction term itself and testing its coefficient for significance exactly as any other slope is tested — the diagnostic and the repair are the same object. Where the analogy breaks down: shared water pressure is a physical fact you could verify with a gauge, whereas whether two predictors interact is a modelling question that has to be posed before it can be answered.
 
-**Core takeaway** — Additivity fails whenever one predictor changes the *rate* at which another one acts, which is why the repair is a product term rather than another separate slope.
+**Core takeaway** — Additivity fails whenever one predictor changes the _rate_ at which another one acts, which is why the repair is a product term rather than another separate slope.
 
 **Exam focus** — Know that the fix for violated additivity is an interaction term, not one of the five numbered tests.
 
@@ -309,7 +312,7 @@ flowchart LR
     B --> D["2.2 Durbin-Watson:<br/>far from 2 breaks independence"]
     B --> E["2.3 Breusch-Pagan:<br/>small p breaks homoscedasticity"]
     B --> F["2.4 Q-Q and Shapiro-Wilk:<br/>off the diagonal breaks normality"]
-    A --> G["2.5 VIF:<br/>above 5 breaks no-multicollinearity"]
+    A --> G["2.5 Correlation matrix, CN, VIF:<br/>redundant predictors break no-multicollinearity"]
     C --> H[Repair, then refit]
     D --> H
     E --> H
@@ -317,7 +320,7 @@ flowchart LR
     G --> H
 ```
 
-Note that VIF branches off the fitted model rather than off the residuals — it is the one diagnostic here that examines the predictors themselves rather than what the model failed to explain.
+Note that the multicollinearity diagnostics branch off the fitted model rather than off the residuals — they are the one group here that examines the predictors themselves rather than what the model failed to explain, which is also why they can be run before the model is fitted at all.
 
 ### Core takeaway
 
@@ -337,7 +340,7 @@ Each test reads exactly one clause, so a model that passes four of them is not f
 
 **Example** — A clear U-shape, with residuals negative in the middle of the fitted range and positive at both ends, is the steel ruler on the curved plank drawn as a graph — precisely the diminishing-returns case from 1.1.
 
-**Important details** — This one plot reads two clauses, which is why it is worth drawing first. A *curve* indicates broken linearity; a *funnel* in the same plot indicates broken homoscedasticity (2.3). Same plot, different feature of the shape.
+**Important details** — This one plot reads two clauses, which is why it is worth drawing first. A _curve_ indicates broken linearity; a _funnel_ in the same plot indicates broken homoscedasticity (2.3). Same plot, different feature of the shape.
 
 **Core takeaway** — Anything left in the residuals with a recognisable shape is signal the model should have used and did not.
 
@@ -349,7 +352,7 @@ Each test reads exactly one clause, so a model that passes four of them is not f
 
 > **Formal definition:** The Durbin-Watson test is a statistical test that produces a value between 0 and 4 to detect the presence of autocorrelation among the residuals of a regression model.
 
-**Feel for the quantity** — The statistic compares the size of the *changes* between consecutive residuals against the size of the residuals themselves. If consecutive errors resemble each other, the changes are small and the statistic falls below 2. If they alternate sharply, the changes are large and it climbs above 2. If they are unrelated, it sits near 2.
+**Feel for the quantity** — The statistic compares the size of the _changes_ between consecutive residuals against the size of the residuals themselves. If consecutive errors resemble each other, the changes are small and the statistic falls below 2. If they alternate sharply, the changes are large and it climbs above 2. If they are unrelated, it sits near 2.
 
 **Formula (Durbin-Watson statistic)** — **Exam-important**
 $$DW = \frac{\sum_{t=2}^{n}(e_t - e_{t-1})^2}{\sum_{t=1}^{n}e_t^2}$$
@@ -380,7 +383,7 @@ $$DW = \frac{\sum_{t=2}^{n}(e_t - e_{t-1})^2}{\sum_{t=1}^{n}e_t^2}$$
 
 **Example** — The Breusch-Pagan test on the house-price model returns $p = 0.01$. Squared residuals are significantly related to area, confirming numerically the funnel suspected visually in 1.3: errors on large houses really are bigger.
 
-**Important details** — The null hypothesis is that homoscedasticity holds, so a *small* p-value is the bad news. The residual-vs-fitted plot from 2.1 answers the same question by eye and should be drawn first; Breusch-Pagan supplies the number when the eye is unsure.
+**Important details** — The null hypothesis is that homoscedasticity holds, so a _small_ p-value is the bad news. The residual-vs-fitted plot from 2.1 answers the same question by eye and should be drawn first; Breusch-Pagan supplies the number when the eye is unsure.
 
 **Core takeaway** — Squaring the residuals converts "how wrong" into a quantity that can itself be predicted, which is what makes a formal test of spread possible at all.
 
@@ -396,13 +399,51 @@ $$DW = \frac{\sum_{t=2}^{n}(e_t - e_{t-1})^2}{\sum_{t=1}^{n}e_t^2}$$
 
 **Example** — The house-price model's Q-Q plot curves away from the diagonal at both ends in a shallow S, indicating tails heavier than normal — more very large errors than a bell curve would produce. A Shapiro-Wilk p-value of 0.01 confirms it.
 
-**Important details** — Two tools for one clause, differing in what they give you: the plot shows *how* normality fails, which guides the repair, while the test gives a yes-or-no verdict. The test is also over-sensitive in large samples, flagging departures too small to matter for inference, which is another reason to look at the plot.
+**Important details** — Two tools for one clause, differing in what they give you: the plot shows _how_ normality fails, which guides the repair, while the test gives a yes-or-no verdict. The test is also over-sensitive in large samples, flagging departures too small to matter for inference, which is another reason to look at the plot.
 
 **Core takeaway** — A Q-Q plot works because a straight diagonal is what "these two distributions have the same shape" looks like when drawn.
 
 **Exam focus** — Know both tools belong to the same assumption, know the Shapiro-Wilk null hypothesis, and know what a straight diagonal on a Q-Q plot signifies.
 
-### 2.5 Testing Multicollinearity — Variance Inflation Factor (VIF)
+### 2.5 Testing Multicollinearity — Correlation Matrix, Condition Number and VIF
+
+**Meaning** — Multicollinearity is checked by three diagnostics of increasing resolution: a correlation matrix, which examines one pair of predictors at a time; the condition number, which judges the predictor set as a whole; and the Variance Inflation Factor, which returns to individual predictors and names the culprit.
+
+> **Formal definition:** Multicollinearity diagnostics are measures computed from the predictor variables of a regression model — the pairwise correlation matrix and its determinant, the condition number of that matrix, and the Variance Inflation Factor of each predictor — used to detect the degree to which the predictors are linearly related to one another.
+
+**Why it matters** — The three are not alternatives to be chosen between but a sequence with a gap in it. Pairwise correlation misses redundancy spread across three or more predictors; the condition number catches that redundancy but cannot say where it lives; only VIF assigns blame to a specific column. Running just the first is the common mistake, and it is why a model can pass a correlation check and still have unusable coefficients.
+
+#### 2.5.1 Correlation Matrix and its Determinant
+
+**Meaning** — A correlation matrix tabulates the correlation between every pair of predictors, so a redundant pair shows up as a large off-diagonal entry; the determinant of that same matrix condenses the whole table into one number measuring how much genuinely independent variation the predictors jointly retain.
+
+> **Formal definition:** The correlation matrix of the predictors is the square symmetric matrix whose $(i,j)$ entry is the Pearson correlation between predictors $X_i$ and $X_j$; its determinant $D$ lies between 0 and 1, with $D = 1$ indicating mutually uncorrelated predictors and $D \to 0$ indicating severe multicollinearity.
+
+**Feel for the quantity** — For $D$: a value near 1 means every witness is telling a different story, so the matrix is close to the identity matrix. A value near 0 means at least one witness's statement can be reconstructed from the others, so the matrix is close to singular and the least-squares solution is close to having no unique answer at all.
+
+**Example** — For the house-price predictors, the correlation between area and number of rooms comes out at 0.92, which is flagged immediately on inspection, and the determinant of the full predictor correlation matrix is 0.02 — near enough to zero to confirm a real problem.
+
+**Important details** — Pairwise correlation detects only pairwise redundancy. A predictor that is a linear combination of three others can have an unremarkable correlation with each of them individually and still be perfectly redundant when all three are present — which is precisely the case the next two diagnostics exist to catch. A common working threshold is $|r| > 0.8$ for a pair.
+
+#### 2.5.2 Condition Number (CN)
+
+**Meaning** — The condition number asks how far the predictor set is from being singular by comparing the direction in which the predictors vary most against the direction in which they vary least; a large ratio means there is some direction in the predictor space along which the data barely moves at all.
+
+> **Formal definition:** The condition number is the ratio of the largest to the smallest eigenvalue of the correlation matrix of the predictors, and measures the overall sensitivity of the regression coefficients to small changes in the data.
+
+**Feel for the quantity** — A condition number near 1 means the predictors vary about equally in every direction, which is the healthy case. A very large condition number means one direction has almost no variation left in it, so the coefficients along that direction are being estimated from almost nothing and will swing wildly if a few rows change.
+
+**Formula (Condition Number)** — **Exam-important**
+$$CN = \frac{\lambda_{max}}{\lambda_{min}}$$
+**Where** — $\lambda_{max}$: the largest eigenvalue of the correlation matrix of the predictors, the amount of variation along the direction in which they vary most; $\lambda_{min}$: the smallest eigenvalue, the variation along the direction in which they vary least; $CN$: their ratio, a single whole-model measure of collinearity.
+
+**Example** — With $\lambda_{max} = 3.2$ and $\lambda_{min} = 0.0025$, $CN = 3.2 / 0.0025 = 1280$.
+
+**Interpretation** — Read $CN < 100$ as no serious problem, 100 to 1000 as moderate multicollinearity, and above 1000 as severe. At 1280 the predictor set is severely collinear, and the individual coefficients should not be interpreted before the cause is found. Beware a second convention: some texts report the square root of this ratio, called the condition index, whose corresponding "severe" threshold is around 30 — always check which form a given cutoff belongs to.
+
+**Important details** — Unlike pairwise correlation, the condition number detects redundancy involving any number of predictors simultaneously, because an eigenvalue near zero is exactly the statement that some linear combination of the columns is nearly constant. Its limitation is the mirror image: it confirms that a problem exists without indicating which predictor causes it.
+
+#### 2.5.3 Variance Inflation Factor (VIF)
 
 **Meaning** — The Variance Inflation Factor asks, for one predictor at a time, how much of that predictor's own variation is already accounted for by the other predictors, and converts the answer into a factor by which its coefficient's variance is inflated.
 
@@ -412,7 +453,7 @@ $$DW = \frac{\sum_{t=2}^{n}(e_t - e_{t-1})^2}{\sum_{t=1}^{n}e_t^2}$$
 
 **Formula (Variance Inflation Factor)** — **Essential**
 $$VIF_j = \frac{1}{1 - R_j^2}$$
-**Where** — $VIF_j$: the variance inflation factor for predictor $j$; $R_j^2$: the coefficient of determination obtained by regressing predictor $X_j$ on all the *other* predictors — not on the target $Y$ — i.e. the proportion of $X_j$'s own variation the other predictors can reproduce; $1 - R_j^2$: the proportion of $X_j$'s variation that is uniquely its own.
+**Where** — $VIF_j$: the variance inflation factor for predictor $j$; $R_j^2$: the coefficient of determination obtained by regressing predictor $X_j$ on all the _other_ predictors — not on the target $Y$ — i.e. the proportion of $X_j$'s own variation the other predictors can reproduce; $1 - R_j^2$: the proportion of $X_j$'s variation that is uniquely its own.
 
 **Example** — Regressing "number of rooms" on "area" and "age" gives $R_j^2 = 0.8$, so $VIF = 1/(1-0.8) = 5$.
 
@@ -422,7 +463,20 @@ $$VIF_j = \frac{1}{1 - R_j^2}$$
 
 **Core takeaway** — VIF measures redundancy rather than correlation with the target, which is why a predictor can be extremely useful and still have an unusable coefficient.
 
-**Exam focus** — Compute VIF from a given $R_j^2$, state the cutoff, and be explicit that $R_j^2$ comes from regressing a predictor on the *other predictors*, never on the target.
+**Exam focus** — Compute VIF from a given $R_j^2$, state the cutoff, and be explicit that $R_j^2$ comes from regressing a predictor on the _other predictors_, never on the target.
+
+#### Comparison: Multicollinearity Diagnostics
+
+| Aspect                        | Correlation matrix (and determinant $D$)      | Condition Number (CN)         | Variance Inflation Factor (VIF)        |
+| ----------------------------- | --------------------------------------------- | ----------------------------- | -------------------------------------- |
+| What it examines              | One pair of predictors at a time; $D$ the set | The predictor set as a whole  | One predictor at a time                |
+| Quantity computed             | Pearson $r$ per pair; $D$ from 0 to 1         | $\lambda_{max}/\lambda_{min}$ | $1/(1-R_j^2)$                          |
+| Danger signal                 | $\lvert r\rvert > 0.8$; $D$ near 0            | $CN > 1000$ (severe)          | $VIF > 5$, some texts $> 10$           |
+| Detects three-way redundancy? | No, unless read through $D$                   | Yes                           | Yes                                    |
+| Names the culprit?            | For a pair only                               | No                            | Yes                                    |
+| Cost                          | Trivial                                       | One eigen-decomposition       | One auxiliary regression per predictor |
+
+The central difference is resolution: the correlation matrix looks at pairs, the condition number at the whole predictor set, and VIF at each predictor individually. In practice run all three in that order — the matrix to spot the obvious duplicated pair, the condition number to confirm whether a problem exists at all, and VIF to decide which column to drop or merge.
 
 **Connection** — The model has now been checked for validity. The next question is a different one entirely — not whether the fit can be trusted, but how large its mistakes actually are.
 
@@ -432,7 +486,7 @@ $$VIF_j = \frac{1}{1 - R_j^2}$$
 
 ### Picture this
 
-Two examiners mark the same exam paper. The first deducts one mark per mistake, whatever the mistake was: a slipped decimal point and a completely fabricated method both cost one mark. The second deducts the *square* of the severity, so a handful of small slips barely register but a single catastrophic answer wipes out the paper. Neither examiner is wrong. They are answering different questions about the same script, and a student would want to know which one is holding the pen.
+Two examiners mark the same exam paper. The first deducts one mark per mistake, whatever the mistake was: a slipped decimal point and a completely fabricated method both cost one mark. The second deducts the _square_ of the severity, so a handful of small slips barely register but a single catastrophic answer wipes out the paper. Neither examiner is wrong. They are answering different questions about the same script, and a student would want to know which one is holding the pen.
 
 ### Mapping
 
@@ -483,7 +537,7 @@ $$MAE = \frac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat y_i\right|$$
 
 ### 3.2 Mean Squared Error (MSE) & Root Mean Squared Error (RMSE)
 
-**Meaning** — MSE averages the *squared* errors, so that severity is punished disproportionately, and RMSE takes the square root of that average to return the result to the target's own unit.
+**Meaning** — MSE averages the _squared_ errors, so that severity is punished disproportionately, and RMSE takes the square root of that average to return the result to the target's own unit.
 
 > **Formal definition:** The Mean Squared Error is the average of the squared differences between predicted and actual values; the Root Mean Squared Error is the square root of the Mean Squared Error, expressed in the same unit as the target variable.
 
@@ -491,7 +545,7 @@ $$MAE = \frac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat y_i\right|$$
 
 **Formula (Mean Squared Error)** — **Essential**
 $$MSE = \frac{1}{n}\sum_{i=1}^{n}(y_i - \hat y_i)^2$$
-**Where** — $y_i$: the actual value; $\hat y_i$: the predicted value; $(y_i - \hat y_i)^2$: the squared error, which both removes the sign and magnifies large errors; $n$: the number of observations; $MSE$: the resulting mean, expressed in the *square* of the target's unit. This is the same quantity as $SSE$ from Session 2 divided by $n$, and the same quantity least squares was minimising when it fitted the line.
+**Where** — $y_i$: the actual value; $\hat y_i$: the predicted value; $(y_i - \hat y_i)^2$: the squared error, which both removes the sign and magnifies large errors; $n$: the number of observations; $MSE$: the resulting mean, expressed in the _square_ of the target's unit. This is the same quantity as $SSE$ from Session 2 divided by $n$, and the same quantity least squares was minimising when it fitted the line.
 
 **Formula (Root Mean Squared Error)** — **Essential**
 $$RMSE = \sqrt{MSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat y_i)^2}$$
@@ -586,7 +640,7 @@ $$\hat y = b_0 + b_1 x_{area} + b_2 D_{Suburb} + b_3 D_{Rural}$$
 
 **Interpretation** — A Suburb house is predicted to cost ₹8 lakh more than a Downtown house of the same area, and a Rural house ₹4 lakh less than that same Downtown house. Every dummy coefficient is a comparison, and the thing being compared to is the omitted level.
 
-**Important details** — Note what this does *not* allow: all three localities share the single area slope $b_1$. The dummies shift the line up or down per locality but cannot tilt it differently for each — which is exactly the additivity constraint from 1.6, and exactly what Section 5 relaxes.
+**Important details** — Note what this does _not_ allow: all three localities share the single area slope $b_1$. The dummies shift the line up or down per locality but cannot tilt it differently for each — which is exactly the additivity constraint from 1.6, and exactly what Section 5 relaxes.
 
 **Core takeaway** — A dummy coefficient is never an absolute effect but always a difference from the baseline, so changing which level is omitted changes every coefficient's value without changing a single prediction.
 
@@ -606,7 +660,7 @@ $$\hat y = b_0 + b_1 x_{area} + b_2 D_{Suburb} + b_3 D_{Rural}$$
 
 **Core takeaway** — The trap occurs because $k$ switches describing $k$ mutually exclusive states carry only $k-1$ independent facts, and the surplus column adds a constraint rather than information.
 
-**Exam focus** — A frequent trap question. Explain *why* it fails — perfect multicollinearity from the columns summing to 1 — rather than just quoting the $k-1$ rule.
+**Exam focus** — A frequent trap question. Explain _why_ it fails — perfect multicollinearity from the columns summing to 1 — rather than just quoting the $k-1$ rule.
 
 **Connection** — With locality now in the equation as a set of level shifts, Section 5 addresses the constraint that encoding left behind: every locality is still forced to share one area slope.
 
@@ -645,7 +699,7 @@ The product term is zero for every baseline observation and equal to the continu
 
 **Formula (Regression equation with an interaction term)** — **Exam-important**
 $$\hat y = b_0 + b_1 x_{area} + b_2 D_{Suburb} + b_3 (x_{area} \times D_{Suburb})$$
-**Where** — $\hat y$: the predicted price; $x_{area}$: the continuous predictor; $D_{Suburb}$: the dummy from 4.1, equal to 1 for Suburb houses and 0 for the Downtown baseline; $x_{area} \times D_{Suburb}$: the interaction term, which equals $x_{area}$ for Suburb houses and 0 for Downtown houses; $b_0$: the baseline intercept; $b_1$: the area slope for the baseline group; $b_2$: the intercept shift for Suburb houses; $b_3$: the interaction coefficient, the *additional* area slope that applies only to Suburb houses.
+**Where** — $\hat y$: the predicted price; $x_{area}$: the continuous predictor; $D_{Suburb}$: the dummy from 4.1, equal to 1 for Suburb houses and 0 for the Downtown baseline; $x_{area} \times D_{Suburb}$: the interaction term, which equals $x_{area}$ for Suburb houses and 0 for Downtown houses; $b_0$: the baseline intercept; $b_1$: the area slope for the baseline group; $b_2$: the intercept shift for Suburb houses; $b_3$: the interaction coefficient, the _additional_ area slope that applies only to Suburb houses.
 
 **Example** — Fitted model $\hat y = 10 + 3x_{area} + 5D_{Suburb} + 1.5(x_{area} \times D_{Suburb})$. For a Downtown house of area 20, both $D_{Suburb}$ and the product term are 0, so $\hat y = 10 + 3(20) = 70$ lakh. For a Suburb house of the same area: $\hat y = 10 + 3(20) + 5(1) + 1.5(20)(1) = 105$ lakh.
 
@@ -677,9 +731,9 @@ Know the general form, and be ready to compute the effective slope for each grou
 ### Must remember
 
 - The six assumptions — see the formal definition in Section 1: linearity, independence of errors, homoscedasticity, normality of residuals, no multicollinearity, additivity.
-- The matching tests: residual-vs-fitted plot, Durbin-Watson, Breusch-Pagan, Q-Q plot with Shapiro-Wilk, VIF (2.1 to 2.5).
+- The matching tests: residual-vs-fitted plot, Durbin-Watson, Breusch-Pagan, Q-Q plot with Shapiro-Wilk, and the three multicollinearity diagnostics — correlation matrix, condition number and VIF (2.1 to 2.5).
 - Durbin-Watson benchmark: $DW \approx 2$ means no autocorrelation, below 2 positive, above 2 negative (2.2).
-- $VIF_j = 1/(1-R_j^2)$, with $R_j^2$ from regressing $X_j$ on the other predictors; concern above 5 (2.5).
+- $VIF_j = 1/(1-R_j^2)$, with $R_j^2$ from regressing $X_j$ on the other predictors; concern above 5 (2.5.3). $CN = \lambda_{max}/\lambda_{min}$; severe above 1000 (2.5.2). Determinant of the predictor correlation matrix near 0 means severe collinearity (2.5.1).
 - $MAE = \frac{1}{n}\sum|y_i-\hat y_i|$ and $RMSE = \sqrt{\frac{1}{n}\sum(y_i-\hat y_i)^2}$, with $RMSE \geq MAE$ always (3.1, 3.2).
 - Dummy rule: $k-1$ dummies for $k$ levels, one omitted as baseline (4.1); including all $k$ is the dummy variable trap (4.2).
 - Interaction equation $\hat y = b_0 + b_1x_1 + b_2D + b_3(x_1 \times D)$, with group slopes $b_1$ and $b_1 + b_3$ (Section 5).
@@ -713,7 +767,7 @@ _10-mark:_ "Introduction: Ordinary Least Squares returns a fitted line for any d
 2. Which test checks independence of errors, and what is its ideal value?
    **Answer:** The Durbin-Watson test; a value near 2 indicates no autocorrelation (Section 2.2).
 3. Write the formula for the Variance Inflation Factor.
-   **Answer:** $VIF_j = 1/(1-R_j^2)$, where $R_j^2$ comes from regressing predictor $j$ on the other predictors (Section 2.5).
+   **Answer:** $VIF_j = 1/(1-R_j^2)$, where $R_j^2$ comes from regressing predictor $j$ on the other predictors (Section 2.5.3).
 4. Write the formulas for MAE and RMSE.
    **Answer:** $MAE = \frac{1}{n}\sum|y_i-\hat y_i|$ and $RMSE = \sqrt{\frac{1}{n}\sum(y_i-\hat y_i)^2}$ (Sections 3.1–3.2).
 5. How many dummy variables represent a categorical feature with 4 levels?
@@ -764,7 +818,7 @@ _10-mark:_ "Introduction: Ordinary Least Squares returns a fitted line for any d
 - **One-sentence summary:** A fitted regression line is only trustworthy while six assumptions hold — five with a matching diagnostic and one repaired by an interaction term — and its prediction quality is judged by error-size metrics alongside the variance-explained metrics from Session 2.
 - **Hierarchy:** see the Concept Hierarchy diagram at the top of this file.
 - **Essential definitions:** the six assumptions (1.1–1.6), their matching tests (2.1–2.5), MAE (3.1), MSE and RMSE (3.2), dummy encoding and the trap (4.1–4.2), interaction effect (Section 5).
-- **Key formulas:** Durbin-Watson (2.2); VIF (2.5); MAE, MSE and RMSE (3.1–3.2); the dummy-variable equation (4.1); the interaction equation (Section 5).
+- **Key formulas:** Durbin-Watson (2.2); VIF (2.5.3); the condition number (2.5.2); MAE, MSE and RMSE (3.1–3.2); the dummy-variable equation (4.1); the interaction equation (Section 5).
 - **Most important comparison:** MAE versus RMSE (Section 3), because it decides how outlier-sensitive your judgement of the model will be.
 - **5 exam keywords:** heteroscedasticity, autocorrelation, Variance Inflation Factor, dummy variable trap, interaction effect.
 - **6 common mistakes:** checking assumptions by eye and skipping the formal test; treating a high $R^2$ as evidence the assumptions hold; using all $k$ dummies instead of $k-1$; comparing MAE and RMSE without noting the squaring; adding an interaction term without checking it improves Adjusted $R^2$; assuming additivity holds because nothing tested it.
@@ -779,7 +833,7 @@ _10-mark:_ "Introduction: Ordinary Least Squares returns a fitted line for any d
 - **1.5 Multicollinearity** — two witnesses repeating one rumour; a shortage of variation, not of data.
 - **1.6 Additivity** — two taps sharing a supply pipe; it fails when one predictor changes the rate of another.
 - **2. Assumption tests** — the meter held against the socket; each reads exactly one clause.
-- **2.5 VIF** — how much of this witness's story is already in the others'.
+- **2.5 Multicollinearity diagnostics** — how much of this witness's story is already in the others'; pairs, then the whole set, then the individual culprit.
 - **3. Evaluation metrics** — two examiners marking one script, one deducting per mistake and one squaring severity.
 - **4. Dummy variables** — switches on a control panel; all switches down already names a room.
 - **5. Interaction** — a term for the shared pipe itself; a column active in one group only is what lets slopes differ.
@@ -788,6 +842,7 @@ _10-mark:_ "Introduction: Ordinary Least Squares returns a fitted line for any d
 
 - Assumptions of Linear Regression — Covered in Section 1, with 1.1 to 1.6 (source: `03-assumptions-and-model-evaluation.md`, Session 3)
 - Tests for assumptions of Linear Regression — Covered in Section 2, with 2.1 to 2.5 (source: `03-assumptions-and-model-evaluation.md`, Session 3)
+- Multicollinearity detection (correlation matrix determinant, Condition Number, VIF) — Covered in Sections 2.5.1 to 2.5.3 (source: `Session_3 - Assumptions of Regression and Model Evaluation.pdf`, Multicollinearity Detection; the correlation-matrix and condition-number methods added after the knowledge-map audit)
 - Model evaluation Metrics — Covered in Section 3, with 3.1 to 3.3 (source: `03-assumptions-and-model-evaluation.md`, Session 3; R² and Adjusted R² merged by reference with Session 2 Section 2.5, where they were derived)
 - Presence of categorical variable — Covered in Section 4, with 4.1 and 4.2 (source: `03-assumptions-and-model-evaluation.md`, Session 3)
 - Interaction effect — Covered in Section 5 (source: `03-assumptions-and-model-evaluation.md`, Session 3)

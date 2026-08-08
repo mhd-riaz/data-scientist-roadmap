@@ -19,6 +19,7 @@ flowchart TD
     P2 --> C26[2.6 Inferences about Slope]
     P2 --> C27[2.7 Confidence Interval for Coefficients]
     P2 --> C28[2.8 F-test for Overall Model Significance]
+    C28 --> C281[2.8.1 The ANOVA Table for Regression]
 ```
 
 **Reordering note:** Inside "Linear Regression", _Covariance & Correlation_ was moved to the front (2.1) and _Regression Analysis_ placed immediately after it (2.2), because both are prerequisites for simple linear regression — the slope of the fitted line is literally built from covariance. _Ordinary Least Squares_ is nested under _Simple Linear Regression_ as 2.3.1, since it is the specific method that fits that line. No topic was dropped or merged; _Applications of Machine Learning_ and _Autoregression_ keep their original top-level positions.
@@ -171,7 +172,7 @@ $$r = \frac{Cov(X,Y)}{\sigma_X \, \sigma_Y}$$
 
 **Interpretation** — At $r \approx 0.99$ the four pins lie almost exactly on a rising straight line: area and price move together tightly and in the same direction.
 
-**Important details** — A low $r$ rules out a *straight-line* relationship only; a strong curved relationship can sit comfortably at $r \approx 0$. And correlation never establishes causation — the dials may both be driven by a third thing you never measured. Where the analogy breaks down: two needles on a machine usually are mechanically linked, whereas two correlated columns in a dataset frequently are not.
+**Important details** — A low $r$ rules out a _straight-line_ relationship only; a strong curved relationship can sit comfortably at $r \approx 0$. And correlation never establishes causation — the dials may both be driven by a third thing you never measured. Where the analogy breaks down: two needles on a machine usually are mechanically linked, whereas two correlated columns in a dataset frequently are not.
 
 **Core takeaway** — Covariance says which way two variables lean together, and correlation is the same statement stripped of the units, which is the only form in which strength can be compared.
 
@@ -243,7 +244,7 @@ $$\hat{y} = b_0 + b_1 x$$
 
 ##### Picture this
 
-Extend the board. Attach a small spring from every pin straight down or straight up to the rod, so each spring is stretched by exactly the vertical gap between its pin and the rod. Now let go. The rod pivots and slides until the springs stop pulling it anywhere — and because a stretched spring stores energy in proportion to the *square* of its stretch, the position it settles into is the one where the total of all those squared gaps is as small as it can be. Every other position you could have chosen has more energy in it, which is exactly why the rod refuses to stay there.
+Extend the board. Attach a small spring from every pin straight down or straight up to the rod, so each spring is stretched by exactly the vertical gap between its pin and the rod. Now let go. The rod pivots and slides until the springs stop pulling it anywhere — and because a stretched spring stores energy in proportion to the _square_ of its stretch, the position it settles into is the one where the total of all those squared gaps is as small as it can be. Every other position you could have chosen has more energy in it, which is exactly why the rod refuses to stay there.
 
 ##### Mapping
 
@@ -338,7 +339,7 @@ $$\hat{y} = b_0 + b_1x_1 + b_2x_2 + \dots + b_kx_k$$
 
 **Example** — A fitted model $\hat y = 10 + 2.6x_1 + 4x_2 - 0.5x_3$ over area, rooms and age. For a house of area 20, with 3 rooms, aged 5 years: $\hat y = 10 + 52 + 12 - 2.5 = 71.5$ lakh.
 
-**Interpretation** — The coefficient $b_3 = -0.5$ says each additional year of age is associated with about ₹0.5 lakh less in price *among houses of the same area and the same number of rooms*. Drop that qualifier and the sentence is simply false.
+**Interpretation** — The coefficient $b_3 = -0.5$ says each additional year of age is associated with about ₹0.5 lakh less in price _among houses of the same area and the same number of rooms_. Drop that qualifier and the sentence is simply false.
 
 **Important details** — The coefficients are still found by minimising the same sum of squared residuals; only the arithmetic extends to matrix form, which is an implementation detail rather than a new idea. Where the analogy breaks down: a tilted sheet is easy to picture in three dimensions and impossible in eight, so beyond two predictors the geometry has to be trusted rather than seen — and one genuinely new failure mode appears with several predictors, when two of them tilt along nearly the same direction, which Session 3 diagnoses.
 
@@ -533,11 +534,76 @@ $$F = \frac{SSR/k}{SSE/(n-k-1)} = \frac{MSR}{MSE}$$
 
 **Interpretation** — An $F$ of about 95 is far above the critical value for these degrees of freedom, so $H_0$ is rejected: taken as a whole, the model explains substantially more variation in price than four unrelated predictors would produce by chance.
 
-**Important details** — A significant F-test establishes only that *something* in the model matters, never which thing; that is what the individual t-tests are for. The converse case is real too — a model can pass the F-test comfortably while several individual predictors fail their own t-tests, which typically happens when those predictors overlap heavily with one another.
+**Important details** — A significant F-test establishes only that _something_ in the model matters, never which thing; that is what the individual t-tests are for. The converse case is real too — a model can pass the F-test comfortably while several individual predictors fail their own t-tests, which typically happens when those predictors overlap heavily with one another.
 
 **Core takeaway** — The F-test and the t-test answer questions at different scopes, and the whole-model question has to come first because individual tests multiply their own false alarms.
 
 **Exam focus** — Know the formula, know $SST = SSR + SSE$, and be able to state the scope distinction in one sentence: F for the whole model, t for one coefficient.
+
+#### 2.8.1 The ANOVA Table for Regression
+
+**Picture this** — The shop's accountant is not content with "the hiring worked". She opens a ledger with fixed printed columns and writes the same story into them: one line for what the new team brought in, one line for ordinary trading noise, one line for the total, and against each line the headcount it was spread across. Anyone can now pick up the ledger, divide two numbers, and reach the same verdict she did — the format is what makes the conclusion checkable rather than merely asserted.
+
+**Mapping**
+
+| Analogy element                           | What it really is                                    |
+| ----------------------------------------- | ---------------------------------------------------- |
+| The ledger's fixed printed columns        | The standard columns of the ANOVA table              |
+| The line for what the new team brought in | The Regression row, holding $SSR$                    |
+| The line for ordinary trading noise       | The Error (residual) row, holding $SSE$              |
+| The bottom total line                     | The Total row, holding $SST$                         |
+| The headcount each line was spread across | The degrees of freedom column                        |
+| Money per head on a line                  | The mean square, $SS$ divided by its own $df$        |
+| The auditor dividing two of the numbers   | Forming $F = MSR/MSE$ and reaching the same decision |
+
+**Meaning** — The ANOVA table for regression sets out the variation decomposition, its degrees of freedom, the resulting mean squares and the F-statistic in one fixed tabular layout, so that overall model significance can be read off — and independently rechecked — from a single block of numbers.
+
+> **Formal definition:** The ANOVA (Analysis of Variance) table for regression is a standard tabular summary that partitions the total variation of the dependent variable into regression (explained) and error (unexplained) components, reporting for each the sum of squares, the degrees of freedom and the mean square, together with the resulting F-statistic and p-value used to test the overall significance of the model.
+
+**Why it matters** — Every quantity from 2.5 and 2.8 already exists; the table adds no new mathematics. What it adds is a canonical arrangement — which is why statistical software prints it, why examiners ask for it, and why $R^2$, the residual variance and the F-test can all be recovered from the same six numbers without going back to the raw data.
+
+**How it works**
+
+```mermaid
+flowchart LR
+    SST["SST<br/>total variation<br/>df = n-1"] --> SSR["SSR<br/>explained<br/>df = k"]
+    SST --> SSE["SSE<br/>unexplained<br/>df = n-k-1"]
+    SSR --> MSR["MSR = SSR/k"]
+    SSE --> MSE["MSE = SSE/(n-k-1)"]
+    MSR --> F["F = MSR/MSE"]
+    MSE --> F
+    F --> D{"F > F-critical<br/>or p < alpha?"}
+    D -->|Yes| R["Reject H0 — the model is significant"]
+    D -->|No| A["Fail to reject H0"]
+```
+
+The table itself, which is what an examiner expects to see drawn:
+
+| Source of variation    | Sum of squares | Degrees of freedom | Mean square           | F                 |
+| ---------------------- | -------------- | ------------------ | --------------------- | ----------------- |
+| **Regression** (model) | $SSR$          | $k$                | $MSR = SSR / k$       | $F_0 = MSR / MSE$ |
+| **Error** (residual)   | $SSE$          | $n - k - 1$        | $MSE = SSE / (n-k-1)$ |                   |
+| **Total**              | $SST$          | $n - 1$            |                       |                   |
+
+**Where** — $SSR$: the regression sum of squares from 2.5, the variation the fitted model explains; $SSE$: the error sum of squares, the variation left in the residuals; $SST$: the total sum of squares, the variation of $y$ about its own mean; $k$: the number of predictors in the model; $n$: the number of observations; $MSR$: the mean square for regression, explained variation per predictor; $MSE$: the mean square error, unexplained variation per residual degree of freedom; $F_0$: the computed test statistic, compared against a critical value from the F-distribution with $k$ and $n-k-1$ degrees of freedom.
+
+Two internal checks confirm a correctly built table: the sums of squares add up, $SST = SSR + SSE$, and so do the degrees of freedom, $k + (n-k-1) = n-1$.
+
+**Example** — Reusing the figures from 2.5 and 2.8 — $SST = 500$, $SSE = 100$, so $SSR = 400$, with $k = 4$ and $n = 100$:
+
+| Source     | SS  | df  | MS                     | F                      |
+| ---------- | --- | --- | ---------------------- | ---------------------- |
+| Regression | 400 | 4   | $400/4 = 100$          | $100/1.053 \approx 95$ |
+| Error      | 100 | 95  | $100/95 \approx 1.053$ |                        |
+| Total      | 500 | 99  |                        |                        |
+
+**Interpretation** — $F_0 \approx 95$ against a critical value of roughly 2.47 for $(4, 95)$ degrees of freedom at $\alpha = 0.05$, giving a p-value far below 0.05. The decision rule is stated either way and they always agree: reject $H_0$ if $F_0 > F_{\text{critical}}$, equivalently if $p < \alpha$. Here $H_0$ is rejected — at least one predictor carries real explanatory power.
+
+**Important details** — **A naming clash worth guarding against in an exam.** Some texts label the regression row $RSS$ ("regression sum of squares") and the error row $ESS$ ("error sum of squares"); others use exactly the opposite convention, $RSS$ for "residual sum of squares" and $ESS$ for "explained sum of squares". The unambiguous move is to write $SSR$ and $SSE$, or to state in words which row you mean. Note also that $MSE$ here is the estimated variance of the residuals, so $\sqrt{MSE}$ is the residual standard error — the same quantity Session 3 reports as RMSE.
+
+**Core takeaway** — The ANOVA table introduces no new statistics, only a fixed arrangement of existing ones, and that arrangement is what makes the significance verdict reproducible by anyone holding the table.
+
+**Exam focus** — "Construct the ANOVA table for the given regression output" is a standard 5-mark question. Memorise the five column headings and, above all, the degrees-of-freedom column — $k$, $n-k-1$, $n-1$ — since that is where marks are most often lost. Always finish with the decision rule.
 
 **Connection** — The six boxes of the workflow diagram are now complete: check the relationship, fit the rod, judge how much it explains, and trust-check both the individual tilts and the model as a whole. Section 3 keeps the same straight-line machinery but changes what goes into it, replacing separate features with the target's own history.
 
@@ -588,7 +654,7 @@ $$Y_t = c + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \dots + \phi_p Y_{t-p} + \varepsil
 
 ### Core takeaway
 
-Autoregression is ordinary regression with the predictor column filled in from the target's own past, which is why everything about fitting it is familiar and everything about *when it is allowed* is not.
+Autoregression is ordinary regression with the predictor column filled in from the target's own past, which is why everything about fitting it is familiar and everything about _when it is allowed_ is not.
 
 ### Exam focus
 
@@ -707,7 +773,7 @@ _10-mark:_ "Introduction: Fitting a regression line requires a precise and mathe
 - **One-sentence summary:** Linear regression settles a straight line into a cloud of points by minimising squared vertical error, then measures how much of the scatter that line explains and how much its tilt can be trusted — and the same machinery, fed the target's own past, becomes autoregression.
 - **Hierarchy:** see the Concept Hierarchy diagram at the top of this file.
 - **Essential definitions:** covariance and correlation (2.1), regression analysis (2.2), simple linear regression (2.3), OLS (2.3.1), multiple linear regression (2.4), the sums of squares and $R^2$ (2.5), slope inference (2.6), confidence intervals (2.7), the F-test (2.8), autoregression (Section 3).
-- **Key formulas:** covariance and correlation (2.1); OLS slope and intercept (2.3.1); SST, SSR, SSE, $R^2$, Adjusted $R^2$ (2.5); the t-statistic (2.6); the confidence interval (2.7); the F-statistic (2.8); the AR($p$) equation (Section 3).
+- **Key formulas:** covariance and correlation (2.1); OLS slope and intercept (2.3.1); SST, SSR, SSE, $R^2$, Adjusted $R^2$ (2.5); the t-statistic (2.6); the confidence interval (2.7); the F-statistic (2.8); the ANOVA table layout and its degrees of freedom (2.8.1); the AR($p$) equation (Section 3).
 - **Most important comparison:** $R^2$ versus Adjusted $R^2$ (2.5), because it governs whether model comparison is valid at all.
 - **5 exam keywords:** covariance, Ordinary Least Squares, residual, Adjusted R-squared, stationarity.
 - **5 common mistakes:** reading covariance's raw magnitude as a strength; treating a higher $R^2$ as a better model regardless of predictor count; stating that OLS minimises absolute rather than squared residuals; dropping the holding-constant clause from a multiple-regression coefficient; fitting an autoregression to a trending series without differencing.
@@ -724,6 +790,7 @@ _10-mark:_ "Introduction: Fitting a regression line requires a precise and mathe
 - **2.6 Slope inference** — a bathroom scale that jitters; the evidence lives in the ratio, not the reading.
 - **2.7 Confidence interval** — quoting a range instead of a verdict; it answers the magnitude question the test discards.
 - **2.8 F-test** — hiring four salespeople at once; the whole-model question must come first because individual tests multiply false alarms.
+- **2.8.1 ANOVA table** — the accountant's fixed-column ledger; the layout is what makes the verdict recheckable by anyone.
 - **3. Autoregression** — a heavy flywheel carrying its speed forward; ordinary regression with the predictor column filled from the target's own past.
 
 ## Topic Coverage
@@ -739,6 +806,7 @@ _10-mark:_ "Introduction: Fitting a regression line requires a precise and mathe
 - Inferences about slope — Covered in Section 2.6 (source: `02-linear-regression.md`, Session 2)
 - Confidence Interval for Coefficients — Covered in Section 2.7 (source: `02-linear-regression.md`, Session 2)
 - F-test for Overall Model Significance — Covered in Section 2.8 (source: `02-linear-regression.md`, Session 2)
+- ANOVA table for regression (RSS/ESS/TSS, F-ratio, p-value) — Covered in Section 2.8.1 (source: `Session_1 - Linear Regression.pdf`, ANOVA Table and Model Significance; added after the knowledge-map audit)
 - Linear Regression with Time Series Data: Autoregression — Covered in Section 3 (source: `02-linear-regression.md`, Session 2)
 
 ### Gaps to Look Up
