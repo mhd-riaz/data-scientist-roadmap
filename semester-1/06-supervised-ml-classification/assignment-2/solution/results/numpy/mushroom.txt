@@ -1,0 +1,59 @@
+Running tests with SKLEARN framework
+============================================================
+ target column: 'class' (last column)
+Original dataset info:
+Shape: (8124, 23)
+Columns: ['cap-shape', 'cap-surface', 'cap-color', 'bruises', 'odor', 'gill-attachment', 'gill-spacing', 'gill-size', 'gill-color', 'stalk-shape', 'stalk-root', 'stalk-surface-above-ring', 'stalk-surface-below-ring', 'stalk-color-above-ring', 'stalk-color-below-ring', 'veil-type', 'veil-color', 'ring-number', 'ring-type', 'spore-print-color', 'population', 'habitat', 'class']
+
+First few rows:
+
+cap-shape: <StringArray>
+['x', 'b', 's', 'f', 'k']
+Length: 5, dtype: str -> [5 0 4 2 3]
+
+cap-surface: <StringArray>
+['s', 'y', 'f', 'g']
+Length: 4, dtype: str -> [2 3 0 1]
+
+cap-color: <StringArray>
+['n', 'y', 'w', 'g', 'e']
+Length: 5, dtype: str -> [4 9 8 3 2]
+
+class: <StringArray>
+['p', 'e']
+Length: 2, dtype: str -> [1 0]
+
+Processed dataset shape: (8124, 23)
+Number of features: 22
+Features: ['cap-shape', 'cap-surface', 'cap-color', 'bruises', 'odor', 'gill-attachment', 'gill-spacing', 'gill-size', 'gill-color', 'stalk-shape', 'stalk-root', 'stalk-surface-above-ring', 'stalk-surface-below-ring', 'stalk-color-above-ring', 'stalk-color-below-ring', 'veil-type', 'veil-color', 'ring-number', 'ring-type', 'spore-print-color', 'population', 'habitat']
+Target: class
+Framework: SKLEARN
+Data type: <class 'numpy.ndarray'>
+
+============================================================
+DECISION TREE CONSTRUCTION DEMO
+============================================================
+Total samples: 8124
+Training samples: 6499
+Testing samples: 1625
+
+Constructing decision tree using training data...
+
+🌳 Decision tree construction completed using SKLEARN!
+
+📊 OVERALL PERFORMANCE METRICS
+========================================
+Accuracy:             1.0000 (100.00%)
+Precision (weighted): 1.0000
+Recall (weighted):    1.0000
+F1-Score (weighted):  1.0000
+Precision (macro):    1.0000
+Recall (macro):       1.0000
+F1-Score (macro):     1.0000
+
+🌳 TREE COMPLEXITY METRICS
+========================================
+Maximum Depth:        4
+Total Nodes:          29
+Leaf Nodes:           24
+Internal Nodes:       5

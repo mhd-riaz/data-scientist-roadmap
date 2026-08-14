@@ -1,0 +1,59 @@
+Running tests with PYTORCH framework
+============================================================
+ target column: 'Class' (last column)
+Original dataset info:
+Shape: (958, 10)
+Columns: ['top-left-square', 'top-middle-square', 'top-right-square', 'middle-left-square', 'middle-middle-square', 'middle-right-square', 'bottom-left-square', 'bottom-middle-square', 'bottom-right-square', 'Class']
+
+First few rows:
+
+top-left-square: <StringArray>
+['x', 'o', 'b']
+Length: 3, dtype: str -> [2 1 0]
+
+top-middle-square: <StringArray>
+['x', 'o', 'b']
+Length: 3, dtype: str -> [2 1 0]
+
+top-right-square: <StringArray>
+['x', 'o', 'b']
+Length: 3, dtype: str -> [2 1 0]
+
+Class: <StringArray>
+['positive', 'negative']
+Length: 2, dtype: str -> [1 0]
+
+Processed dataset shape: torch.Size([958, 10])
+Number of features: 9
+Features: ['top-left-square', 'top-middle-square', 'top-right-square', 'middle-left-square', 'middle-middle-square', 'middle-right-square', 'bottom-left-square', 'bottom-middle-square', 'bottom-right-square']
+Target: Class
+Framework: PYTORCH
+Data type: <class 'torch.Tensor'>
+
+============================================================
+DECISION TREE CONSTRUCTION DEMO
+============================================================
+Total samples: 958
+Training samples: 766
+Testing samples: 192
+
+Constructing decision tree using training data...
+
+🌳 Decision tree construction completed using PYTORCH!
+
+📊 OVERALL PERFORMANCE METRICS
+========================================
+Accuracy:             0.8730 (87.30%)
+Precision (weighted): 0.8741
+Recall (weighted):    0.8730
+F1-Score (weighted):  0.8734
+Precision (macro):    0.8590
+Recall (macro):       0.8638
+F1-Score (macro):     0.8613
+
+🌳 TREE COMPLEXITY METRICS
+========================================
+Maximum Depth:        7
+Total Nodes:          281
+Leaf Nodes:           180
+Internal Nodes:       101
