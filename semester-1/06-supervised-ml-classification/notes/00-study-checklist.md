@@ -2,7 +2,7 @@
 
 > Subject: Supervised Machine Learning — Classification (SMLC)
 > Compiled: Aug 7, 2026
-> Source material processed: 8 files — `unit-1_a_ml_intro.pdf`, `unit-1_b_performance_metrics.pdf`, `unit-1_c_linear_regression.pdf`, `unit-1_d_logistic_regression.pdf`, `unit-2_knn.pdf`, `unit-3_a_decission_tree.pdf`, `unit-3_b_id3_algo.pdf`, `unit-4_ensemble_learning.txt`
+> Source material processed: 12 files — `unit-1_a_ml_intro.pdf`, `unit-1_b_performance_metrics.pdf`, `unit-1_c_linear_regression.pdf`, `unit-1_d_logistic_regression.pdf`, `unit-2_knn.pdf`, `unit-3_a_decission_tree.pdf`, `unit-3_b_id3_algo.pdf`, `unit-4_ensemble_learning.txt`, `08_ensemble-learning.pptx`, `09_adaBoost.pdf`, `10_gradientBoost.pdf`, `11_random_forest.pptx`
 
 This file is the entry point. It tells you **what exists, in what order to read it, and how to check you actually know it.** Every other file in this folder is a chapter of the same book — read them in the numbered order the first time, then jump around freely afterwards.
 
@@ -18,6 +18,7 @@ flowchart TD
     SMLC --> F4["04. K-Nearest Neighbours"]
     SMLC --> F5["05. Decision Trees + ID3"]
     SMLC --> F6["06. Ensemble Learning"]
+    SMLC --> F6B["06b. Ensemble Methods Deep Dive"]
     SMLC --> F7["07. Performance Metrics"]
     SMLC --> F8["08. Exam Preparation"]
 
@@ -26,7 +27,8 @@ flowchart TD
     F3 --> F4
     F4 --> F5
     F5 -->|"trees are the base learner"| F6
-    F6 --> F7
+    F6 -->|"AdaBoost, GBM classification,<br/>RF internals in full depth"| F6B
+    F6B --> F7
     F7 --> F8
 ```
 
@@ -34,17 +36,18 @@ flowchart TD
 
 Linear regression (unit 1c) is kept **before** logistic regression even though this is a classification subject, because logistic regression borrows its cost-function machinery and its optimiser (gradient descent) wholesale. Skipping it makes Chapter 03 unreadable.
 
-| #   | File                                                                                 | Covers (source unit) | Read it for                                                                  |
-| --- | ------------------------------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------- |
-| 00  | this file                                                                            | —                    | Map, checklist, revision tracker                                             |
-| 01  | [ML Foundations](01-ml-foundations.md)                                               | unit-1a              | $\langle P, T, E \rangle$, learning styles, workflow, notation               |
-| 02  | [Linear Regression & Gradient Descent](02-linear-regression-and-gradient-descent.md) | unit-1c              | Residuals, squared-error cost, gradient descent, convergence                 |
-| 03  | [Logistic Regression](03-logistic-regression.md)                                     | unit-1d              | Sigmoid, probability output, decision boundary, one-vs-all                   |
-| 04  | [K-Nearest Neighbours](04-knn.md)                                                    | unit-2               | Distance, choosing K, elbow method, encoding, scaling, KNN regression        |
-| 05  | [Decision Trees & ID3](05-decision-trees-and-id3.md)                                 | unit-3a, unit-3b     | Entropy, information gain, ID3, inductive bias, overfitting, pruning         |
-| 06  | [Ensemble Learning](06-ensemble-learning.md)                                         | unit-4               | Bagging, boosting, Random Forest, AdaBoost, GBM, XGBoost, feature importance |
-| 07  | [Performance Metrics](07-performance-metrics.md)                                     | unit-1b              | Confusion matrix, precision/recall/F1, ROC, AUC                              |
-| 08  | [Exam Preparation](08-exam-preparation.md)                                           | all                  | Model answers, question patterns, practice set, quick revision, gaps         |
+| #   | File                                                                                 | Covers (source unit) | Read it for                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 00  | this file                                                                            | —                    | Map, checklist, revision tracker                                                                                                                       |
+| 01  | [ML Foundations](01-ml-foundations.md)                                               | unit-1a              | $\langle P, T, E \rangle$, learning styles, workflow, notation                                                                                         |
+| 02  | [Linear Regression & Gradient Descent](02-linear-regression-and-gradient-descent.md) | unit-1c              | Residuals, squared-error cost, gradient descent, convergence                                                                                           |
+| 03  | [Logistic Regression](03-logistic-regression.md)                                     | unit-1d              | Sigmoid, probability output, decision boundary, one-vs-all                                                                                             |
+| 04  | [K-Nearest Neighbours](04-knn.md)                                                    | unit-2               | Distance, choosing K, elbow method, encoding, scaling, KNN regression                                                                                  |
+| 05  | [Decision Trees & ID3](05-decision-trees-and-id3.md)                                 | unit-3a, unit-3b     | Entropy, information gain, ID3, inductive bias, overfitting, pruning                                                                                   |
+| 06  | [Ensemble Learning](06-ensemble-learning.md)                                         | unit-4               | Bagging, boosting, Random Forest, AdaBoost, GBM, XGBoost, feature importance                                                                           |
+| 06b | [Ensemble Methods Deep Dive](06b-ensemble-methods-deep-dive.md)                      | 08–11                | Weak-learner diversity & taxonomy, full AdaBoost algorithm, Gradient Boosting for classification, Random Forest OOB/voting/proximity-matrix imputation |
+| 07  | [Performance Metrics](07-performance-metrics.md)                                     | unit-1b              | Confusion matrix, precision/recall/F1, ROC, AUC                                                                                                        |
+| 08  | [Exam Preparation](08-exam-preparation.md)                                           | all                  | Model answers, question patterns, practice set, quick revision, gaps                                                                                   |
 
 ---
 

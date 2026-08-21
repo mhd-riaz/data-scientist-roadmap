@@ -1,7 +1,7 @@
 # Chapter 07 — Performance Metrics for Classification
 
 > Source: `unit-1_b_performance_metrics.pdf`
-> Read after: Chapters [03](03-logistic-regression.md)–[06](06-ensemble-learning.md) — you need a classifier before you can score one
+> Read after: Chapters [03](03-logistic-regression.md)–[06](06-ensemble-learning.md), and [06b](06b-ensemble-methods-deep-dive.md) if you want the deeper ensemble mechanics first — you need a classifier before you can score one
 
 ## Concept Hierarchy
 
@@ -38,14 +38,14 @@ flowchart TD
 
 **Mapping**:
 
-| Analogy element                              | What it really is                                        |
-| -------------------------------------------- | -------------------------------------------------------- |
-| The thousand people walking past him         | the test set                                             |
-| The one person actually carrying something   | an instance of the rare positive class                   |
-| Waving everybody through                     | the trivial always-predict-negative classifier           |
-| Being right 999 times out of a thousand      | 99.9% accuracy                                           |
-| Having caught nobody in his whole career     | zero recall on the only class anyone cares about         |
-| His manager being pleased with the number    | exactly why accuracy gets reported and why it misleads   |
+| Analogy element                            | What it really is                                      |
+| ------------------------------------------ | ------------------------------------------------------ |
+| The thousand people walking past him       | the test set                                           |
+| The one person actually carrying something | an instance of the rare positive class                 |
+| Waving everybody through                   | the trivial always-predict-negative classifier         |
+| Being right 999 times out of a thousand    | 99.9% accuracy                                         |
+| Having caught nobody in his whole career   | zero recall on the only class anyone cares about       |
+| His manager being pleased with the number  | exactly why accuracy gets reported and why it misleads |
 
 **Meaning** — a model that never predicts "default" at all — a single line of code returning "no default" for everyone — scores $900/1000 = \mathbf{90\%}$ accuracy on this test set. It catches zero defaulters and is completely worthless to the bank, yet it beats many genuine models on the accuracy metric.
 
@@ -71,15 +71,15 @@ This is why one number is never enough. The confusion matrix (§2) breaks the re
 
 **Mapping**:
 
-| Analogy element                                  | What it really is                                   |
-| ------------------------------------------------ | --------------------------------------------------- |
-| Stopped, and rightly so                          | **TP** — true positive                               |
-| Waved through, and rightly so                    | **TN** — true negative                               |
-| Stopped wrongly — the laptop-and-grievance tray   | **FP** — false positive, a Type I error, a false alarm |
-| Waved through wrongly                            | **FN** — false negative, a Type II error, a miss     |
-| Emptying the entire shift into the trays         | evaluating over the whole test set                  |
-| The four counts laid out on a 2×2 board           | the confusion matrix                                |
-| Every claim anyone makes about the guard         | every derived metric in §3                           |
+| Analogy element                                 | What it really is                                      |
+| ----------------------------------------------- | ------------------------------------------------------ |
+| Stopped, and rightly so                         | **TP** — true positive                                 |
+| Waved through, and rightly so                   | **TN** — true negative                                 |
+| Stopped wrongly — the laptop-and-grievance tray | **FP** — false positive, a Type I error, a false alarm |
+| Waved through wrongly                           | **FN** — false negative, a Type II error, a miss       |
+| Emptying the entire shift into the trays        | evaluating over the whole test set                     |
+| The four counts laid out on a 2×2 board         | the confusion matrix                                   |
+| Every claim anyone makes about the guard        | every derived metric in §3                             |
 
 **Meaning** — the confusion matrix is simply those four counts arranged so that actual and predicted classes each get an axis.
 
@@ -261,16 +261,16 @@ $$F_\beta = (1+\beta^2)\times\frac{\text{Precision}\times\text{Recall}}{(\beta^2
 
 **Mapping**:
 
-| Analogy element                             | What it really is                                       |
-| ------------------------------------------- | ------------------------------------------------------- |
-| The sensitivity dial                        | the classification threshold                            |
-| Turning the sensitivity up                  | lowering the probability threshold — flagging more       |
-| Shrieking at belt buckles                   | false positives rising, precision falling               |
-| Nothing getting past                        | recall rising                                           |
-| Turning the sensitivity down                | raising the threshold — flagging fewer                   |
-| The queue flowing beautifully               | precision rising                                        |
-| Things getting past                         | recall falling                                          |
-| The manager deciding, not the engineer      | the threshold is a business decision, not a statistical one |
+| Analogy element                        | What it really is                                           |
+| -------------------------------------- | ----------------------------------------------------------- |
+| The sensitivity dial                   | the classification threshold                                |
+| Turning the sensitivity up             | lowering the probability threshold — flagging more          |
+| Shrieking at belt buckles              | false positives rising, precision falling                   |
+| Nothing getting past                   | recall rising                                               |
+| Turning the sensitivity down           | raising the threshold — flagging fewer                      |
+| The queue flowing beautifully          | precision rising                                            |
+| Things getting past                    | recall falling                                              |
+| The manager deciding, not the engineer | the threshold is a business decision, not a statistical one |
 
 **Meaning** — the metrics above all describe a *single* threshold. Since logistic regression and every ensemble emit a **probability** ([03 §2.3](03-logistic-regression.md#23-the-classification-threshold)), the threshold is a dial you can turn — and turning it moves every number in §3.
 
@@ -357,16 +357,16 @@ $$\text{Precision}_{\text{High}} = \frac{65}{82} = 0.793 \qquad \text{Recall}_{\
 
 **Mapping**:
 
-| Analogy element                                | What it really is                                       |
-| ---------------------------------------------- | ------------------------------------------------------- |
-| Sweeping the dial from end to end              | varying the threshold across its whole range            |
-| Fraction of real threats caught                | TPR / recall — the vertical axis                         |
-| Fraction of innocent travellers delayed        | FPR — the horizontal axis                                |
-| One point on the line                          | the classifier at one fixed threshold                   |
-| The whole line                                 | the ROC curve                                           |
-| The dial at maximum, everybody stopped         | the top-right point $(1,1)$                              |
-| A line hugging the top-left corner             | a strongly discriminating classifier                    |
-| A line lying along the diagonal                | a detector no better than a coin toss                   |
+| Analogy element                         | What it really is                            |
+| --------------------------------------- | -------------------------------------------- |
+| Sweeping the dial from end to end       | varying the threshold across its whole range |
+| Fraction of real threats caught         | TPR / recall — the vertical axis             |
+| Fraction of innocent travellers delayed | FPR — the horizontal axis                    |
+| One point on the line                   | the classifier at one fixed threshold        |
+| The whole line                          | the ROC curve                                |
+| The dial at maximum, everybody stopped  | the top-right point $(1,1)$                  |
+| A line hugging the top-left corner      | a strongly discriminating classifier         |
+| A line lying along the diagonal         | a detector no better than a coin toss        |
 
 **Meaning** — every metric so far describes one threshold. The ROC curve describes the classifier at **all thresholds at once**, so two models can be compared without first committing to a cut-off.
 
@@ -427,15 +427,15 @@ Plotting TPR against FPR and joining the points gives the ROC curve. Every curve
 
 **Mapping**:
 
-| Analogy element                                     | What it really is                                       |
-| --------------------------------------------------- | ------------------------------------------------------- |
-| One real threat beside one innocent traveller       | a randomly chosen positive and negative instance        |
-| Reading the dial rather than taking the decision    | using the model's score, not its predicted label        |
-| Which of the two reads higher                       | the ranking the model imposes on the pair               |
-| The fraction of pairs it gets the right way round   | the AUC                                                 |
-| Getting every single pair right                     | AUC $= 1.0$                                              |
-| Effectively coin-flipping each pair                 | AUC $= 0.5$                                              |
-| Reading everybody 20 points too high, but in order  | a calibration error AUC is blind to                     |
+| Analogy element                                    | What it really is                                |
+| -------------------------------------------------- | ------------------------------------------------ |
+| One real threat beside one innocent traveller      | a randomly chosen positive and negative instance |
+| Reading the dial rather than taking the decision   | using the model's score, not its predicted label |
+| Which of the two reads higher                      | the ranking the model imposes on the pair        |
+| The fraction of pairs it gets the right way round  | the AUC                                          |
+| Getting every single pair right                    | AUC $= 1.0$                                      |
+| Effectively coin-flipping each pair                | AUC $= 0.5$                                      |
+| Reading everybody 20 points too high, but in order | a calibration error AUC is blind to              |
 
 **Meaning** — a curve is hard to put in a results table. AUC collapses it into one number.
 

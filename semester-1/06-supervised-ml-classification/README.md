@@ -15,6 +15,7 @@ Covered by the notes in this folder:
 - [x] Decision trees — entropy, information gain, ID3, pruning
 - [x] Model evaluation — confusion matrix, precision/recall/F1, ROC-AUC
 - [x] Ensembles — bagging, boosting, Random Forest, AdaBoost, GBM, XGBoost
+- [x] Ensemble methods deep dive — weak-learner diversity/taxonomy, full AdaBoost algorithm, Gradient Boosting for classification, Random Forest proximity-matrix missing-data imputation
 
 Not present in the source material for this subject:
 
@@ -35,6 +36,7 @@ assumes the previous one.
 - [04 — K-Nearest Neighbours](notes/04-knn.md) — distance, choosing K, encoding, scaling
 - [05 — Decision Trees & ID3](notes/05-decision-trees-and-id3.md) — entropy, information gain, inductive bias, pruning
 - [06 — Ensemble Learning](notes/06-ensemble-learning.md) — bagging, boosting, Random Forest, AdaBoost, XGBoost
+- [06b — Ensemble Methods Deep Dive](notes/06b-ensemble-methods-deep-dive.md) — full AdaBoost algorithm, Gradient Boosting for classification, Random Forest internals (OOB, voting, proximity-matrix imputation)
 - [07 — Performance Metrics](notes/07-performance-metrics.md) — confusion matrix, precision/recall/F1, ROC, AUC
 - [08 — Exam Preparation](notes/08-exam-preparation.md) — model answers, practice questions, revision, gaps
 

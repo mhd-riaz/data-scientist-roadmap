@@ -37,15 +37,15 @@ flowchart TD
 
 **Mapping**:
 
-| Analogy element                                       | What it really is                                      |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| One person's slip of paper                            | one base model's prediction                            |
-| The butcher high and the schoolteacher low            | errors pointing in different directions                |
-| Tipping out the box and averaging                     | the aggregation step — vote or mean                     |
-| The average landing near the truth                    | independent errors cancelling out                      |
-| The whole field of eight hundred guessers             | the ensemble                                           |
-| One wild slip not moving the answer                   | robustness to a single bad base model                  |
-| Everyone simply copying the butcher's number          | correlated models — the ensemble gains nothing at all   |
+| Analogy element                              | What it really is                                     |
+| -------------------------------------------- | ----------------------------------------------------- |
+| One person's slip of paper                   | one base model's prediction                           |
+| The butcher high and the schoolteacher low   | errors pointing in different directions               |
+| Tipping out the box and averaging            | the aggregation step — vote or mean                   |
+| The average landing near the truth           | independent errors cancelling out                     |
+| The whole field of eight hundred guessers    | the ensemble                                          |
+| One wild slip not moving the answer          | robustness to a single bad base model                 |
+| Everyone simply copying the butcher's number | correlated models — the ensemble gains nothing at all |
 
 **Meaning** — a single decision tree is fast and readable but unstable and greedy ([05 §5](05-decision-trees-and-id3.md#5-hypothesis-space-search-in-id3)). Ensemble learning refuses to fix the individual model and instead builds **many** of them, then combines their predictions into one answer that is more accurate and more stable than any single member.
 
@@ -118,15 +118,15 @@ flowchart TD
 
 **Mapping**:
 
-| Analogy element                                    | What it really is                                     |
-| -------------------------------------------------- | ----------------------------------------------------- |
-| The town's full register of households             | the original training set                             |
-| One surveyor's randomly drawn list                 | one bootstrap sample                                  |
-| A household appearing three times on a list        | sampling with replacement                             |
-| Households missing from one surveyor's list        | that model's out-of-bag examples                      |
-| Twenty surveyors walking at the same time          | base models trained independently, in parallel        |
-| Each report shaped by whose door they knocked on   | variance contributed by the particular sample         |
-| Averaging the twenty reports                       | aggregation by majority vote or mean                  |
+| Analogy element                                  | What it really is                              |
+| ------------------------------------------------ | ---------------------------------------------- |
+| The town's full register of households           | the original training set                      |
+| One surveyor's randomly drawn list               | one bootstrap sample                           |
+| A household appearing three times on a list      | sampling with replacement                      |
+| Households missing from one surveyor's list      | that model's out-of-bag examples               |
+| Twenty surveyors walking at the same time        | base models trained independently, in parallel |
+| Each report shaped by whose door they knocked on | variance contributed by the particular sample  |
+| Averaging the twenty reports                     | aggregation by majority vote or mean           |
 
 **Meaning** — bagging manufactures diversity by giving each base model a different random view of the same data, then cancels out the resulting disagreement by averaging.
 
@@ -188,14 +188,14 @@ Since each tree never saw about 36.8% of the data, those rows act as a free vali
 
 **Mapping**:
 
-| Analogy element                                     | What it really is                                    |
-| --------------------------------------------------- | ---------------------------------------------------- |
-| Twenty near-identical reports                       | highly correlated trees — diversity has collapsed     |
-| The obvious question everyone opened with           | a dominant feature chosen at every root              |
-| The rule limiting choices at each doorstep          | random feature subsetting at every split             |
-| The small handful of questions offered              | the $m$ features drawn per split                      |
-| Surveyors pushed onto the other questions           | decorrelated trees                                   |
-| Reports that finally differ from one another        | genuine diversity, so averaging actually pays        |
+| Analogy element                              | What it really is                                 |
+| -------------------------------------------- | ------------------------------------------------- |
+| Twenty near-identical reports                | highly correlated trees — diversity has collapsed |
+| The obvious question everyone opened with    | a dominant feature chosen at every root           |
+| The rule limiting choices at each doorstep   | random feature subsetting at every split          |
+| The small handful of questions offered       | the $m$ features drawn per split                  |
+| Surveyors pushed onto the other questions    | decorrelated trees                                |
+| Reports that finally differ from one another | genuine diversity, so averaging actually pays     |
 
 **Meaning** — bagging alone leaves a subtle problem: if one feature is overwhelmingly predictive, *every* bootstrap tree will choose it at the root, and the trees end up highly correlated — which violates the diversity condition of §2. Random Forest injects a second source of randomness to break that correlation.
 
@@ -242,15 +242,15 @@ $$m = \sqrt{n} \ \text{ (classification)} \qquad\qquad m = \frac{n}{3} \ \text{ 
 
 **Mapping**:
 
-| Analogy element                                       | What it really is                                      |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| Each lesson she teaches                               | one base learner                                       |
-| Marking the test before planning the next lesson      | training model $t$ on the errors of models $1 \dots t-1$ |
-| The questions you got wrong                           | misclassified (or high-residual) examples              |
-| Giving those questions more time each round           | increasing those examples' weights                     |
-| Being unable to start lesson 3 before lesson 2 is marked | the sequential, non-parallelisable structure         |
-| Trusting a tutor who taught well more than one who didn't | the learner weight $\alpha_t$                       |
-| A question that was mis-printed in the book           | a permanently mislabelled example — chased forever      |
+| Analogy element                                           | What it really is                                        |
+| --------------------------------------------------------- | -------------------------------------------------------- |
+| Each lesson she teaches                                   | one base learner                                         |
+| Marking the test before planning the next lesson          | training model $t$ on the errors of models $1 \dots t-1$ |
+| The questions you got wrong                               | misclassified (or high-residual) examples                |
+| Giving those questions more time each round               | increasing those examples' weights                       |
+| Being unable to start lesson 3 before lesson 2 is marked  | the sequential, non-parallelisable structure             |
+| Trusting a tutor who taught well more than one who didn't | the learner weight $\alpha_t$                            |
+| A question that was mis-printed in the book               | a permanently mislabelled example — chased forever       |
 
 **Meaning** — bagging builds its models in ignorance of one another. Boosting does the opposite: it builds them in a chain, and each new model is told exactly where the current ensemble is failing.
 
@@ -397,15 +397,15 @@ The central difference in one sentence: **bagging averages away the randomness o
 
 **Mapping**:
 
-| Analogy element                                    | What it really is                                       |
-| -------------------------------------------------- | ------------------------------------------------------- |
-| The transcripts                                    | every split in every tree of the ensemble               |
-| How much a question narrowed things down           | the impurity reduction achieved at that split           |
-| Tallying question by question                      | summing per feature, then averaging across trees        |
-| Questions asked constantly that settled everything | high-importance features                                |
-| Two questions that were near-duplicates            | strongly correlated features                            |
-| Each of them looking half as useful as it was      | importance credit split between correlated features     |
-| The tally not explaining *why* the verdict was right | importance is not causation                            |
+| Analogy element                                      | What it really is                                   |
+| ---------------------------------------------------- | --------------------------------------------------- |
+| The transcripts                                      | every split in every tree of the ensemble           |
+| How much a question narrowed things down             | the impurity reduction achieved at that split       |
+| Tallying question by question                        | summing per feature, then averaging across trees    |
+| Questions asked constantly that settled everything   | high-importance features                            |
+| Two questions that were near-duplicates              | strongly correlated features                        |
+| Each of them looking half as useful as it was        | importance credit split between correlated features |
+| The tally not explaining *why* the verdict was right | importance is not causation                         |
 
 **Meaning** — an ensemble sacrifices the readability of a single tree ([05 §1.2](05-decision-trees-and-id3.md#12-how-a-tree-makes-a-prediction)). Feature importance buys some of it back by ranking the inputs by how much work each one actually did.
 
@@ -463,4 +463,4 @@ The source does not supply the actual data or code for these datasets; that is r
 
 ---
 
-**Previous:** [Chapter 05](05-decision-trees-and-id3.md) · **Next:** [Chapter 07 — Performance Metrics](07-performance-metrics.md) · Back to [module map](00-study-checklist.md)
+**Previous:** [Chapter 05](05-decision-trees-and-id3.md) · **Next:** [Chapter 06b — Ensemble Methods Deep Dive](06b-ensemble-methods-deep-dive.md) (AdaBoost, Gradient Boosting for classification, Random Forest internals) · Then [Chapter 07 — Performance Metrics](07-performance-metrics.md) · Back to [module map](00-study-checklist.md)
