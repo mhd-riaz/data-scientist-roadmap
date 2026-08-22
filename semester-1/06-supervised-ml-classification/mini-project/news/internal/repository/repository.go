@@ -43,3 +43,17 @@ type SourceRepository interface {
 	// Delete removes a source, returning ErrNotFound if the id is unknown.
 	Delete(ctx context.Context, id string) error
 }
+
+// ArticleRepository persists collected articles.
+type ArticleRepository interface {
+	// Create stores a new article, returning ErrDuplicate when a unique index
+	// rejects it. Two collectors racing on the same article both call this; the
+	// index, not a prior read, is what decides which one wins.
+	Create(ctx context.Context, a *domain.Article) error
+
+	// FindByIdentity returns the stored article matching any of the identity's
+	// keys, or ErrNotFound. Keys are tried in the deduplication order:
+	// normalized URL, canonical URL, source plus feed GUID, then the content
+	// hash within the same source.
+	FindByIdentity(ctx context.Context, identity domain.ArticleIdentity) (*domain.Article, error)
+}

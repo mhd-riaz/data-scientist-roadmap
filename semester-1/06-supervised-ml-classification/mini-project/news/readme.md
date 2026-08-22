@@ -6,12 +6,13 @@ Phase 1 is **data collection only**. Topic classification, bias analysis, locati
 matching, LLMs, site scraping, browser automation, social media and any frontend are
 explicitly out of scope.
 
-> **Status: Milestone 3 complete.** On top of Milestone 1's configuration,
+> **Status: Milestone 4 complete.** On top of Milestone 1's configuration,
 > logging, MongoDB connection management, health endpoints, migration and
-> container stack, and Milestone 2's source model, persistence layer, source
-> management APIs and seeding CLI, the SSRF-guarded HTTP client and the
-> RSS/Atom feed collector are now in place. The processing pipeline, the
-> scheduler and the article query APIs arrive in Milestones 4-6.
+> container stack, Milestone 2's source model, persistence layer, source
+> management APIs and seeding CLI, and Milestone 3's SSRF-guarded HTTP client
+> and RSS/Atom collector, the article model and the processing pipeline that
+> normalises, deduplicates and stores collected items are now in place. The
+> scheduler and the article query APIs arrive in Milestones 5-6.
 
 ## Requirements
 
@@ -191,6 +192,44 @@ An Atom entry that carries only `updated` uses it as its publication date.
 Nothing schedules a collection yet: the scheduler and the manual collection CLI arrive
 in Milestone 5.
 
+## Article processing
+
+Each collected item is normalised, checked against what is already stored, and inserted
+— one item at a time, so two entries duplicating each other inside a single feed are
+caught by the same lookup that catches a duplicate of yesterday's collection.
+
+Normalising an item produces the article: HTML becomes plain text (tags are removed
+before entities are decoded, so escaped markup cannot reappear as real markup), the link
+is reduced to a canonical form, the region and language are taken from the source, and a
+missing or impossible publication date falls back to the collection time. An item with
+no headline or no usable link is counted as invalid and skipped rather than failing the
+batch.
+
+URL normalisation is what makes the same article arriving by two routes one article:
+lower-case scheme and host, no `www.`, no default port, no fragment, no `utm_*`/`gclid`/
+`fbclid`-style tracking parameters, the remaining parameters in a stable order, and no
+trailing slash.
+
+The deduplication keys are then tried in order:
+
+| Order | Key                          | Why it comes here                                               |
+| ----- | ---------------------------- | --------------------------------------------------------------- |
+| 1     | `normalized_url`             | Cheapest and strongest: the same URL is the same article        |
+| 2     | `canonical_url`              | The publisher's permalink, kept stable across a link change     |
+| 3     | `source_id` + `feed_guid`    | The publisher's own identifier, unique within its feed          |
+| 4     | `source_id` + `content_hash` | The same text republished under a new URL by the same publisher |
+
+`canonical_url` is the feed's own identifier when that identifier is itself a URL, which
+is what RSS permalink GUIDs and most Atom ids are. The content hash is deliberately
+scoped to one source: two publishers syndicating the same story are two articles, which
+is also why its index is not unique.
+
+The lookup answers the common case without a write, and `uq_dedup_id`,
+`uq_normalized_url` and `uq_source_feed_guid` settle the race it cannot — between the
+read and the insert another collector may store the same article, and a duplicate key
+there is the expected outcome, not a fault. A batch reports how many items it stored,
+skipped as duplicates and rejected as invalid.
+
 ## Data model
 
 Five collections, created and indexed by `make migrate`:
@@ -226,7 +265,7 @@ internal/repository/mongo MongoDB implementations
 internal/service         application orchestration
 internal/httpclient      SSRF-guarded HTTP client
 internal/collector/rss   gofeed-based RSS/Atom collector
-internal/processor       staged processing pipeline        (Milestone 4)
+internal/processor       staged processing pipeline
 internal/scheduler       cron scheduling and locking       (Milestone 5)
 
 configs/      default configuration and the source seed file
@@ -268,6 +307,9 @@ they sort chronologically the `_id` index alone gives listings a stable order.
   bomb is inert, and an over-large body is rejected rather than truncated.
 - `collector.allow_private_networks` turns the address guard off for local development
   and is refused outright when `app.environment` is `production`.
+- Feed content is stored as plain text with its markup removed, and every article field
+  is bounded before it reaches the database, so a publisher cannot use a feed to plant
+  markup or an unbounded document in the store.
 
 Every outbound request in the application goes through `internal/httpclient`, so no
 caller can reach the network without those guards.

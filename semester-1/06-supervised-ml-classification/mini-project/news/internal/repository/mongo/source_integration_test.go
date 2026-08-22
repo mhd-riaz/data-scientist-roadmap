@@ -3,75 +3,17 @@
 package mongo
 
 import (
-	"context"
 	"errors"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/riaz/newscollector/internal/domain"
-	"github.com/riaz/newscollector/internal/mongodb"
 	"github.com/riaz/newscollector/internal/repository"
 )
 
-// newTestRepo connects to the MongoDB instance named by NEWS_TEST_MONGO_URI
-// (default: the local Docker Compose one) using a database unique to this run,
-// and applies the real migration so the tests exercise the production indexes.
 func newTestRepo(t *testing.T) *SourceRepository {
 	t.Helper()
-
-	uri := os.Getenv("NEWS_TEST_MONGO_URI")
-	if uri == "" {
-		uri = "mongodb://localhost:27017"
-	}
-
-	client, err := mongodb.Connect(mongodb.Settings{
-		URI: uri,
-		// Nanoseconds keep the name unique per test without the '.' that a
-		// fractional-second timestamp would introduce; MongoDB forbids it.
-		Database:               fmt.Sprintf("news_it_src_%d", time.Now().UnixNano()),
-		AppName:                "news-collector-tests",
-		ConnectTimeout:         5 * time.Second,
-		ServerSelectionTimeout: 5 * time.Second,
-		OperationTimeout:       10 * time.Second,
-		MaxPoolSize:            5,
-	})
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx); err != nil {
-		t.Fatalf("MongoDB is not reachable at %s: %v", uri, err)
-	}
-	if _, err := mongodb.EnsureCollections(ctx, client.Database()); err != nil {
-		t.Fatalf("EnsureCollections: %v", err)
-	}
-	if _, err := mongodb.EnsureIndexes(ctx, client.Database()); err != nil {
-		t.Fatalf("EnsureIndexes: %v", err)
-	}
-
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cleanupCancel()
-		if err := client.Database().Drop(cleanupCtx); err != nil {
-			t.Errorf("drop test database: %v", err)
-		}
-		if err := client.Close(cleanupCtx); err != nil {
-			t.Errorf("close client: %v", err)
-		}
-	})
-
-	return NewSourceRepository(client.Database())
-}
-
-func testContext(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	t.Cleanup(cancel)
-	return ctx
+	return NewSourceRepository(newTestDatabase(t, "src"))
 }
 
 func newSource(t *testing.T, feedURL string, mutate ...func(*domain.SourceInput)) *domain.Source {
