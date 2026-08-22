@@ -45,6 +45,67 @@ func TestCollectionsAreUnique(t *testing.T) {
 	}
 }
 
+// No index in the plan may still carry a name the plan itself declares
+// obsolete, or the migration would drop what it is about to create.
+func TestObsoleteIndexesAreNotAlsoPlanned(t *testing.T) {
+	obsolete := ObsoleteIndexes()
+
+	for _, ci := range IndexPlan() {
+		retired := make(map[string]struct{}, len(obsolete[ci.Collection]))
+		for _, name := range obsolete[ci.Collection] {
+			retired[name] = struct{}{}
+		}
+
+		for _, m := range ci.Models {
+			opts := resolveOptions(t, m)
+			if opts.Name == nil {
+				continue
+			}
+			if _, clash := retired[*opts.Name]; clash {
+				t.Errorf("%s: index %q is both planned and declared obsolete", ci.Collection, *opts.Name)
+			}
+		}
+	}
+}
+
+// Every index a listing sorts on must end in the _id tiebreaker, or one page of
+// a filtered listing costs a sort of everything that matched.
+func TestListingIndexesCarryTheCursorTiebreaker(t *testing.T) {
+	cursorIndexes := map[string]struct{}{
+		"ix_published_cursor":          {},
+		"ix_collected_cursor":          {},
+		"ix_source_published_cursor":   {},
+		"ix_language_published_cursor": {},
+		"ix_region_published_cursor":   {},
+	}
+
+	found := 0
+	for _, ci := range IndexPlan() {
+		if ci.Collection != CollectionArticles {
+			continue
+		}
+		for _, m := range ci.Models {
+			opts := resolveOptions(t, m)
+			if opts.Name == nil {
+				continue
+			}
+			if _, ok := cursorIndexes[*opts.Name]; !ok {
+				continue
+			}
+			found++
+
+			keys := m.Keys.(bson.D)
+			if last := keys[len(keys)-1]; last.Key != "_id" || last.Value != -1 {
+				t.Errorf("%s ends in %v, want {_id: -1}", *opts.Name, last)
+			}
+		}
+	}
+
+	if found != len(cursorIndexes) {
+		t.Errorf("found %d of the %d listing indexes", found, len(cursorIndexes))
+	}
+}
+
 func TestIndexPlanCoversEveryCollection(t *testing.T) {
 	planned := map[string]int{}
 	for _, ci := range IndexPlan() {

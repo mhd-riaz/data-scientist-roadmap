@@ -72,6 +72,16 @@ func run() error {
 	}
 	logger.Info("collections ensured", "created", created, "total", len(mongodb.Collections()))
 
+	// Superseded indexes go before the new ones: MongoDB refuses to recreate an
+	// existing name with different keys.
+	dropped, err := mongodb.DropObsoleteIndexes(ctx, client.Database())
+	if err != nil {
+		return err
+	}
+	for collection, names := range dropped {
+		logger.Info("obsolete indexes dropped", "collection", collection, "indexes", names)
+	}
+
 	applied, err := mongodb.EnsureIndexes(ctx, client.Database())
 	if err != nil {
 		return err

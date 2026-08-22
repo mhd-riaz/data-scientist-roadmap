@@ -265,7 +265,9 @@ enabled sources whose `next_scheduled_at` has passed, highest `priority` first, 
 most `scheduler.batch_size` of them, and collects up to `scheduler.max_concurrent` at
 once. A tick starts only once the previous one has finished, so a slow batch delays the
 next rather than stacking on top of it, and shutdown waits for the collections already
-in flight instead of abandoning them.
+in flight instead of abandoning them — within the same `server.shutdown_timeout` the
+HTTP server gets, so one slow publisher cannot hold the process open. A collection still
+running when that elapses loses its lease to the TTL instead of releasing it.
 
 Before collecting a source, a collector takes a lease on it in `application_locks`, and
 the resource name is the document `_id`, so the primary key itself is what makes the
@@ -338,6 +340,10 @@ deployment cannot collide with the scheduled collection of the same source. A fe
 fails is a recorded run, not a command failure: the exit code stays zero so one broken
 publisher does not abandon the rest of the batch.
 
+`-source` refuses a disabled feed rather than collecting it. Disabled has to mean the
+same thing everywhere, or switching a feed off would still leave one way to pull
+articles from it.
+
 ## Article processing
 
 Each collected item is normalised, checked against what is already stored, and inserted
@@ -393,15 +399,20 @@ hash) is enforced by three unique indexes on `articles`. `content_hash` is index
 **not** unique, because two sources may legitimately syndicate identical content.
 `application_locks` carries a TTL index so a crashed collector cannot hold a lock forever.
 
-Every article listing is index-served: `ix_published_cursor` and `ix_collected_cursor`
-carry the two timelines and their `_id` tiebreaker, `ix_source_published` and
-`ix_language_published` carry those filters, and `ix_region_published`
-(`country, state, city, published_at`) carries the regional query this system exists to
-answer. An integration test explains each listing shape and fails the build if MongoDB
-answers it with a collection scan.
+Every article listing is index-served, and every listing index ends in
+`published_at` (or `collected_at`) followed by `_id` — the exact order a page is read
+in. Without the `_id` the database cannot order two articles sharing a timestamp from
+the index alone, and has to sort the whole filtered set to hand back one page of it:
+`ix_published_cursor` and `ix_collected_cursor` carry the two timelines,
+`ix_source_published_cursor` and `ix_language_published_cursor` carry those filters, and
+`ix_region_published_cursor` carries the regional query this system exists to answer. An
+integration test explains each listing shape and fails the build if MongoDB answers any
+of them with a collection scan **or** a blocking sort.
 
-Milestone 6 added `ix_region_published`; it is the only schema change since Milestone 1.
-`createIndexes` is idempotent, so applying it is `make migrate` and nothing else.
+MongoDB refuses to recreate an existing index name with different keys, so an index that
+gains a field is retired under its old name rather than edited in place. `ObsoleteIndexes`
+lists those names and `make migrate` drops them before applying the plan, so upgrading an
+existing deployment is still `make migrate` and nothing else.
 
 ## Project layout
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -109,7 +108,7 @@ func run() error {
 
 	// The scheduler shares the process with the API. Per-source leases are what
 	// make that safe with more than one replica running.
-	var schedulerDone sync.WaitGroup
+	schedulerStopped := make(chan struct{})
 	if cfg.Scheduler.Enabled {
 		sch := scheduler.New(collectionService, scheduler.Config{
 			Interval:      cfg.Scheduler.Interval,
@@ -117,14 +116,14 @@ func run() error {
 			MaxConcurrent: cfg.Scheduler.MaxConcurrent,
 		}, logger)
 
-		schedulerDone.Add(1)
 		go func() {
-			defer schedulerDone.Done()
+			defer close(schedulerStopped)
 			if err := sch.Run(ctx); err != nil {
 				logger.Error("scheduler stopped early", "error", err)
 			}
 		}()
 	} else {
+		close(schedulerStopped)
 		logger.Warn("scheduler is disabled; feeds will only be collected by the collector command")
 	}
 
@@ -156,11 +155,17 @@ func run() error {
 		logger.Error("graceful shutdown failed", "error", shutdownErr)
 	}
 
-	// The scheduler stops with the signal context; waiting for it here means a
-	// collection in flight finishes and gives its lease back before the MongoDB
-	// connection it needs is closed.
+	// The scheduler stops with the signal context. Waiting for it lets a
+	// collection in flight finish and give its lease back before the MongoDB
+	// connection it needs is closed — but only within the same grace period the
+	// HTTP server gets, so a slow publisher cannot hold shutdown open.
 	stop()
-	schedulerDone.Wait()
+	select {
+	case <-schedulerStopped:
+	case <-shutdownCtx.Done():
+		logger.Warn("scheduler did not stop within the shutdown timeout; " +
+			"any lease it still holds will expire on its own")
+	}
 
 	if err := mongoClient.Close(shutdownCtx); err != nil {
 		logger.Error("closing mongodb failed", "error", err)

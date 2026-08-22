@@ -20,6 +20,9 @@ import (
 // exactly what the lease exists to arbitrate.
 var ErrLocked = errors.New("service: source is already being collected")
 
+// ErrSourceDisabled means the source was asked for by name but is switched off.
+var ErrSourceDisabled = errors.New("service: source is disabled")
+
 // FeedCollector fetches and parses one source's feed. The service depends on
 // the behaviour rather than the concrete collector, so its tests need no
 // network.
@@ -89,6 +92,10 @@ func (s *CollectionService) Due(ctx context.Context, limit int) ([]domain.Source
 // collection is an operator deciding the feed is worth reading right now, so it
 // deliberately ignores next_scheduled_at — the lease still applies, so it
 // cannot collide with a scheduled run of the same source.
+//
+// A disabled source is refused rather than collected: disabled has to mean the
+// same thing everywhere, or turning a feed off would still leave one way to
+// pull articles from it.
 func (s *CollectionService) CollectByID(ctx context.Context, id string) (*domain.CollectionRun, error) {
 	if err := domain.ValidateID(id); err != nil {
 		return nil, err
@@ -97,6 +104,9 @@ func (s *CollectionService) CollectByID(ctx context.Context, id string) (*domain
 	src, err := s.deps.Sources.GetByID(ctx, id)
 	if err != nil {
 		return nil, translate(err)
+	}
+	if !src.Enabled {
+		return nil, ErrSourceDisabled
 	}
 	return s.Collect(ctx, src)
 }

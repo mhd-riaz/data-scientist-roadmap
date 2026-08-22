@@ -508,6 +508,30 @@ func TestCollectByIDReportsAnUnknownSource(t *testing.T) {
 	}
 }
 
+// Disabled has to mean the same thing everywhere: a feed switched off must not
+// still be collectable by naming it.
+func TestCollectByIDRefusesADisabledSource(t *testing.T) {
+	h := newCollectionHarness(t)
+
+	disabled := *h.source
+	disabled.Enabled = false
+	h.sources.mu.Lock()
+	h.sources.byID[disabled.ID] = disabled
+	h.sources.mu.Unlock()
+
+	_, err := h.svc.CollectByID(t.Context(), disabled.ID)
+
+	if !errors.Is(err, ErrSourceDisabled) {
+		t.Fatalf("error = %v, want ErrSourceDisabled", err)
+	}
+	if h.collector.calls != 0 {
+		t.Errorf("the feed was fetched %d times, want 0", h.collector.calls)
+	}
+	if len(h.locks.held) != 0 {
+		t.Errorf("a lease was taken for a source that was never collected: %+v", h.locks.held)
+	}
+}
+
 func TestDueReturnsOnlySourcesWhoseTimeHasCome(t *testing.T) {
 	h := newCollectionHarness(t)
 

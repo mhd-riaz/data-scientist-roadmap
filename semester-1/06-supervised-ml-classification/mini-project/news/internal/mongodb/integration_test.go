@@ -4,6 +4,7 @@ package mongodb
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -22,8 +23,11 @@ func newTestClient(t *testing.T) *Client {
 	}
 
 	client, err := Connect(Settings{
-		URI:                    uri,
-		Database:               "news_it_" + time.Now().UTC().Format("20060102150405"),
+		URI: uri,
+		// Nanoseconds, not a formatted timestamp: two tests starting inside the
+		// same second would otherwise share a database and each one's cleanup
+		// would drop the other's data out from under it.
+		Database:               fmt.Sprintf("news_it_%d", time.Now().UnixNano()),
 		AppName:                "news-collector-tests",
 		ConnectTimeout:         5 * time.Second,
 		ServerSelectionTimeout: 5 * time.Second,

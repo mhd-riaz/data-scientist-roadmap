@@ -33,18 +33,27 @@ func explainList(ctx context.Context, repo *ArticleRepository, filter domain.Art
 	}).Raw()
 }
 
-// winningStage reports whether the plan MongoDB chose reads an index or the
-// whole collection. Only the winning plan is inspected: a rejected plan may
-// legitimately be a collection scan.
+// winningStage reports how MongoDB chose to answer the query. Only the winning
+// plan is inspected: a rejected plan may legitimately be a collection scan.
+//
+// A blocking SORT is called out as well as a COLLSCAN, because it is the more
+// insidious of the two — the query is indexed, but the database still has to
+// read and order every matching article to hand back one page of them.
 func winningStage(plan bson.Raw) string {
 	winning, err := plan.LookupErr("queryPlanner", "winningPlan")
 	if err != nil {
 		return ""
 	}
-	if strings.Contains(winning.String(), "COLLSCAN") {
+
+	described := winning.String()
+	switch {
+	case strings.Contains(described, "COLLSCAN"):
 		return "COLLSCAN"
+	case strings.Contains(described, `"SORT"`):
+		return "SORT"
+	default:
+		return "IXSCAN"
 	}
-	return "IXSCAN"
 }
 
 // seedSourceID is shared by every seeded article, because newArticle otherwise
@@ -320,7 +329,9 @@ func TestArticleListSortsByCollectionTime(t *testing.T) {
 	}
 }
 
-// Every listing shape must be served by an index rather than a collection scan.
+// Every listing shape must be answered from an index alone — no collection
+// scan, and no blocking sort either: one page must not cost a read of every
+// article that matched.
 func TestArticleListQueriesAreIndexed(t *testing.T) {
 	repo := newTestArticleRepo(t)
 	ctx := testContext(t)
@@ -333,11 +344,12 @@ func TestArticleListQueriesAreIndexed(t *testing.T) {
 		filter domain.ArticleFilter
 	}{
 		{"unfiltered", domain.ArticleFilter{}},
-		{"by source", domain.ArticleFilter{SourceID: "0198f3d2-1111-7000-8000-000000000001"}},
+		{"by source", domain.ArticleFilter{SourceID: seedSourceID}},
 		{"by language", domain.ArticleFilter{Language: "en"}},
 		{"by region", domain.ArticleFilter{Country: "IN", State: "Karnataka", City: "Bengaluru"}},
 		{"by collection time", domain.ArticleFilter{Sort: domain.SortCollectedAt}},
 		{"with a cursor", domain.ArticleFilter{Cursor: &cursor}},
+		{"by source with a cursor", domain.ArticleFilter{SourceID: seedSourceID, Cursor: &cursor}},
 	}
 
 	for _, tt := range tests {
@@ -349,8 +361,8 @@ func TestArticleListQueriesAreIndexed(t *testing.T) {
 			if err != nil {
 				t.Fatalf("explain: %v", err)
 			}
-			if stage := winningStage(plan); stage == "COLLSCAN" {
-				t.Fatalf("query plan is a collection scan: %s", plan)
+			if stage := winningStage(plan); stage != "IXSCAN" {
+				t.Fatalf("query plan is a %s, want an index-only plan: %s", stage, plan)
 			}
 		})
 	}

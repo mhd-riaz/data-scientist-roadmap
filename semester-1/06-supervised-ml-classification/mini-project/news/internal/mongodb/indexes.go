@@ -13,6 +13,13 @@ import (
 // namespaceExistsCode is the MongoDB error returned when a collection already exists.
 const namespaceExistsCode = 48
 
+// indexNotFoundCode is returned by dropIndexes for an index that is not there,
+// which is the normal case on a database that never had the superseded one.
+const indexNotFoundCode = 27
+
+// namespaceNotFoundCode is returned when the collection itself is not there yet.
+const namespaceNotFoundCode = 26
+
 // CollectionIndexes binds a collection to the indexes it requires.
 type CollectionIndexes struct {
 	Collection string
@@ -93,8 +100,12 @@ func IndexPlan() []CollectionIndexes {
 					Options: options.Index().SetName("ix_content_hash"),
 				},
 				{
-					Keys:    bson.D{{Key: "source_id", Value: 1}, {Key: "published_at", Value: -1}},
-					Options: options.Index().SetName("ix_source_published"),
+					Keys: bson.D{
+						{Key: "source_id", Value: 1},
+						{Key: "published_at", Value: -1},
+						{Key: "_id", Value: -1},
+					},
+					Options: options.Index().SetName("ix_source_published_cursor"),
 				},
 				{
 					Keys:    bson.D{{Key: "published_at", Value: -1}, {Key: "_id", Value: -1}},
@@ -105,21 +116,31 @@ func IndexPlan() []CollectionIndexes {
 					Options: options.Index().SetName("ix_collected_cursor"),
 				},
 				{
-					Keys:    bson.D{{Key: "language", Value: 1}, {Key: "published_at", Value: -1}},
-					Options: options.Index().SetName("ix_language_published"),
+					Keys: bson.D{
+						{Key: "language", Value: 1},
+						{Key: "published_at", Value: -1},
+						{Key: "_id", Value: -1},
+					},
+					Options: options.Index().SetName("ix_language_published_cursor"),
 				},
 				// Region is the axis this whole system is organised around, so
 				// filtering by it must not be a collection scan. The prefix
 				// order matches how a caller narrows: country, then state,
 				// then city.
+				//
+				// Every listing index ends in published_at and _id because that
+				// is the order a page is read in; without the _id the database
+				// cannot order two articles sharing a timestamp from the index
+				// alone and has to sort the whole filtered set to find one page.
 				{
 					Keys: bson.D{
 						{Key: "country", Value: 1},
 						{Key: "state", Value: 1},
 						{Key: "city", Value: 1},
 						{Key: "published_at", Value: -1},
+						{Key: "_id", Value: -1},
 					},
-					Options: options.Index().SetName("ix_region_published"),
+					Options: options.Index().SetName("ix_region_published_cursor"),
 				},
 				{
 					Keys:    bson.D{{Key: "processing_status", Value: 1}, {Key: "collected_at", Value: -1}},
@@ -171,6 +192,25 @@ func IndexPlan() []CollectionIndexes {
 	}
 }
 
+// ObsoleteIndexes names, per collection, the indexes a previous version of the
+// plan created and this one has replaced.
+//
+// MongoDB refuses to recreate an existing index name with different keys, so an
+// index that gains a field has to be retired under its old name rather than
+// edited in place. Listing them here keeps that history explicit and auditable
+// instead of hiding it in a conditional inside the migration.
+func ObsoleteIndexes() map[string][]string {
+	return map[string][]string{
+		// Superseded by their *_cursor forms, which carry the _id tiebreaker a
+		// paged listing sorts on.
+		CollectionArticles: {
+			"ix_source_published",
+			"ix_language_published",
+			"ix_region_published",
+		},
+	}
+}
+
 // EnsureCollections creates any missing collection and returns the names it
 // created. It is safe to run repeatedly.
 func EnsureCollections(ctx context.Context, db *mongo.Database) ([]string, error) {
@@ -200,6 +240,63 @@ func EnsureCollections(ctx context.Context, db *mongo.Database) ([]string, error
 	return created, nil
 }
 
+// DropObsoleteIndexes removes the superseded indexes and returns the names it
+// dropped per collection. An index that is not there — a fresh database, or a
+// second run — is not an error, so this is safe to run before every migration.
+//
+// What is present is read first and only those are dropped, so the returned
+// list, and the migration's log line, name what actually changed rather than
+// what was merely attempted.
+func DropObsoleteIndexes(ctx context.Context, db *mongo.Database) (map[string][]string, error) {
+	dropped := make(map[string][]string)
+
+	for collection, names := range ObsoleteIndexes() {
+		present, err := existingIndexNames(ctx, db, collection)
+		if err != nil {
+			return dropped, err
+		}
+
+		for _, name := range names {
+			if _, ok := present[name]; !ok {
+				continue
+			}
+			// Still tolerate a missing index: another migration may have been
+			// running at the same time and dropped it first.
+			if err := db.Collection(collection).Indexes().DropOne(ctx, name); err != nil && !isIndexNotFound(err) {
+				return dropped, fmt.Errorf("mongodb: drop index %q on %q: %w", name, collection, err)
+			}
+			dropped[collection] = append(dropped[collection], name)
+		}
+	}
+	return dropped, nil
+}
+
+// existingIndexNames lists the indexes on a collection. A collection that does
+// not exist yet simply has none.
+func existingIndexNames(ctx context.Context, db *mongo.Database, collection string) (map[string]struct{}, error) {
+	cursor, err := db.Collection(collection).Indexes().List(ctx)
+	if err != nil {
+		if isIndexNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("mongodb: list indexes on %q: %w", collection, err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	var specs []struct {
+		Name string `bson:"name"`
+	}
+	if err := cursor.All(ctx, &specs); err != nil {
+		return nil, fmt.Errorf("mongodb: decode indexes on %q: %w", collection, err)
+	}
+
+	names := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		names[spec.Name] = struct{}{}
+	}
+	return names, nil
+}
+
 // EnsureIndexes applies the index plan. createIndexes is idempotent for an
 // unchanged specification, so reruns are no-ops.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) (map[string][]string, error) {
@@ -218,4 +315,11 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) (map[string][]string
 func isNamespaceExists(err error) bool {
 	var cmdErr mongo.CommandError
 	return errors.As(err, &cmdErr) && cmdErr.Code == namespaceExistsCode
+}
+
+// isIndexNotFound also covers a collection that does not exist yet, which the
+// server reports the same way when asked to drop an index from it.
+func isIndexNotFound(err error) bool {
+	var cmdErr mongo.CommandError
+	return errors.As(err, &cmdErr) && (cmdErr.Code == indexNotFoundCode || cmdErr.Code == namespaceNotFoundCode)
 }

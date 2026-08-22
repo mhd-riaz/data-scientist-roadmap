@@ -158,10 +158,14 @@ func report(logger *slog.Logger, run *domain.CollectionRun) {
 }
 
 func describeError(sourceID string, err error) error {
-	if errors.Is(err, service.ErrNotFound) {
+	switch {
+	case errors.Is(err, service.ErrNotFound):
 		return fmt.Errorf("no source with id %q", sourceID)
+	case errors.Is(err, service.ErrSourceDisabled):
+		return fmt.Errorf("source %s is disabled; enable it before collecting it", sourceID)
+	default:
+		return fmt.Errorf("collect source %s: %w", sourceID, err)
 	}
-	return fmt.Errorf("collect source %s: %w", sourceID, err)
 }
 
 func defaultConfigPath() string {
