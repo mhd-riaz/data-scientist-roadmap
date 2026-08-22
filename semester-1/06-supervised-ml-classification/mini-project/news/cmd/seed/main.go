@@ -78,9 +78,14 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", defaultConfigPath(), "path to the YAML configuration file")
+	envPath := flag.String("env", config.EnvFilePath(), "path to the dotenv file holding secrets")
 	sourcesPath := flag.String("sources", defaultSourcesPath, "path to the YAML seed file")
 	dryRun := flag.Bool("dry-run", false, "validate the seed file without writing to the database")
 	flag.Parse()
+
+	if err := config.LoadEnvFile(*envPath); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

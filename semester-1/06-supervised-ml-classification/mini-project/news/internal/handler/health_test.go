@@ -41,6 +41,7 @@ func newTestServer(t *testing.T, p Pinger) http.Handler {
 		NewSource(&fakeSourceManager{}, logger),
 		NewCollectionRun(&fakeRunReader{}, logger),
 		NewArticle(&fakeArticleReader{}, logger),
+		nil,
 		logger,
 	)
 }

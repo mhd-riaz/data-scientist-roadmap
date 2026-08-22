@@ -21,6 +21,14 @@ explicitly out of scope.
 
 ## Quick start with Docker Compose
 
+Secrets come from `.env`, which is gitignored and never baked into the image.
+Create it first — the API refuses to start with auth enabled and no credentials:
+
+```bash
+cp .env.example .env
+openssl rand -hex 32          # paste into NEWS_AUTH_API_KEYS
+```
+
 Starts MongoDB, runs the migration to completion, then starts the API:
 
 ```bash
@@ -28,8 +36,8 @@ make up
 curl -s localhost:8080/health/live
 curl -s localhost:8080/health/ready
 make seed          # apply the feeds in configs/sources.yaml
-curl -s 'localhost:8080/api/v1/collection-runs?limit=5'
-curl -s 'localhost:8080/api/v1/articles?limit=5'
+curl -s -H "X-API-Key: $KEY" 'localhost:8080/api/v1/collection-runs?limit=5'
+curl -s -H "X-API-Key: $KEY" 'localhost:8080/api/v1/articles?limit=5'
 make logs
 make down          # stops the stack and deletes the volume
 ```
@@ -79,6 +87,11 @@ Three layers, each overriding the one before: built-in defaults →
 | `server.idle_timeout`              | `NEWS_SERVER_IDLE_TIMEOUT`              | `60s`                       |
 | `server.shutdown_timeout`          | `NEWS_SERVER_SHUTDOWN_TIMEOUT`          | `15s`                       |
 | `server.max_header_bytes`          | `NEWS_SERVER_MAX_HEADER_BYTES`          | `1048576`                   |
+| `auth.enabled`                     | `NEWS_AUTH_ENABLED`                     | `true` (via config file)    |
+| `auth.api_key_header`              | `NEWS_AUTH_API_KEY_HEADER`              | `X-API-Key`                 |
+| —                                  | `NEWS_AUTH_API_KEYS`                    | none                        |
+| —                                  | `NEWS_AUTH_BASIC_USERNAME`              | none                        |
+| —                                  | `NEWS_AUTH_BASIC_PASSWORD`              | none                        |
 | `mongo.uri`                        | `NEWS_MONGO_URI`                        | `mongodb://localhost:27017` |
 | `mongo.database`                   | `NEWS_MONGO_DATABASE`                   | `news`                      |
 | `mongo.connect_timeout`            | `NEWS_MONGO_CONNECT_TIMEOUT`            | `10s`                       |
@@ -101,6 +114,91 @@ Three layers, each overriding the one before: built-in defaults →
 | `logging.format`                   | `NEWS_LOGGING_FORMAT`                   | `json`                      |
 
 `NEWS_CONFIG_PATH` selects a different config file without passing `-config`.
+
+### Secrets come from the environment, not the config file
+
+The three credential rows above have no YAML key on purpose. They are read only
+from the environment, so a secret cannot be committed in `configs/config.yaml` —
+putting one there fails the load rather than being quietly honoured.
+
+Every command loads `.env` before reading its configuration. Variables already
+present in the environment are left alone, so the file never shadows a real
+value: the same binary reads secrets from `.env` on a laptop and from Coolify's
+injected environment in the homelab, with no branch either way. A missing `.env`
+is not an error. `NEWS_ENV_FILE` (or `-env`) points at a different file, such as
+a mounted secret.
+
+## Authentication
+
+Every `/api/v1` route requires a credential. `/health/live` and `/health/ready`
+stay open, because the container healthcheck and the reverse proxy probe them
+before any credential is in play and they reveal nothing but liveness.
+
+Two schemes are accepted, and either one alone is sufficient:
+
+```bash
+curl -H "X-API-Key: $KEY" localhost:8080/api/v1/sources        # scripts
+curl -u operator:secret    localhost:8080/api/v1/sources        # browser, curl
+```
+
+- `NEWS_AUTH_API_KEYS` is a comma-separated list, so a key is rotated by adding
+  the replacement, moving clients over, then dropping the old one — no window
+  where the API is unprotected.
+- Keys must be at least 32 characters, basic passwords at least 16.
+- The header name is configurable with `NEWS_AUTH_API_KEY_HEADER`, and is
+  rejected at startup if it is not a valid HTTP field name.
+- Only SHA-256 digests are held in memory, compared in constant time with every
+  configured key checked, so neither the value nor the length of a rejected
+  credential is observable from timing.
+- A rejected request gets `401` with the standard error envelope and a `Basic`
+  challenge. It says nothing about which scheme would have worked, and an
+  unknown path under `/api/v1` is answered the same way as a known one.
+- `auth.enabled: false` is a development convenience and is refused when
+  `app.environment` is `production`. Enabling it with no credentials configured
+  is a startup error.
+
+## Deployment
+
+[.github/workflows/news-collector.yml](../../../../.github/workflows/news-collector.yml)
+runs on pushes that touch this directory: it gates on `gofmt`, `go vet` and
+`go test -race`, builds the image, pushes it to
+`ghcr.io/<owner>/news-collector` tagged `latest` and the commit SHA, then calls
+the Coolify deploy webhook. The homelab only ever pulls a finished image, so no
+Go build runs on it.
+
+On the Coolify side, create a **Docker Compose** resource from
+[deployments/coolify.compose.yml](deployments/coolify.compose.yml). It brings up
+MongoDB with generated credentials, runs the idempotent migration to completion,
+then starts the API behind a Coolify-issued domain.
+
+Set these in the Coolify UI before the first deploy — the compose file marks
+them required, so a missing one fails the deployment instead of starting an
+unguarded API:
+
+| Variable                   | Notes                                   |
+| -------------------------- | --------------------------------------- |
+| `NEWS_AUTH_API_KEYS`       | `openssl rand -hex 32`, comma-separated |
+| `NEWS_AUTH_BASIC_USERNAME` |                                         |
+| `NEWS_AUTH_BASIC_PASSWORD` | at least 16 characters                  |
+| `NEWS_IMAGE`               | optional; pin to a SHA tag to roll back |
+
+And these as GitHub repository secrets:
+
+| Secret            | Notes                                    |
+| ----------------- | ---------------------------------------- |
+| `COOLIFY_WEBHOOK` | the resource's Deploy Webhook URL        |
+| `COOLIFY_TOKEN`   | Coolify API token with deploy permission |
+
+If either is missing the deploy step is skipped with a warning and the image is
+still published, so the pipeline is usable before Coolify is wired up. Roll back
+by setting `NEWS_IMAGE` to a previous `sha-` tag and redeploying.
+
+`GITHUB_TOKEN` covers the GHCR push. If the package is private, authenticate the
+homelab's Docker daemon once:
+
+```bash
+echo "$GH_TOKEN" | docker login ghcr.io -u <username> --password-stdin
+```
 
 ## Sources
 
@@ -141,6 +239,7 @@ set one is rejected rather than ignored.
 | `GET`    | `/api/v1/collection-runs`      | List collection attempts                    | 5         |
 | `GET`    | `/api/v1/collection-runs/{id}` | Fetch one collection attempt                | 5         |
 | `GET`    | `/api/v1/articles`             | List articles, filtered and paginated       | 6         |
+| `DELETE` | `/api/v1/articles`             | Expire articles older than a given date     | 6         |
 | `GET`    | `/api/v1/articles/{id}`        | Fetch one article, content included         | 6         |
 
 Liveness is deliberately independent of MongoDB so a transient database outage causes
@@ -228,6 +327,35 @@ curl -s 'localhost:8080/api/v1/articles?limit=2&cursor=MTc2Njk5MDgwMDAwMC4wMTk4.
 
 There is no `total`. Counting a filtered set of an unbounded collection on every page is
 the same walk the cursor exists to avoid.
+
+### Retention
+
+Articles accumulate without bound, so `DELETE /api/v1/articles` expires the old ones. It
+is meant to be run on a schedule — a nightly cron against the API is enough.
+
+```bash
+curl -s -X DELETE 'localhost:8080/api/v1/articles?delete_older_than=2026-07-01T00:00:00Z'
+curl -s -X DELETE 'localhost:8080/api/v1/articles?delete_older_than=2026-07-01T00:00:00Z&source_id=<id>'
+curl -s -X DELETE 'localhost:8080/api/v1/articles?delete_older_than=2026-07-01T00:00:00Z&source_name=The+Hindu'
+```
+
+| Parameter           | Effect                                                     |
+| ------------------- | ---------------------------------------------------------- |
+| `delete_older_than` | Required. RFC 3339; deletes articles published before it   |
+| `source_id`         | Optional. Only expire one feed's articles                  |
+| `source_name`       | Optional. The same, matched on the name stored on articles |
+
+The bound is required and has no default: without one, a mistyped request would empty the
+collection. It is exclusive, so an article published exactly at the bound survives and
+re-running the same sweep is a no-op. The response is the count, because a caller cannot
+otherwise tell a sweep that expired a month of articles from one that matched nothing:
+
+```json
+{ "deleted": 1284 }
+```
+
+Deleting is by publication date rather than collection date, so it lines up with the
+`published_from`/`published_to` bounds a caller already filters listings by.
 
 ### Listings omit the article text
 
@@ -438,8 +566,9 @@ internal/scheduler       the collection loop and its concurrency bounds
 
 configs/      default configuration and the source seed file
 fixtures/     offline feed fixtures for tests
-deployments/  Dockerfile and Docker Compose
+deployments/  Dockerfile, local Docker Compose, Coolify Compose stack
 scripts/      developer helper scripts
+.env.example  template for the gitignored .env holding secrets
 ```
 
 Dependencies point inward only: handlers depend on services, services depend on
@@ -449,6 +578,24 @@ they sort chronologically the `_id` index alone gives listings a stable order.
 
 ## Security posture in this milestone
 
+- Every `/api/v1` route requires an API key or basic credentials; only `/health`
+  is open, and it exposes nothing but liveness.
+- The guarded routes live on their own mux, so what authentication covers is
+  decided by which handlers are registered behind it rather than by matching the
+  request path in a middleware, which is where prefix-comparison bypasses come from.
+- Credentials are held only as SHA-256 digests and compared with
+  `crypto/subtle`, with every configured key checked on every request, so
+  neither the value nor the length of a rejected credential leaks through timing.
+- Auth cannot be disabled in production, and enabling it without credentials is
+  a startup error, so no path leads to an unguarded deployment.
+- Secrets are accepted only from the environment. The credential fields carry no
+  YAML tag, so a key placed in the config file fails the load; `.env` is
+  gitignored and excluded from the Docker build context.
+- `.env` never overrides a variable already set, so a platform-injected secret
+  always beats a stale local file.
+- The `WWW-Authenticate` realm is a fixed constant rather than configuration, so
+  no configured value can inject into a response header, and the configured API
+  key header name is validated as an HTTP field name at startup.
 - MongoDB credentials are redacted before the connection target is logged.
 - Request and response headers are never logged, so bearer tokens cannot leak.
 - Driver errors are mapped to fixed codes; readiness reports `unavailable`, never the

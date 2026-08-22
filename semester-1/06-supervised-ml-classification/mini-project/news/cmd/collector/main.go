@@ -38,10 +38,15 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", defaultConfigPath(), "path to the YAML configuration file")
+	envPath := flag.String("env", config.EnvFilePath(), "path to the dotenv file holding secrets")
 	sourceID := flag.String("source", "", "collect only this source, ignoring its schedule")
 	limit := flag.Int("limit", domain.DefaultListLimit, "how many due sources to collect when -source is not given")
 	timeout := flag.Duration("timeout", 10*time.Minute, "overall time budget for the run")
 	flag.Parse()
+
+	if err := config.LoadEnvFile(*envPath); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

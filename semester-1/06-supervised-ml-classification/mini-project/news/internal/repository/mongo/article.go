@@ -133,6 +133,36 @@ func (r *ArticleRepository) List(ctx context.Context, filter domain.ArticleFilte
 	return page, nil
 }
 
+// DeleteOlderThan removes the articles the deletion selects.
+//
+// The whole match goes in one DeleteMany rather than in batches: the bound is
+// on published_at, which is indexed, and a sweep run on a schedule has no
+// reader waiting on it.
+func (r *ArticleRepository) DeleteOlderThan(ctx context.Context, d domain.ArticleDeletion) (int64, error) {
+	res, err := r.coll.DeleteMany(ctx, articleDeletionQuery(d))
+	if err != nil {
+		return 0, fmt.Errorf("mongo: delete articles: %w", err)
+	}
+	return res.DeletedCount, nil
+}
+
+// articleDeletionQuery builds the sweep's filter from typed, already-validated
+// values, the same way articleQuery does. The bound is exclusive, so an article
+// published exactly at it survives and a caller can sweep the same instant
+// twice without the second run taking anything the first left on purpose.
+func articleDeletionQuery(d domain.ArticleDeletion) bson.D {
+	query := bson.D{{Key: "published_at", Value: bson.D{{Key: "$lt", Value: d.OlderThan}}}}
+
+	if d.SourceID != "" {
+		query = append(query, bson.E{Key: "source_id", Value: d.SourceID})
+	}
+	if d.SourceName != "" {
+		query = append(query, bson.E{Key: "source_name", Value: d.SourceName})
+	}
+
+	return query
+}
+
 // articleSortField maps the requested order onto the field that carries it. The
 // enum is validated in the domain, so anything unexpected here means a caller
 // inside this process got it wrong, and the safe default is the published

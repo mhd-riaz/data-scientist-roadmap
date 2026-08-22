@@ -78,6 +78,12 @@ type ArticleRepository interface {
 	// carry no content: a listing of fifty full articles is megabytes nobody
 	// asked for.
 	List(ctx context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error)
+
+	// DeleteOlderThan removes every article published before the deletion's
+	// bound and returns how many went, which may be zero. Matching nothing is
+	// not ErrNotFound: a retention sweep that finds the collection already
+	// tidy has succeeded.
+	DeleteOlderThan(ctx context.Context, d domain.ArticleDeletion) (int64, error)
 }
 
 // CollectionRunRepository persists the audit record of every collection

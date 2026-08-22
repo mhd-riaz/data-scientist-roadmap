@@ -13,21 +13,23 @@ import (
 	"github.com/riaz/newscollector/internal/service"
 )
 
-// ArticleReader is the slice of article access this handler needs. Articles are
-// written only by the collection pipeline, so the contract is read-only.
-type ArticleReader interface {
+// ArticleManager is the slice of article access this handler needs. Articles
+// are written only by the collection pipeline, so the only write in the
+// contract is the retention sweep.
+type ArticleManager interface {
 	List(ctx context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error)
 	Get(ctx context.Context, id string) (*domain.Article, error)
+	DeleteOlderThan(ctx context.Context, d domain.ArticleDeletion) (int64, error)
 }
 
 // Article serves the article query endpoints.
 type Article struct {
-	articles ArticleReader
+	articles ArticleManager
 	logger   *slog.Logger
 }
 
 // NewArticle builds the article handlers.
-func NewArticle(articles ArticleReader, logger *slog.Logger) *Article {
+func NewArticle(articles ArticleManager, logger *slog.Logger) *Article {
 	return &Article{articles: articles, logger: logger}
 }
 
@@ -91,6 +93,13 @@ type articleListResponse struct {
 	NextCursor string            `json:"next_cursor,omitempty"`
 }
 
+// articleDeleteResponse reports the size of a sweep. It is returned with 200
+// rather than 204 because the count is the only way a caller can tell a sweep
+// that expired a month of articles from one that matched nothing.
+type articleDeleteResponse struct {
+	Deleted int64 `json:"deleted"`
+}
+
 // List returns the articles matching the query parameters.
 func (h *Article) List(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseArticleFilter(r)
@@ -125,6 +134,55 @@ func (h *Article) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, newArticleResponse(article))
+}
+
+// Delete expires articles published before delete_older_than, optionally
+// limited to one source by source_id or source_name.
+func (h *Article) Delete(w http.ResponseWriter, r *http.Request) {
+	deletion, err := parseArticleDeletion(r)
+	if err != nil {
+		writeValidationError(w, err)
+		return
+	}
+
+	deleted, err := h.articles.DeleteOlderThan(r.Context(), deletion)
+	if err != nil {
+		h.writeServiceError(w, r, err, "delete articles")
+		return
+	}
+
+	h.logger.InfoContext(r.Context(), "articles expired",
+		slog.Int64("deleted", deleted),
+		slog.Time("older_than", deletion.OlderThan),
+		slog.String("source_id", deletion.SourceID),
+		slog.String("source_name", deletion.SourceName),
+	)
+	writeJSON(w, http.StatusOK, articleDeleteResponse{Deleted: deleted})
+}
+
+// parseArticleDeletion reads the sweep's parameters. The bound is required
+// here as well as in the domain, so a request that simply forgot it is
+// rejected as a missing parameter rather than as a zero timestamp.
+func parseArticleDeletion(r *http.Request) (domain.ArticleDeletion, error) {
+	q := r.URL.Query()
+	deletion := domain.ArticleDeletion{
+		SourceID:   q.Get("source_id"),
+		SourceName: q.Get("source_name"),
+	}
+
+	var v domain.FieldErrors
+
+	raw := q.Get("delete_older_than")
+	if raw == "" {
+		v.Add("delete_older_than", "is required")
+	} else if bound := parseTimestamp(&v, raw, "delete_older_than"); bound != nil {
+		deletion.OlderThan = *bound
+	}
+
+	if err := v.Err(); err != nil {
+		return domain.ArticleDeletion{}, err
+	}
+	return deletion, nil
 }
 
 // parseArticleFilter reads the listing query parameters. Enum values, the

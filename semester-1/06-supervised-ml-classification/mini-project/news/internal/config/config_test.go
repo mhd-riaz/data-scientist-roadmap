@@ -207,6 +207,153 @@ func TestValidateReportsAllProblemsAtOnce(t *testing.T) {
 	}
 }
 
+func TestAuthValidation(t *testing.T) {
+	const (
+		validKey      = "9f2c1d4e8a6b0c3d5e7f9a1b2c3d4e5f60718293"
+		validPassword = "correct-horse-battery"
+	)
+
+	enabled := func(mutate func(*Auth)) func(*Config) {
+		return func(c *Config) {
+			c.Auth.Enabled = true
+			c.Auth.APIKeys = []string{validKey}
+			mutate(&c.Auth)
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantMsg string
+	}{
+		{
+			"disabled in production",
+			func(c *Config) { c.App.Environment = "production"; c.Auth.Enabled = false },
+			"auth.enabled",
+		},
+		{
+			"enabled with no credentials",
+			enabled(func(a *Auth) { a.APIKeys = nil }),
+			"no credentials are configured",
+		},
+		{
+			"short api key",
+			enabled(func(a *Auth) { a.APIKeys = []string{"tooshort"} }),
+			"AUTH_API_KEYS",
+		},
+		{
+			"basic password without username",
+			enabled(func(a *Auth) { a.BasicPassword = validPassword }),
+			"AUTH_BASIC_USERNAME",
+		},
+		{
+			"basic username without password",
+			enabled(func(a *Auth) { a.BasicUsername = "operator" }),
+			"AUTH_BASIC_PASSWORD",
+		},
+		{
+			"short basic password",
+			enabled(func(a *Auth) { a.BasicUsername = "operator"; a.BasicPassword = "short" }),
+			"AUTH_BASIC_PASSWORD",
+		},
+		{
+			"empty header name",
+			enabled(func(a *Auth) { a.APIKeyHeader = "" }),
+			"auth.api_key_header",
+		},
+		{
+			"header name with a separator",
+			enabled(func(a *Auth) { a.APIKeyHeader = "X-Api Key: injected" }),
+			"auth.api_key_header",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Default()
+			tc.mutate(cfg)
+
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatalf("expected a validation error mentioning %s", tc.wantMsg)
+			}
+			if !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Errorf("error should mention %s, got: %v", tc.wantMsg, err)
+			}
+		})
+	}
+}
+
+func TestAuthAcceptsEitherCredentialKind(t *testing.T) {
+	const (
+		validKey      = "9f2c1d4e8a6b0c3d5e7f9a1b2c3d4e5f60718293"
+		validPassword = "correct-horse-battery"
+	)
+
+	cases := map[string]func(*Auth){
+		"api keys only": func(a *Auth) { a.APIKeys = []string{validKey} },
+		"basic only":    func(a *Auth) { a.BasicUsername = "operator"; a.BasicPassword = validPassword },
+		"both": func(a *Auth) {
+			a.APIKeys = []string{validKey}
+			a.BasicUsername = "operator"
+			a.BasicPassword = validPassword
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := Default()
+			cfg.App.Environment = "production"
+			cfg.Auth.Enabled = true
+			mutate(&cfg.Auth)
+
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("expected a valid configuration, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestAuthEnvOverrides(t *testing.T) {
+	t.Setenv(EnvPrefix+"AUTH_ENABLED", "true")
+	t.Setenv(EnvPrefix+"AUTH_API_KEY_HEADER", "X-News-Api-Key")
+	t.Setenv(EnvPrefix+"AUTH_API_KEYS",
+		" 9f2c1d4e8a6b0c3d5e7f9a1b2c3d4e5f60718293 , ,0011223344556677889900aabbccddeeff00112233,")
+	t.Setenv(EnvPrefix+"AUTH_BASIC_USERNAME", "operator")
+	t.Setenv(EnvPrefix+"AUTH_BASIC_PASSWORD", "correct-horse-battery")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if !cfg.Auth.Enabled {
+		t.Error("auth should be enabled")
+	}
+	if cfg.Auth.APIKeyHeader != "X-News-Api-Key" {
+		t.Errorf("api_key_header = %q", cfg.Auth.APIKeyHeader)
+	}
+	// Blank entries and surrounding spaces are dropped, not carried through as keys.
+	if len(cfg.Auth.APIKeys) != 2 {
+		t.Fatalf("api keys = %d, want 2", len(cfg.Auth.APIKeys))
+	}
+	if cfg.Auth.APIKeys[0] != "9f2c1d4e8a6b0c3d5e7f9a1b2c3d4e5f60718293" {
+		t.Errorf("first key = %q", cfg.Auth.APIKeys[0])
+	}
+	if cfg.Auth.BasicUsername != "operator" {
+		t.Errorf("basic username = %q", cfg.Auth.BasicUsername)
+	}
+}
+
+// Secrets belong in the environment, so the file layer must not accept them.
+func TestConfigFileRejectsAuthCredentials(t *testing.T) {
+	path := writeConfig(t, "auth:\n  enabled: true\n  basic_password: hunter2\n")
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected credentials in the config file to be rejected")
+	}
+}
+
 func TestRedactedURIHidesCredentials(t *testing.T) {
 	m := Mongo{URI: "mongodb://admin:sup3rs3cret@localhost:27017/news"}
 

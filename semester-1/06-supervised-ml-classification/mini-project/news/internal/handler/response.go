@@ -21,6 +21,7 @@ const (
 	CodeUnavailable   = "unavailable"
 	CodeInvalidInput  = "invalid_input"
 	CodeConflict      = "conflict"
+	CodeUnauthorized  = "unauthorized"
 )
 
 // maxRequestBodyBytes caps a request body. Source management payloads are small,

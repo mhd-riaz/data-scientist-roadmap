@@ -37,7 +37,12 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", defaultConfigPath(), "path to the YAML configuration file")
+	envPath := flag.String("env", config.EnvFilePath(), "path to the dotenv file holding secrets")
 	flag.Parse()
+
+	if err := config.LoadEnvFile(*envPath); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -90,6 +95,22 @@ func run() error {
 		return err
 	}
 
+	var authenticator *handler.Authenticator
+	if cfg.Auth.Enabled {
+		authenticator = handler.NewAuthenticator(handler.AuthCredentials{
+			APIKeyHeader:  cfg.Auth.APIKeyHeader,
+			APIKeys:       cfg.Auth.APIKeys,
+			BasicUsername: cfg.Auth.BasicUsername,
+			BasicPassword: cfg.Auth.BasicPassword,
+		})
+		logger.Info("api authentication enabled",
+			"api_key_header", cfg.Auth.APIKeyHeader,
+			"api_keys", len(cfg.Auth.APIKeys),
+			"basic_auth", cfg.Auth.BasicUsername != "")
+	} else {
+		logger.Warn("api authentication is disabled; every endpoint is open to anyone who can reach the port")
+	}
+
 	srv := &http.Server{
 		Addr: cfg.Server.Address(),
 		Handler: handler.NewRouter(
@@ -97,6 +118,7 @@ func run() error {
 			handler.NewSource(sourceService, logger),
 			handler.NewCollectionRun(collectionService, logger),
 			handler.NewArticle(articleService, logger),
+			authenticator,
 			logger,
 		),
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,

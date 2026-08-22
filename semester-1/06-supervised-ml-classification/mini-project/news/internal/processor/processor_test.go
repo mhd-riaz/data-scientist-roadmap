@@ -82,6 +82,10 @@ func (f *fakeArticleRepo) List(_ context.Context, filter domain.ArticleFilter) (
 	return domain.ArticlePage{Items: f.stored, Limit: filter.Limit}, nil
 }
 
+func (f *fakeArticleRepo) DeleteOlderThan(context.Context, domain.ArticleDeletion) (int64, error) {
+	return 0, nil
+}
+
 func testSource() *domain.Source {
 	return &domain.Source{
 		ID:       "018f3f7e-1c2a-7f24-9a3f-8f9f2a0a5c11",

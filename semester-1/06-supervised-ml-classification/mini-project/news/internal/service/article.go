@@ -7,9 +7,10 @@ import (
 	"github.com/riaz/newscollector/internal/repository"
 )
 
-// ArticleService reads collected articles. Articles are written only by the
-// collection pipeline, so this service is deliberately read-only: there is no
-// use case in Phase 1 for editing or deleting one through an API.
+// ArticleService reads collected articles and expires old ones. Articles are
+// written only by the collection pipeline, so there is no way to create or edit
+// one through this service; the single write it offers is the retention sweep
+// that stops the collection growing without bound.
 type ArticleService struct {
 	repo repository.ArticleRepository
 }
@@ -44,4 +45,19 @@ func (s *ArticleService) Get(ctx context.Context, id string) (*domain.Article, e
 		return nil, translate(err)
 	}
 	return article, nil
+}
+
+// DeleteOlderThan expires the articles the deletion selects and reports how
+// many went. A sweep that matches nothing is a success, not a not-found.
+func (s *ArticleService) DeleteOlderThan(ctx context.Context, d domain.ArticleDeletion) (int64, error) {
+	d.Normalize()
+	if err := d.Validate(); err != nil {
+		return 0, err
+	}
+
+	deleted, err := s.repo.DeleteOlderThan(ctx, d)
+	if err != nil {
+		return 0, translate(err)
+	}
+	return deleted, nil
 }

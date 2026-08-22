@@ -19,13 +19,15 @@ import (
 type fakeArticleReader struct {
 	article  *domain.Article
 	page     domain.ArticlePage
+	deleted  int64
 	err      error
 	lastID   string
 	lastFltr domain.ArticleFilter
+	lastDel  domain.ArticleDeletion
 	calls    int
 }
 
-var _ ArticleReader = (*fakeArticleReader)(nil)
+var _ ArticleManager = (*fakeArticleReader)(nil)
 
 func (f *fakeArticleReader) List(_ context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error) {
 	f.calls++
@@ -37,6 +39,12 @@ func (f *fakeArticleReader) Get(_ context.Context, id string) (*domain.Article, 
 	f.calls++
 	f.lastID = id
 	return f.article, f.err
+}
+
+func (f *fakeArticleReader) DeleteOlderThan(_ context.Context, d domain.ArticleDeletion) (int64, error) {
+	f.calls++
+	f.lastDel = d
+	return f.deleted, f.err
 }
 
 func sampleArticle() *domain.Article {
@@ -61,7 +69,7 @@ func sampleArticle() *domain.Article {
 	}
 }
 
-func newArticleServer(t *testing.T, articles ArticleReader) http.Handler {
+func newArticleServer(t *testing.T, articles ArticleManager) http.Handler {
 	t.Helper()
 	logger := discardLogger()
 	return NewRouter(
@@ -69,6 +77,7 @@ func newArticleServer(t *testing.T, articles ArticleReader) http.Handler {
 		NewSource(&fakeSourceManager{}, logger),
 		NewCollectionRun(&fakeRunReader{}, logger),
 		NewArticle(articles, logger),
+		nil,
 		logger,
 	)
 }
@@ -269,12 +278,85 @@ func TestGetArticleMapsServiceErrors(t *testing.T) {
 func TestArticlesRejectWrites(t *testing.T) {
 	h := newArticleServer(t, &fakeArticleReader{})
 
-	for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
+	for _, method := range []string{http.MethodPost, http.MethodPatch} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(method, "/api/v1/articles", nil))
 
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("%s: status = %d, want 404: articles are written only by the collector", method, rec.Code)
 		}
+	}
+}
+
+func TestDeleteArticlesPassesTheDeletionThroughAndReportsTheCount(t *testing.T) {
+	articles := &fakeArticleReader{deleted: 42}
+	sourceID := "0198f3d2-1111-7000-8000-000000000001"
+
+	rec := do(t, newArticleServer(t, articles), http.MethodDelete,
+		"/api/v1/articles?delete_older_than=2026-07-01T00:00:00Z&source_id="+sourceID+
+			"&source_name=The+Hindu")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	got := articles.lastDel
+	if !got.OlderThan.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("older_than = %v, want 2026-07-01T00:00:00Z", got.OlderThan)
+	}
+	if got.SourceID != sourceID || got.SourceName != "The Hindu" {
+		t.Errorf("deletion = %+v, want both source filters carried through", got)
+	}
+
+	var body articleDeleteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Deleted != 42 {
+		t.Errorf("deleted = %d, want 42", body.Deleted)
+	}
+}
+
+// The bound is what stops the sweep emptying the collection, so a request that
+// omits it must never reach the service.
+func TestDeleteArticlesRequiresTheBound(t *testing.T) {
+	for _, query := range []string{"", "?source_id=0198f3d2-1111-7000-8000-000000000001", "?delete_older_than=last+week"} {
+		t.Run(query, func(t *testing.T) {
+			articles := &fakeArticleReader{}
+
+			rec := do(t, newArticleServer(t, articles), http.MethodDelete, "/api/v1/articles"+query)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body)
+			}
+			if articles.calls != 0 {
+				t.Errorf("service was called %d times, want 0", articles.calls)
+			}
+		})
+	}
+}
+
+func TestDeleteArticlesMapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"invalid source id", &domain.ValidationError{Fields: []domain.FieldError{{Field: "source_id", Message: "must be a valid UUID"}}}, http.StatusBadRequest},
+		{"dependency timed out", context.DeadlineExceeded, http.StatusServiceUnavailable},
+		{"anything else", errors.New("server selection error: no reachable servers at cluster0.internal:27017"), http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := do(t, newArticleServer(t, &fakeArticleReader{err: tt.err}), http.MethodDelete,
+				"/api/v1/articles?delete_older_than=2026-07-01T00:00:00Z")
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if strings.Contains(rec.Body.String(), "cluster0.internal") {
+				t.Error("an internal host name reached the caller")
+			}
+		})
 	}
 }

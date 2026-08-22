@@ -23,8 +23,13 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", defaultConfigPath(), "path to the YAML configuration file")
+	envPath := flag.String("env", config.EnvFilePath(), "path to the dotenv file holding secrets")
 	timeout := flag.Duration("timeout", 2*time.Minute, "overall time budget for the migration")
 	flag.Parse()
+
+	if err := config.LoadEnvFile(*envPath); err != nil {
+		return err
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

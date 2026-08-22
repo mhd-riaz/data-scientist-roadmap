@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -27,6 +28,7 @@ const DefaultPath = "configs/config.yaml"
 type Config struct {
 	App       App       `yaml:"app"`
 	Server    Server    `yaml:"server"`
+	Auth      Auth      `yaml:"auth"`
 	Mongo     Mongo     `yaml:"mongo"`
 	Collector Collector `yaml:"collector"`
 	Scheduler Scheduler `yaml:"scheduler"`
@@ -49,6 +51,24 @@ type Server struct {
 	IdleTimeout       time.Duration `yaml:"idle_timeout"`
 	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout"`
 	MaxHeaderBytes    int           `yaml:"max_header_bytes"`
+}
+
+// Auth holds the credentials that guard the management and query APIs. The
+// credential fields carry no YAML tag on purpose: secrets are accepted only
+// from the environment (or the .env file that feeds it), so a checked-in config
+// file can never hold one, and a key placed there fails the load instead of
+// being silently honoured.
+type Auth struct {
+	Enabled      bool   `yaml:"enabled"`
+	APIKeyHeader string `yaml:"api_key_header"`
+
+	// APIKeys holds every currently accepted key. It is a list so a key can be
+	// rotated by adding the replacement, moving clients over, then dropping the
+	// old one — none of which needs a window where the API is unprotected.
+	APIKeys []string `yaml:"-"`
+
+	BasicUsername string `yaml:"-"`
+	BasicPassword string `yaml:"-"`
 }
 
 // Mongo holds MongoDB connection settings.
@@ -138,6 +158,13 @@ func Default() *Config {
 			ShutdownTimeout:   15 * time.Second,
 			MaxHeaderBytes:    1 << 20,
 		},
+		Auth: Auth{
+			// Off in the built-in defaults so a bare `go run` works, but the
+			// shipped config file turns it on and validation refuses to leave it
+			// off in production, so nothing reaches a server unguarded.
+			Enabled:      false,
+			APIKeyHeader: DefaultAPIKeyHeader,
+		},
 		Mongo: Mongo{
 			URI:                    "mongodb://localhost:27017",
 			Database:               "news",
@@ -219,6 +246,12 @@ func (c *Config) applyEnv() error {
 	b.duration("SERVER_SHUTDOWN_TIMEOUT", &c.Server.ShutdownTimeout)
 	b.integer("SERVER_MAX_HEADER_BYTES", &c.Server.MaxHeaderBytes)
 
+	b.boolean("AUTH_ENABLED", &c.Auth.Enabled)
+	b.str("AUTH_API_KEY_HEADER", &c.Auth.APIKeyHeader)
+	b.list("AUTH_API_KEYS", &c.Auth.APIKeys)
+	b.str("AUTH_BASIC_USERNAME", &c.Auth.BasicUsername)
+	b.str("AUTH_BASIC_PASSWORD", &c.Auth.BasicPassword)
+
 	b.str("MONGO_URI", &c.Mongo.URI)
 	b.str("MONGO_DATABASE", &c.Mongo.Database)
 	b.duration("MONGO_CONNECT_TIMEOUT", &c.Mongo.ConnectTimeout)
@@ -288,10 +321,92 @@ func (c *Config) Validate() error {
 		oneOf("logging.level", c.Logging.Level, "debug", "info", "warn", "error"),
 		oneOf("logging.format", c.Logging.Format, "json", "text"),
 	)
+	errs = append(errs, c.Auth.validate(c.App.Environment)...)
 	errs = append(errs, c.Collector.validate(c.App.Environment)...)
 	errs = append(errs, c.Scheduler.validate(c.Collector.RequestTimeout)...)
 
 	return errors.Join(errs...)
+}
+
+// DefaultAPIKeyHeader carries the API key when no other header is configured.
+const DefaultAPIKeyHeader = "X-API-Key"
+
+// Minimum credential lengths. An API key is machine-generated, so it can be
+// held to a length that is infeasible to guess; a basic password is typed by a
+// person, so the floor is lower but still well past a dictionary word.
+const (
+	minAPIKeyLength        = 32
+	minBasicPasswordLength = 16
+)
+
+// validate reports every problem with the auth settings at once. No message
+// ever quotes a credential value, because configuration errors are logged.
+func (a Auth) validate(environment string) []error {
+	var errs []error
+
+	if !a.Enabled {
+		// Turning auth off is a development convenience. In production it would
+		// publish source management and the whole article corpus to anyone who
+		// can reach the port, so it is refused outright.
+		if environment == "production" {
+			errs = append(errs, errors.New("auth.enabled must not be false in production"))
+		}
+		return errs
+	}
+
+	if err := validateHeaderName(a.APIKeyHeader); err != nil {
+		errs = append(errs, err)
+	}
+
+	for i, key := range a.APIKeys {
+		if len(key) < minAPIKeyLength {
+			errs = append(errs, fmt.Errorf("%sAUTH_API_KEYS entry %d must be at least %d characters",
+				EnvPrefix, i+1, minAPIKeyLength))
+		}
+	}
+
+	// A half-configured basic credential is a misconfiguration, not a request to
+	// disable basic auth, so it is reported rather than quietly ignored.
+	hasBasic := a.BasicUsername != "" || a.BasicPassword != ""
+	if hasBasic {
+		if a.BasicUsername == "" {
+			errs = append(errs, fmt.Errorf("%sAUTH_BASIC_USERNAME must be set when a basic password is configured", EnvPrefix))
+		}
+		if len(a.BasicPassword) < minBasicPasswordLength {
+			errs = append(errs, fmt.Errorf("%sAUTH_BASIC_PASSWORD must be at least %d characters",
+				EnvPrefix, minBasicPasswordLength))
+		}
+	}
+
+	if !hasBasic && len(a.APIKeys) == 0 {
+		errs = append(errs, fmt.Errorf("auth.enabled is true but no credentials are configured; set %sAUTH_API_KEYS, "+
+			"or %sAUTH_BASIC_USERNAME and %sAUTH_BASIC_PASSWORD", EnvPrefix, EnvPrefix, EnvPrefix))
+	}
+
+	return errs
+}
+
+// validateHeaderName refuses anything that is not an RFC 9110 field name. The
+// value reaches a response header on a rejected request, so a name carrying a
+// separator or control character would let configuration inject a header.
+func validateHeaderName(name string) error {
+	if name == "" {
+		return errors.New("auth.api_key_header must not be empty")
+	}
+	for _, r := range name {
+		if r > unicode.MaxASCII || !isTokenChar(byte(r)) {
+			return fmt.Errorf("auth.api_key_header %q is not a valid HTTP header name", name)
+		}
+	}
+	return nil
+}
+
+func isTokenChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0
 }
 
 // maxCollectorResponseBytes is the ceiling on the per-response cap itself. A
@@ -439,6 +554,22 @@ func (b *envBinder) str(key string, dst *string) {
 	if v, ok := b.lookup(key); ok {
 		*dst = v
 	}
+}
+
+// list reads a comma-separated variable, dropping empty entries so a trailing
+// comma or a gap left by a removed value does not become a zero-length item.
+func (b *envBinder) list(key string, dst *[]string) {
+	v, ok := b.lookup(key)
+	if !ok {
+		return
+	}
+	values := make([]string, 0, strings.Count(v, ",")+1)
+	for _, part := range strings.Split(v, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	*dst = values
 }
 
 func (b *envBinder) integer(key string, dst *int) {

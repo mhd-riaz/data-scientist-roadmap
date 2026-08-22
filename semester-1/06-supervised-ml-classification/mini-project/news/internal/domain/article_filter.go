@@ -43,6 +43,46 @@ type ArticleFilter struct {
 	Limit  int
 }
 
+// ArticleDeletion selects the articles a retention sweep removes.
+//
+// OlderThan is required and has no default: articles accumulate without bound,
+// but a deletion whose bound could be omitted would empty the collection on a
+// mistyped parameter. The optional source narrows the sweep to one feed, by id
+// or by the name denormalised onto every article.
+type ArticleDeletion struct {
+	OlderThan  time.Time
+	SourceID   string
+	SourceName string
+}
+
+// Normalize canonicalises the fields the same way the article model does, so a
+// name given here matches the name stored on the article.
+func (d *ArticleDeletion) Normalize() {
+	d.OlderThan = d.OlderThan.UTC()
+	d.SourceID = strings.TrimSpace(d.SourceID)
+	d.SourceName = collapseSpace(d.SourceName)
+}
+
+// Validate rejects a sweep with no bound, an identifier that is not a UUID and
+// a name no article could carry.
+func (d ArticleDeletion) Validate() error {
+	var v validator
+
+	if d.OlderThan.IsZero() {
+		v.add("delete_older_than", "is required")
+	}
+	if d.SourceID != "" {
+		if _, err := uuid.Parse(d.SourceID); err != nil {
+			v.add("source_id", "must be a valid UUID")
+		}
+	}
+	if len(d.SourceName) > MaxNameLength {
+		v.add("source_name", "must be at most %d characters", MaxNameLength)
+	}
+
+	return v.err()
+}
+
 // ArticlePage is one page of a listing.
 //
 // It carries no total. Articles accumulate without bound, and counting a

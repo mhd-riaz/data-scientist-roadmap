@@ -12,6 +12,8 @@ coverage.html
 configs/config.local.yaml
 .env
 .env.*
+# The template holds no secrets and is what .env is copied from.
+!.env.example
 
 # Editor and OS noise
 .DS_Store

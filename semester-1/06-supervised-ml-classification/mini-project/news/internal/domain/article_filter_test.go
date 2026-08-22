@@ -77,6 +77,54 @@ func TestArticleFilterAcceptsAnOpenEndedRange(t *testing.T) {
 	}
 }
 
+// A deletion with no bound would empty the collection, so the zero value must
+// never be a usable sweep.
+func TestArticleDeletionRequiresABound(t *testing.T) {
+	deletion := ArticleDeletion{}
+	deletion.Normalize()
+
+	err := deletion.Validate()
+
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("Validate error = %v, want a validation error", err)
+	}
+	if len(ve.Fields) != 1 || ve.Fields[0].Field != "delete_older_than" {
+		t.Fatalf("fields = %+v, want the missing bound reported", ve.Fields)
+	}
+}
+
+func TestArticleDeletionNormalizesTheSource(t *testing.T) {
+	deletion := ArticleDeletion{
+		OlderThan:  filterNow.In(time.FixedZone("IST", 5*60*60+30*60)),
+		SourceID:   "  0198f3d2-1111-7000-8000-000000000001  ",
+		SourceName: "  The   Hindu — Bengaluru  ",
+	}
+
+	deletion.Normalize()
+
+	if deletion.SourceName != "The Hindu — Bengaluru" {
+		t.Errorf("source_name = %q, want it collapsed the way the article stores it", deletion.SourceName)
+	}
+	if deletion.SourceID != "0198f3d2-1111-7000-8000-000000000001" {
+		t.Errorf("source_id = %q, want it trimmed", deletion.SourceID)
+	}
+	if deletion.OlderThan.Location() != time.UTC || !deletion.OlderThan.Equal(filterNow) {
+		t.Errorf("older_than = %v, want the same instant in UTC", deletion.OlderThan)
+	}
+	if err := deletion.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
+func TestArticleDeletionRejectsASourceIDThatIsNotAUUID(t *testing.T) {
+	deletion := ArticleDeletion{OlderThan: filterNow, SourceID: "'; drop everything"}
+
+	if err := deletion.Validate(); !errors.Is(err, ErrValidation) {
+		t.Fatalf("Validate error = %v, want a validation error", err)
+	}
+}
+
 func TestCursorRoundTrips(t *testing.T) {
 	original := ArticleCursor{Value: filterNow, ID: "0198f3d2-3333-7000-8000-000000000001"}
 

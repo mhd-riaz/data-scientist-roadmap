@@ -1,0 +1,137 @@
+name: news-collector
+
+# The app lives in a subdirectory of this monorepo, so every path here is scoped
+# to it and the workflow stays idle when unrelated coursework changes.
+#
+# Pipeline: gate on fmt/vet/tests, build and push a container image to GHCR,
+# then ask Coolify to redeploy. The homelab only pulls the finished image, so a
+# Go build never runs on it.
+#
+# Repository secrets required for the deploy step:
+#   COOLIFY_WEBHOOK  the resource's Deploy Webhook URL from the Coolify UI
+#   COOLIFY_TOKEN    a Coolify API token with deploy permission
+# Without them the deploy step is skipped and the image is still published.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "semester-1/06-supervised-ml-classification/mini-project/news/**"
+      - ".github/workflows/news-collector.yml"
+  pull_request:
+    paths:
+      - "semester-1/06-supervised-ml-classification/mini-project/news/**"
+      - ".github/workflows/news-collector.yml"
+  workflow_dispatch:
+
+env:
+  APP_DIR: semester-1/06-supervised-ml-classification/mini-project/news
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/news-collector
+
+# One deployment at a time; a newer push supersedes an in-flight run.
+concurrency:
+  group: news-collector-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: semester-1/06-supervised-ml-classification/mini-project/news
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: semester-1/06-supervised-ml-classification/mini-project/news/go.mod
+          cache-dependency-path: semester-1/06-supervised-ml-classification/mini-project/news/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "unformatted files:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      # The race detector is the point of running tests here rather than
+      # relying on the local `make check`: the scheduler is concurrent.
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./...
+
+  publish:
+    name: Publish image
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tags the image with the commit SHA as well as latest, so a bad deploy
+      # can be rolled back by pinning NEWS_IMAGE to the previous SHA in Coolify.
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.APP_DIR }}
+          file: ${{ env.APP_DIR }}/deployments/Dockerfile
+          # Add linux/arm64 here if the homelab host is ARM. It costs a slow
+          # emulated build, so it is off until it is needed.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Coolify
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify deployment
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK" ] || [ -z "$COOLIFY_TOKEN" ]; then
+            echo "::warning::COOLIFY_WEBHOOK or COOLIFY_TOKEN is not set; skipping deployment."
+            exit 0
+          fi
+          # --fail turns an HTTP error into a non-zero exit, so a rejected
+          # webhook fails the run instead of passing silently.
+          curl --fail --silent --show-error --request GET "$COOLIFY_WEBHOOK" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN"

@@ -14,6 +14,7 @@ coverage.html
 configs/config.local.yaml
 
 deployments/docker-compose.yml
+deployments/coolify.compose.yml
 readme.md
 
 .DS_Store

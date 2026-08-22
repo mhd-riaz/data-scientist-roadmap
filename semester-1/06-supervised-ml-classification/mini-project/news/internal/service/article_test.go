@@ -14,8 +14,10 @@ import (
 type fakeArticleReadRepo struct {
 	article  *domain.Article
 	page     domain.ArticlePage
+	deleted  int64
 	err      error
 	lastFltr domain.ArticleFilter
+	lastDel  domain.ArticleDeletion
 	calls    int
 }
 
@@ -42,6 +44,12 @@ func (f *fakeArticleReadRepo) List(_ context.Context, filter domain.ArticleFilte
 	f.calls++
 	f.lastFltr = filter
 	return f.page, f.err
+}
+
+func (f *fakeArticleReadRepo) DeleteOlderThan(_ context.Context, d domain.ArticleDeletion) (int64, error) {
+	f.calls++
+	f.lastDel = d
+	return f.deleted, f.err
 }
 
 func TestArticleListNormalizesBeforeQuerying(t *testing.T) {
@@ -132,5 +140,50 @@ func TestArticleGetReturnsTheArticle(t *testing.T) {
 
 	if got.ID != want.ID || got.Content != want.Content {
 		t.Fatalf("article = %+v, want %+v", got, want)
+	}
+}
+
+func TestArticleDeleteOlderThanNormalizesBeforeDeleting(t *testing.T) {
+	repo := &fakeArticleReadRepo{deleted: 7}
+	bound := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+
+	deleted, err := NewArticleService(repo).DeleteOlderThan(t.Context(), domain.ArticleDeletion{
+		OlderThan:  bound,
+		SourceName: "  The   Hindu  ",
+	})
+	if err != nil {
+		t.Fatalf("DeleteOlderThan: %v", err)
+	}
+
+	if deleted != 7 {
+		t.Errorf("deleted = %d, want 7", deleted)
+	}
+	if repo.lastDel.SourceName != "The Hindu" {
+		t.Errorf("source_name = %q, want it collapsed to match the stored name", repo.lastDel.SourceName)
+	}
+}
+
+func TestArticleDeleteOlderThanRejectsASweepWithNoBound(t *testing.T) {
+	repo := &fakeArticleReadRepo{}
+
+	_, err := NewArticleService(repo).DeleteOlderThan(t.Context(), domain.ArticleDeletion{})
+
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("error = %v, want a validation error", err)
+	}
+	if repo.calls != 0 {
+		t.Errorf("an unbounded sweep reached the repository")
+	}
+}
+
+// Nothing to expire is a successful sweep, not a missing resource.
+func TestArticleDeleteOlderThanReportsZeroRatherThanNotFound(t *testing.T) {
+	deleted, err := NewArticleService(&fakeArticleReadRepo{}).DeleteOlderThan(t.Context(),
+		domain.ArticleDeletion{OlderThan: time.Now().UTC()})
+	if err != nil {
+		t.Fatalf("DeleteOlderThan: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("deleted = %d, want 0", deleted)
 	}
 }

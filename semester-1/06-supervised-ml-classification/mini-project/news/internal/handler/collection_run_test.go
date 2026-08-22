@@ -62,6 +62,7 @@ func newRunServer(t *testing.T, runs CollectionRunReader) http.Handler {
 		NewSource(&fakeSourceManager{}, logger),
 		NewCollectionRun(runs, logger),
 		NewArticle(&fakeArticleReader{}, logger),
+		nil,
 		logger,
 	)
 }
