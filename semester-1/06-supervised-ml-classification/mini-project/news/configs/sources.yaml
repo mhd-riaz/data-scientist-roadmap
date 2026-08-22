@@ -23,13 +23,13 @@ sources:
     country: IN
     priority: 60
 
-  - name: Deccan Herald — Bengaluru
-    feed_url: https://www.deccanherald.com/rss/bengaluru.xml
+  # Deccan Herald retired its per-city feeds; stories.rss is the only one it
+  # publishes, so this entry is national and carries no state or city.
+  - name: Deccan Herald — All stories
+    feed_url: https://www.deccanherald.com/stories.rss
     type: rss
     language: en
     country: IN
-    state: Karnataka
-    city: Bengaluru
     priority: 65
 
   - name: The Times of India — India
