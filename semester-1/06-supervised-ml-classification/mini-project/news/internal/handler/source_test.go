@@ -87,6 +87,7 @@ func newSourceServer(t *testing.T, mgr SourceManager) http.Handler {
 	return NewRouter(
 		NewHealth(stubPinger{}, time.Second, "test", logger),
 		NewSource(mgr, logger),
+		NewCollectionRun(&fakeRunReader{}, logger),
 		logger,
 	)
 }

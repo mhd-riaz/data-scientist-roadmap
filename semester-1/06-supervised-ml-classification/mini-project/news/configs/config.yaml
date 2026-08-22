@@ -36,6 +36,15 @@ collector:
   # stops a feed URL reaching a private or link-local address.
   allow_private_networks: false
 
+scheduler:
+  enabled: true
+  interval: 60s
+  batch_size: 50
+  max_concurrent: 4
+  # Must outlast a collection, or a second collector could start one while the
+  # first is still fetching.
+  lock_ttl: 5m
+
 logging:
   level: info
   format: json

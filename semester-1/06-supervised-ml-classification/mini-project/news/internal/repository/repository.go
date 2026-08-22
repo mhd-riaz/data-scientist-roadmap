@@ -7,6 +7,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/riaz/newscollector/internal/domain"
 )
@@ -36,9 +37,21 @@ type SourceRepository interface {
 	// List returns the page of sources matching filter, plus the total match count.
 	List(ctx context.Context, filter domain.SourceFilter) (domain.SourcePage, error)
 
+	// ListDue returns up to limit enabled sources whose next collection falls at
+	// or before now, most important first. It is a read: two collectors may well
+	// receive the same source, and the lease each one takes is what decides
+	// which of them actually collects it.
+	ListDue(ctx context.Context, now time.Time, limit int) ([]domain.Source, error)
+
 	// Update replaces the stored source, returning ErrNotFound if the id is
 	// unknown or ErrDuplicate if the new feed URL collides with another source.
 	Update(ctx context.Context, s *domain.Source) error
+
+	// UpdateCollectionState writes only the fields a collection owns: health,
+	// failure history and schedule. A collection takes seconds, and an operator
+	// may edit the source while one is in flight, so writing the whole document
+	// back afterwards would silently revert that edit.
+	UpdateCollectionState(ctx context.Context, s *domain.Source) error
 
 	// Delete removes a source, returning ErrNotFound if the id is unknown.
 	Delete(ctx context.Context, id string) error
@@ -56,4 +69,43 @@ type ArticleRepository interface {
 	// normalized URL, canonical URL, source plus feed GUID, then the content
 	// hash within the same source.
 	FindByIdentity(ctx context.Context, identity domain.ArticleIdentity) (*domain.Article, error)
+}
+
+// CollectionRunRepository persists the audit record of every collection
+// attempt. Runs are written once and never updated: a run describes an attempt
+// that has already finished.
+type CollectionRunRepository interface {
+	// Create stores a finished run.
+	Create(ctx context.Context, run *domain.CollectionRun) error
+
+	// GetByID returns one run, or ErrNotFound.
+	GetByID(ctx context.Context, id string) (*domain.CollectionRun, error)
+
+	// List returns the page of runs matching filter, plus the total match count.
+	List(ctx context.Context, filter domain.CollectionRunFilter) (domain.CollectionRunPage, error)
+}
+
+// FeedCacheRepository persists the HTTP validators of each source's last
+// collection, so the next one can be conditional.
+type FeedCacheRepository interface {
+	// Get returns the stored validators for a source, or ErrNotFound when the
+	// source has never been collected or the publisher supplied none.
+	Get(ctx context.Context, sourceID string) (*domain.FeedCacheEntry, error)
+
+	// Save stores the validators, replacing whatever was held before.
+	Save(ctx context.Context, entry domain.FeedCacheEntry) error
+}
+
+// LockRepository issues the time-limited leases that stop two collectors
+// working the same source at the same moment.
+type LockRepository interface {
+	// Acquire reports whether the lease was taken. A lease already held by
+	// somebody else is a false, not an error: it is the normal outcome of two
+	// collectors reaching the same due source, and the caller simply moves on.
+	Acquire(ctx context.Context, lock domain.Lock) (bool, error)
+
+	// Release drops a lease this owner holds. ErrNotFound means the lease had
+	// already expired and possibly been taken by somebody else, so the caller
+	// must not assume its work was still exclusive.
+	Release(ctx context.Context, resource, owner string) error
 }

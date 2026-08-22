@@ -177,6 +177,60 @@ func (s *Source) Apply(patch SourcePatch, now time.Time) error {
 	return s.Validate()
 }
 
+// failuresBeforeFailing is how many consecutive failures a source is allowed
+// before it is called failing rather than degraded. One failed poll is usually
+// the publisher having a bad minute; three in a row is a broken feed.
+const failuresBeforeFailing = 3
+
+// MaxCollectionBackoff caps the retry interval of a failing source. It is the
+// longest interval an operator may configure, so backoff can never park a feed
+// for longer than a deliberate configuration could.
+const MaxCollectionBackoff = time.Duration(MaxFetchIntervalSeconds) * time.Second
+
+// RecordSuccess marks a completed collection: the source is healthy, its
+// failure history is cleared, and its next poll is one interval away.
+func (s *Source) RecordSuccess(now time.Time) {
+	now = storedTime(now)
+
+	s.HealthStatus = HealthHealthy
+	s.ConsecutiveFailures = 0
+	s.LastError = ""
+	s.LastCollectedAt = &now
+	s.NextScheduledAt = now.Add(s.FetchInterval())
+	s.UpdatedAt = now
+}
+
+// RecordFailure marks a collection that produced nothing and backs the source
+// off. reason must be a fixed, caller-safe phrase: it is served by the source
+// API, so it must never carry a driver message or a host name.
+//
+// LastCollectedAt is deliberately left alone. It answers "when did this feed
+// last give us articles", and a failed attempt is not an answer to that.
+func (s *Source) RecordFailure(now time.Time, reason string) {
+	now = storedTime(now)
+
+	s.ConsecutiveFailures++
+	if s.ConsecutiveFailures >= failuresBeforeFailing {
+		s.HealthStatus = HealthFailing
+	} else {
+		s.HealthStatus = HealthDegraded
+	}
+	s.LastError = truncate(collapseSpace(reason), MaxRunErrorLength)
+	s.NextScheduledAt = now.Add(backoff(s.FetchInterval(), s.ConsecutiveFailures))
+	s.UpdatedAt = now
+}
+
+// backoff doubles the interval per consecutive failure, capped. A publisher
+// that is down stops being polled every fifteen minutes for a week, which is
+// both wasted work here and unwelcome traffic there.
+func backoff(interval time.Duration, failures int) time.Duration {
+	d := interval
+	for i := 1; i < failures && d < MaxCollectionBackoff; i++ {
+		d *= 2
+	}
+	return min(d, MaxCollectionBackoff)
+}
+
 // storedTime rounds to the millisecond precision BSON records, so the value the
 // API returns after a write equals the one a later read returns.
 func storedTime(t time.Time) time.Time {

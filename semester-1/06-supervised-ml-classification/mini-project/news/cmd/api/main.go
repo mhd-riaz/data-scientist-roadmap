@@ -9,14 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/riaz/newscollector/internal/app"
 	"github.com/riaz/newscollector/internal/config"
 	"github.com/riaz/newscollector/internal/handler"
 	"github.com/riaz/newscollector/internal/mongodb"
 	"github.com/riaz/newscollector/internal/observability"
 	mongorepo "github.com/riaz/newscollector/internal/repository/mongo"
+	"github.com/riaz/newscollector/internal/scheduler"
 	"github.com/riaz/newscollector/internal/service"
 )
 
@@ -82,11 +85,17 @@ func run() error {
 
 	sourceService := service.NewSourceService(mongorepo.NewSourceRepository(mongoClient.Database()), time.Now)
 
+	collectionService, err := app.NewCollectionService(cfg, mongoClient.Database(), time.Now, logger)
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr: cfg.Server.Address(),
 		Handler: handler.NewRouter(
 			handler.NewHealth(mongoClient, readinessCheckTimeout, version, logger),
 			handler.NewSource(sourceService, logger),
+			handler.NewCollectionRun(collectionService, logger),
 			logger,
 		),
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
@@ -94,6 +103,27 @@ func run() error {
 		WriteTimeout:      cfg.Server.WriteTimeout,
 		IdleTimeout:       cfg.Server.IdleTimeout,
 		MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
+	}
+
+	// The scheduler shares the process with the API. Per-source leases are what
+	// make that safe with more than one replica running.
+	var schedulerDone sync.WaitGroup
+	if cfg.Scheduler.Enabled {
+		sch := scheduler.New(collectionService, scheduler.Config{
+			Interval:      cfg.Scheduler.Interval,
+			BatchSize:     cfg.Scheduler.BatchSize,
+			MaxConcurrent: cfg.Scheduler.MaxConcurrent,
+		}, logger)
+
+		schedulerDone.Add(1)
+		go func() {
+			defer schedulerDone.Done()
+			if err := sch.Run(ctx); err != nil {
+				logger.Error("scheduler stopped early", "error", err)
+			}
+		}()
+	} else {
+		logger.Warn("scheduler is disabled; feeds will only be collected by the collector command")
 	}
 
 	serverErr := make(chan error, 1)
@@ -123,6 +153,13 @@ func run() error {
 	if shutdownErr != nil {
 		logger.Error("graceful shutdown failed", "error", shutdownErr)
 	}
+
+	// The scheduler stops with the signal context; waiting for it here means a
+	// collection in flight finishes and gives its lease back before the MongoDB
+	// connection it needs is closed.
+	stop()
+	schedulerDone.Wait()
+
 	if err := mongoClient.Close(shutdownCtx); err != nil {
 		logger.Error("closing mongodb failed", "error", err)
 	}

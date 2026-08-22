@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	driver "go.mongodb.org/mongo-driver/v2/mongo"
@@ -100,6 +101,35 @@ func (r *SourceRepository) List(ctx context.Context, filter domain.SourceFilter)
 	}, nil
 }
 
+// ListDue returns the enabled sources whose next collection has come round,
+// most important first.
+//
+// The sort is priority descending then due-time ascending, which is exactly
+// ix_due_by_priority, so a backlog is worked in the order an operator asked for
+// rather than in insertion order. The limit is what keeps one tick's work
+// bounded when a long outage has left every source overdue at once.
+func (r *SourceRepository) ListDue(ctx context.Context, now time.Time, limit int) ([]domain.Source, error) {
+	query := bson.D{
+		{Key: "enabled", Value: true},
+		{Key: "next_scheduled_at", Value: bson.D{{Key: "$lte", Value: now}}},
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "priority", Value: -1}, {Key: "next_scheduled_at", Value: 1}}).
+		SetLimit(int64(limit))
+
+	cursor, err := r.coll.Find(ctx, query, opts)
+	if err != nil {
+		return nil, fmt.Errorf("mongo: find due sources: %w", err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	items := make([]domain.Source, 0, limit)
+	if err := cursor.All(ctx, &items); err != nil {
+		return nil, fmt.Errorf("mongo: decode due sources: %w", err)
+	}
+	return items, nil
+}
+
 // Update replaces a stored source in full. Replacement rather than a field-wise
 // $set means the document can never end up in a state the domain never validated.
 func (r *SourceRepository) Update(ctx context.Context, s *domain.Source) error {
@@ -109,6 +139,38 @@ func (r *SourceRepository) Update(ctx context.Context, s *domain.Source) error {
 			return repository.ErrDuplicate
 		}
 		return fmt.Errorf("mongo: replace source: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+// UpdateCollectionState writes back only what a collection decides.
+//
+// A full replacement would carry the source as it looked when the collection
+// started, so an operator who disabled the feed or changed its interval during
+// those seconds would find the change quietly undone. last_collected_at is only
+// written when there is one, so a failed attempt against a never-collected
+// source does not record a null.
+func (r *SourceRepository) UpdateCollectionState(ctx context.Context, s *domain.Source) error {
+	fields := bson.D{
+		{Key: "health_status", Value: string(s.HealthStatus)},
+		{Key: "consecutive_failures", Value: s.ConsecutiveFailures},
+		{Key: "last_error", Value: s.LastError},
+		{Key: "next_scheduled_at", Value: s.NextScheduledAt},
+		{Key: "updated_at", Value: s.UpdatedAt},
+	}
+	if s.LastCollectedAt != nil {
+		fields = append(fields, bson.E{Key: "last_collected_at", Value: *s.LastCollectedAt})
+	}
+
+	res, err := r.coll.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: s.ID}},
+		bson.D{{Key: "$set", Value: fields}},
+	)
+	if err != nil {
+		return fmt.Errorf("mongo: update source collection state: %w", err)
 	}
 	if res.MatchedCount == 0 {
 		return repository.ErrNotFound

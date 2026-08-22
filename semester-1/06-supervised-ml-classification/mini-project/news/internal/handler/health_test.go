@@ -39,6 +39,7 @@ func newTestServer(t *testing.T, p Pinger) http.Handler {
 	return NewRouter(
 		NewHealth(p, 100*time.Millisecond, "test", logger),
 		NewSource(&fakeSourceManager{}, logger),
+		NewCollectionRun(&fakeRunReader{}, logger),
 		logger,
 	)
 }

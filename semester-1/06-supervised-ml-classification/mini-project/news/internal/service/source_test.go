@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -105,6 +106,33 @@ func (f *fakeSourceRepo) List(_ context.Context, filter domain.SourceFilter) (do
 	return domain.SourcePage{Items: items, Total: int64(len(items)), Limit: filter.Limit, Offset: filter.Offset}, nil
 }
 
+// ListDue mirrors the real query: enabled sources whose next collection has come
+// round, most important first, capped at limit.
+func (f *fakeSourceRepo) ListDue(_ context.Context, now time.Time, limit int) ([]domain.Source, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail("ListDue"); err != nil {
+		return nil, err
+	}
+
+	items := make([]domain.Source, 0, len(f.byID))
+	for _, s := range f.byID {
+		if s.Enabled && !s.NextScheduledAt.After(now) {
+			items = append(items, s)
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Priority != items[j].Priority {
+			return items[i].Priority > items[j].Priority
+		}
+		return items[i].NextScheduledAt.Before(items[j].NextScheduledAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
 func (f *fakeSourceRepo) Update(_ context.Context, s *domain.Source) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -120,6 +148,33 @@ func (f *fakeSourceRepo) Update(_ context.Context, s *domain.Source) error {
 		}
 	}
 	f.byID[s.ID] = *s
+	return nil
+}
+
+// UpdateCollectionState mirrors the real field-scoped update: only what a
+// collection owns is written, so a test can prove an operator's concurrent edit
+// survives.
+func (f *fakeSourceRepo) UpdateCollectionState(_ context.Context, s *domain.Source) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.fail("UpdateCollectionState"); err != nil {
+		return err
+	}
+	stored, ok := f.byID[s.ID]
+	if !ok {
+		return repository.ErrNotFound
+	}
+
+	stored.HealthStatus = s.HealthStatus
+	stored.ConsecutiveFailures = s.ConsecutiveFailures
+	stored.LastError = s.LastError
+	stored.NextScheduledAt = s.NextScheduledAt
+	stored.UpdatedAt = s.UpdatedAt
+	if s.LastCollectedAt != nil {
+		stored.LastCollectedAt = s.LastCollectedAt
+	}
+
+	f.byID[s.ID] = stored
 	return nil
 }
 

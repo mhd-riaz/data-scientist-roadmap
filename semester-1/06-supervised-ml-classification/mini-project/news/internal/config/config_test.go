@@ -259,3 +259,84 @@ func TestCollectorMalformedBooleanIsReported(t *testing.T) {
 		t.Fatalf("error should name the malformed variable, got: %v", err)
 	}
 }
+
+func TestSchedulerEnvOverrides(t *testing.T) {
+	t.Setenv(EnvPrefix+"SCHEDULER_ENABLED", "false")
+	t.Setenv(EnvPrefix+"SCHEDULER_INTERVAL", "30s")
+	t.Setenv(EnvPrefix+"SCHEDULER_BATCH_SIZE", "10")
+	t.Setenv(EnvPrefix+"SCHEDULER_MAX_CONCURRENT", "2")
+	t.Setenv(EnvPrefix+"SCHEDULER_LOCK_TTL", "90s")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.Scheduler.Enabled {
+		t.Error("Enabled = true, want the env override applied")
+	}
+	if cfg.Scheduler.Interval != 30*time.Second || cfg.Scheduler.LockTTL != 90*time.Second {
+		t.Errorf("durations = %s / %s, want 30s / 90s", cfg.Scheduler.Interval, cfg.Scheduler.LockTTL)
+	}
+	if cfg.Scheduler.BatchSize != 10 || cfg.Scheduler.MaxConcurrent != 2 {
+		t.Errorf("batch/concurrency = %d/%d, want 10/2", cfg.Scheduler.BatchSize, cfg.Scheduler.MaxConcurrent)
+	}
+}
+
+func TestSchedulerValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name:    "no interval",
+			mutate:  func(c *Config) { c.Scheduler.Interval = 0 },
+			wantErr: "scheduler.interval",
+		},
+		{
+			name:    "batch beyond the cap",
+			mutate:  func(c *Config) { c.Scheduler.BatchSize = maxSchedulerBatchSize + 1 },
+			wantErr: "scheduler.batch_size",
+		},
+		{
+			name:    "concurrency beyond the cap",
+			mutate:  func(c *Config) { c.Scheduler.MaxConcurrent = maxSchedulerConcurrency + 1 },
+			wantErr: "scheduler.max_concurrent",
+		},
+		{
+			// A lease that expires while its own fetch is still running is the
+			// exact collision the lease exists to prevent.
+			name:    "lease shorter than a fetch",
+			mutate:  func(c *Config) { c.Scheduler.LockTTL = c.Collector.RequestTimeout },
+			wantErr: "scheduler.lock_ttl",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			tt.mutate(cfg)
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want it to name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// A disabled scheduler is not configured at all, so its settings must not be
+// able to stop the process starting.
+func TestDisabledSchedulerIsNotValidated(t *testing.T) {
+	cfg := Default()
+	cfg.Scheduler.Enabled = false
+	cfg.Scheduler.Interval = 0
+	cfg.Scheduler.BatchSize = 0
+	cfg.Scheduler.MaxConcurrent = 0
+	cfg.Scheduler.LockTTL = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}

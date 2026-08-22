@@ -29,6 +29,7 @@ type Config struct {
 	Server    Server    `yaml:"server"`
 	Mongo     Mongo     `yaml:"mongo"`
 	Collector Collector `yaml:"collector"`
+	Scheduler Scheduler `yaml:"scheduler"`
 	Logging   Logging   `yaml:"logging"`
 }
 
@@ -74,6 +75,26 @@ type Collector struct {
 	// production, because with it on any operator who can register a feed URL can
 	// make the collector read internal services.
 	AllowPrivateNetworks bool `yaml:"allow_private_networks"`
+}
+
+// Scheduler holds the settings of the background collection loop.
+type Scheduler struct {
+	// Enabled turns the loop off without removing its configuration, which is
+	// what an operator wants while investigating a misbehaving publisher.
+	Enabled bool `yaml:"enabled"`
+
+	// Interval is how often due sources are looked for.
+	Interval time.Duration `yaml:"interval"`
+
+	// BatchSize bounds one tick's work.
+	BatchSize int `yaml:"batch_size"`
+
+	// MaxConcurrent bounds how many collections run at the same time.
+	MaxConcurrent int `yaml:"max_concurrent"`
+
+	// LockTTL is how long a source lease is held. It must outlast a collection,
+	// or a second collector could start one while the first is still running.
+	LockTTL time.Duration `yaml:"lock_ttl"`
 }
 
 // Logging holds structured-logging settings.
@@ -133,6 +154,13 @@ func Default() *Config {
 			MaxRedirects:         5,
 			MaxItemsPerFeed:      500,
 			AllowPrivateNetworks: false,
+		},
+		Scheduler: Scheduler{
+			Enabled:       true,
+			Interval:      60 * time.Second,
+			BatchSize:     50,
+			MaxConcurrent: 4,
+			LockTTL:       5 * time.Minute,
 		},
 		Logging: Logging{
 			Level:  "info",
@@ -206,6 +234,12 @@ func (c *Config) applyEnv() error {
 	b.integer("COLLECTOR_MAX_ITEMS_PER_FEED", &c.Collector.MaxItemsPerFeed)
 	b.boolean("COLLECTOR_ALLOW_PRIVATE_NETWORKS", &c.Collector.AllowPrivateNetworks)
 
+	b.boolean("SCHEDULER_ENABLED", &c.Scheduler.Enabled)
+	b.duration("SCHEDULER_INTERVAL", &c.Scheduler.Interval)
+	b.integer("SCHEDULER_BATCH_SIZE", &c.Scheduler.BatchSize)
+	b.integer("SCHEDULER_MAX_CONCURRENT", &c.Scheduler.MaxConcurrent)
+	b.duration("SCHEDULER_LOCK_TTL", &c.Scheduler.LockTTL)
+
 	b.str("LOGGING_LEVEL", &c.Logging.Level)
 	b.str("LOGGING_FORMAT", &c.Logging.Format)
 
@@ -255,6 +289,7 @@ func (c *Config) Validate() error {
 		oneOf("logging.format", c.Logging.Format, "json", "text"),
 	)
 	errs = append(errs, c.Collector.validate(c.App.Environment)...)
+	errs = append(errs, c.Scheduler.validate(c.Collector.RequestTimeout)...)
 
 	return errors.Join(errs...)
 }
@@ -290,6 +325,44 @@ func (c Collector) validate(environment string) []error {
 	}
 	if c.AllowPrivateNetworks && environment == "production" {
 		errs = append(errs, errors.New("collector.allow_private_networks must not be enabled in production"))
+	}
+
+	return errs
+}
+
+// maxSchedulerBatchSize and maxSchedulerConcurrency bound one tick's work.
+// Beyond these a single tick would open more sockets and MongoDB operations
+// than the pools are sized for, so a typo would degrade the API rather than
+// speed up collection.
+const (
+	maxSchedulerBatchSize   = 500
+	maxSchedulerConcurrency = 64
+)
+
+func (s Scheduler) validate(requestTimeout time.Duration) []error {
+	if !s.Enabled {
+		return nil
+	}
+
+	var errs []error
+
+	errs = append(errs, positive("scheduler.interval", s.Interval))
+
+	if s.BatchSize < 1 || s.BatchSize > maxSchedulerBatchSize {
+		errs = append(errs, fmt.Errorf("scheduler.batch_size must be between 1 and %d, got %d",
+			maxSchedulerBatchSize, s.BatchSize))
+	}
+	if s.MaxConcurrent < 1 || s.MaxConcurrent > maxSchedulerConcurrency {
+		errs = append(errs, fmt.Errorf("scheduler.max_concurrent must be between 1 and %d, got %d",
+			maxSchedulerConcurrency, s.MaxConcurrent))
+	}
+
+	// A lease that expires while its own fetch is still running would let a
+	// second collector start the same source, which is the exact collision the
+	// lease exists to prevent.
+	if s.LockTTL <= requestTimeout {
+		errs = append(errs, fmt.Errorf("scheduler.lock_ttl (%s) must be greater than collector.request_timeout (%s)",
+			s.LockTTL, requestTimeout))
 	}
 
 	return errs

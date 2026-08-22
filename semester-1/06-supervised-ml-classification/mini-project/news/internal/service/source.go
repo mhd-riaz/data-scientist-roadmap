@@ -66,7 +66,7 @@ func (s *SourceService) Get(ctx context.Context, id string) (*domain.Source, err
 
 	src, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return nil, s.translate(err)
+		return nil, translate(err)
 	}
 	return src, nil
 }
@@ -80,7 +80,7 @@ func (s *SourceService) List(ctx context.Context, filter domain.SourceFilter) (d
 
 	page, err := s.repo.List(ctx, filter)
 	if err != nil {
-		return domain.SourcePage{}, s.translate(err)
+		return domain.SourcePage{}, translate(err)
 	}
 	return page, nil
 }
@@ -94,7 +94,7 @@ func (s *SourceService) Update(ctx context.Context, id string, patch domain.Sour
 
 	src, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return nil, s.translate(err)
+		return nil, translate(err)
 	}
 	if err := src.Apply(patch, s.clock()); err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (s *SourceService) Update(ctx context.Context, id string, patch domain.Sour
 		if errors.Is(err, repository.ErrDuplicate) {
 			return nil, fmt.Errorf("%w: a source with this feed URL already exists", ErrConflict)
 		}
-		return nil, s.translate(err)
+		return nil, translate(err)
 	}
 	return src, nil
 }
@@ -114,7 +114,7 @@ func (s *SourceService) Delete(ctx context.Context, id string) error {
 	if err := domain.ValidateID(id); err != nil {
 		return err
 	}
-	return s.translate(s.repo.Delete(ctx, id))
+	return translate(s.repo.Delete(ctx, id))
 }
 
 // Ensure makes the stored source match in, keyed on the feed URL, and reports
@@ -137,13 +137,13 @@ func (s *SourceService) Ensure(ctx context.Context, in domain.SourceInput) (src 
 	// Lost the race, or the feed was already configured: patch the existing one.
 	existing, err := s.repo.GetByFeedURL(ctx, src.FeedURL)
 	if err != nil {
-		return nil, false, s.translate(err)
+		return nil, false, translate(err)
 	}
 	if err := existing.Apply(patchFromInput(in), s.clock()); err != nil {
 		return nil, false, err
 	}
 	if err := s.repo.Update(ctx, existing); err != nil {
-		return nil, false, s.translate(err)
+		return nil, false, translate(err)
 	}
 	return existing, false, nil
 }
@@ -180,7 +180,7 @@ func patchFromInput(in domain.SourceInput) domain.SourcePatch {
 
 // translate maps persistence sentinels onto service sentinels, leaving any other
 // error to travel unchanged for the caller to log and report as internal.
-func (s *SourceService) translate(err error) error {
+func translate(err error) error {
 	switch {
 	case err == nil:
 		return nil

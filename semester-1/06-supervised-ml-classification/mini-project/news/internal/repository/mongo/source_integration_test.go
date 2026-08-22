@@ -37,6 +37,128 @@ func newSource(t *testing.T, feedURL string, mutate ...func(*domain.SourceInput)
 	return src
 }
 
+func TestListDueReturnsOverdueSourcesByPriority(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := testContext(t)
+	now := time.Now().UTC()
+
+	// Overdue, low priority.
+	low := newSource(t, "https://example.com/low.rss", func(in *domain.SourceInput) {
+		in.Priority = ptrTo(10)
+	})
+	low.NextScheduledAt = now.Add(-time.Hour)
+
+	// Overdue, high priority: must come first.
+	high := newSource(t, "https://example.com/high.rss", func(in *domain.SourceInput) {
+		in.Priority = ptrTo(90)
+	})
+	high.NextScheduledAt = now.Add(-time.Minute)
+
+	// Not due yet, and a disabled one that is overdue: neither may be returned.
+	future := newSource(t, "https://example.com/future.rss")
+	future.NextScheduledAt = now.Add(time.Hour)
+
+	disabled := newSource(t, "https://example.com/disabled.rss", func(in *domain.SourceInput) {
+		in.Enabled = ptrTo(false)
+	})
+	disabled.NextScheduledAt = now.Add(-time.Hour)
+
+	for _, src := range []*domain.Source{low, high, future, disabled} {
+		if err := repo.Create(ctx, src); err != nil {
+			t.Fatalf("Create %s: %v", src.FeedURL, err)
+		}
+	}
+
+	due, err := repo.ListDue(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("ListDue: %v", err)
+	}
+
+	if len(due) != 2 {
+		t.Fatalf("due = %d sources, want only the two enabled and overdue ones", len(due))
+	}
+	if due[0].ID != high.ID || due[1].ID != low.ID {
+		t.Errorf("order = %q then %q, want the higher priority first", due[0].Name, due[1].Name)
+	}
+}
+
+func TestListDueRespectsTheLimit(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := testContext(t)
+	now := time.Now().UTC()
+
+	for i := range 5 {
+		src := newSource(t, "https://example.com/"+string(rune('a'+i))+".rss")
+		src.NextScheduledAt = now.Add(-time.Hour)
+		if err := repo.Create(ctx, src); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+
+	due, err := repo.ListDue(ctx, now, 2)
+	if err != nil {
+		t.Fatalf("ListDue: %v", err)
+	}
+	if len(due) != 2 {
+		t.Fatalf("due = %d sources, want the limit of 2", len(due))
+	}
+}
+
+func ptrTo[T any](v T) *T { return &v }
+
+// A collection must write back its own fields without carrying the rest of the
+// document it loaded before the fetch.
+func TestUpdateCollectionStateLeavesOperatorFieldsAlone(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := testContext(t)
+	now := time.Now().UTC()
+
+	src := newSource(t, "https://example.com/state.rss")
+	if err := repo.Create(ctx, src); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// The operator disables the feed while a collection is in flight.
+	edited, err := repo.GetByID(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if err := edited.Apply(domain.SourcePatch{Enabled: ptrTo(false)}, now); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := repo.Update(ctx, edited); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	// The collector still holds the copy it loaded before that edit.
+	src.RecordSuccess(now.Add(time.Second))
+	if err := repo.UpdateCollectionState(ctx, src); err != nil {
+		t.Fatalf("UpdateCollectionState: %v", err)
+	}
+
+	got, err := repo.GetByID(ctx, src.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.Enabled {
+		t.Error("the collection re-enabled a source the operator had disabled")
+	}
+	if got.HealthStatus != domain.HealthHealthy || got.LastCollectedAt == nil {
+		t.Errorf("source = %+v, want the collection's own fields written", got)
+	}
+}
+
+func TestUpdateCollectionStateReportsAMissingSource(t *testing.T) {
+	repo := newTestRepo(t)
+	src := newSource(t, "https://example.com/gone.rss")
+
+	err := repo.UpdateCollectionState(testContext(t), src)
+
+	if !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestCreateAndReadBack(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := testContext(t)

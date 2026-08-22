@@ -6,13 +6,15 @@ Phase 1 is **data collection only**. Topic classification, bias analysis, locati
 matching, LLMs, site scraping, browser automation, social media and any frontend are
 explicitly out of scope.
 
-> **Status: Milestone 4 complete.** On top of Milestone 1's configuration,
+> **Status: Milestone 5 complete.** On top of Milestone 1's configuration,
 > logging, MongoDB connection management, health endpoints, migration and
 > container stack, Milestone 2's source model, persistence layer, source
-> management APIs and seeding CLI, and Milestone 3's SSRF-guarded HTTP client
-> and RSS/Atom collector, the article model and the processing pipeline that
-> normalises, deduplicates and stores collected items are now in place. The
-> scheduler and the article query APIs arrive in Milestones 5-6.
+> management APIs and seeding CLI, Milestone 3's SSRF-guarded HTTP client
+> and RSS/Atom collector, and Milestone 4's article model and processing
+> pipeline, feeds are now actually collected: the scheduler polls what is due,
+> leases stop two collectors sharing a source, every attempt is recorded, and
+> the collector CLI runs a collection by hand. The article query APIs arrive in
+> Milestone 6.
 
 ## Requirements
 
@@ -28,9 +30,13 @@ make up
 curl -s localhost:8080/health/live
 curl -s localhost:8080/health/ready
 make seed          # apply the feeds in configs/sources.yaml
+curl -s 'localhost:8080/api/v1/collection-runs?limit=5'
 make logs
 make down          # stops the stack and deletes the volume
 ```
+
+The API process also runs the scheduler, so feeds start being collected as soon
+as they are seeded.
 
 ## Quick start without Docker
 
@@ -38,6 +44,7 @@ make down          # stops the stack and deletes the volume
 make mongo-up                      # MongoDB only, on localhost:27017
 make migrate                       # create collections and indexes
 make seed                          # apply the feeds in configs/sources.yaml
+make collect                       # collect everything currently due, once
 make run                           # serve on localhost:8080
 ```
 
@@ -86,6 +93,11 @@ Three layers, each overriding the one before: built-in defaults →
 | `collector.max_redirects`          | `NEWS_COLLECTOR_MAX_REDIRECTS`          | `5`                         |
 | `collector.max_items_per_feed`     | `NEWS_COLLECTOR_MAX_ITEMS_PER_FEED`     | `500`                       |
 | `collector.allow_private_networks` | `NEWS_COLLECTOR_ALLOW_PRIVATE_NETWORKS` | `false`                     |
+| `scheduler.enabled`                | `NEWS_SCHEDULER_ENABLED`                | `true`                      |
+| `scheduler.interval`               | `NEWS_SCHEDULER_INTERVAL`               | `60s`                       |
+| `scheduler.batch_size`             | `NEWS_SCHEDULER_BATCH_SIZE`             | `50`                        |
+| `scheduler.max_concurrent`         | `NEWS_SCHEDULER_MAX_CONCURRENT`         | `4`                         |
+| `scheduler.lock_ttl`               | `NEWS_SCHEDULER_LOCK_TTL`               | `5m`                        |
 | `logging.level`                    | `NEWS_LOGGING_LEVEL`                    | `info`                      |
 | `logging.format`                   | `NEWS_LOGGING_FORMAT`                   | `json`                      |
 
@@ -118,17 +130,18 @@ set one is rejected rather than ignored.
 
 ## Endpoints
 
-| Method   | Path                         | Purpose                                     | Milestone |
-| -------- | ---------------------------- | ------------------------------------------- | --------- |
-| `GET`    | `/health/live`               | Process is running; never touches MongoDB   | 1         |
-| `GET`    | `/health/ready`              | `200` when MongoDB answers, `503` otherwise | 1         |
-| `POST`   | `/api/v1/sources`            | Register a feed                             | 2         |
-| `GET`    | `/api/v1/sources`            | List feeds, filtered and paginated          | 2         |
-| `GET`    | `/api/v1/sources/{id}`       | Fetch one feed                              | 2         |
-| `PATCH`  | `/api/v1/sources/{id}`       | Partially update a feed                     | 2         |
-| `DELETE` | `/api/v1/sources/{id}`       | Remove a feed                               | 2         |
-|          | `/api/v1/articles...`        | Article queries                             | 6         |
-|          | `/api/v1/collection-runs...` | Run history                                 | 5         |
+| Method   | Path                           | Purpose                                     | Milestone |
+| -------- | ------------------------------ | ------------------------------------------- | --------- |
+| `GET`    | `/health/live`                 | Process is running; never touches MongoDB   | 1         |
+| `GET`    | `/health/ready`                | `200` when MongoDB answers, `503` otherwise | 1         |
+| `POST`   | `/api/v1/sources`              | Register a feed                             | 2         |
+| `GET`    | `/api/v1/sources`              | List feeds, filtered and paginated          | 2         |
+| `GET`    | `/api/v1/sources/{id}`         | Fetch one feed                              | 2         |
+| `PATCH`  | `/api/v1/sources/{id}`         | Partially update a feed                     | 2         |
+| `DELETE` | `/api/v1/sources/{id}`         | Remove a feed                               | 2         |
+| `GET`    | `/api/v1/collection-runs`      | List collection attempts                    | 5         |
+| `GET`    | `/api/v1/collection-runs/{id}` | Fetch one collection attempt                | 5         |
+|          | `/api/v1/articles...`          | Article queries                             | 6         |
 
 Liveness is deliberately independent of MongoDB so a transient database outage causes
 a `503` on readiness rather than a restart loop.
@@ -192,6 +205,86 @@ An Atom entry that carries only `updated` uses it as its publication date.
 Nothing schedules a collection yet: the scheduler and the manual collection CLI arrive
 in Milestone 5.
 
+## Scheduling
+
+The scheduler runs inside the API process. Every `scheduler.interval` it asks for the
+enabled sources whose `next_scheduled_at` has passed, highest `priority` first, takes at
+most `scheduler.batch_size` of them, and collects up to `scheduler.max_concurrent` at
+once. A tick starts only once the previous one has finished, so a slow batch delays the
+next rather than stacking on top of it, and shutdown waits for the collections already
+in flight instead of abandoning them.
+
+Before collecting a source, a collector takes a lease on it in `application_locks`, and
+the resource name is the document `_id`, so the primary key itself is what makes the
+lease exclusive — there is no gap between checking for a holder and becoming one. A
+source already held is skipped rather than queued, because by the time the lease frees,
+the holder has already collected it. The lease expires after `scheduler.lock_ttl`
+whether or not it is released, so a collector that crashes mid-collection cannot park a
+source forever, and `scheduler.lock_ttl` is required to be longer than
+`collector.request_timeout` so a lease can never expire underneath its own fetch.
+
+This is what makes more than one replica safe, and it is why the API and the scheduler
+can share a process.
+
+After a collection the source's own schedule and health are rewritten:
+
+| Outcome                 | Health                                   | Next collection                         |
+| ----------------------- | ---------------------------------------- | --------------------------------------- |
+| Articles stored, or 304 | `healthy`, failure count cleared         | one `fetch_interval_seconds` later      |
+| Failed                  | `degraded`, then `failing` at 3 in a row | doubling each failure, capped at 7 days |
+
+Backing a failing source off matters in both directions: it stops this system spending
+every tick on a feed that is down, and it stops a publisher being polled every fifteen
+minutes for a week after it has broken. A success clears the history immediately, so a
+recovered feed returns to its normal interval on its first good poll.
+`last_collected_at` answers "when did this feed last give us articles", so a failed
+attempt deliberately leaves it alone.
+
+## Collection history
+
+Every attempt is recorded in `collection_runs`, whether it stored articles or not — a
+source that has quietly stopped answering is only visible in the record of the attempts
+that got nothing.
+
+| Status         | Meaning                                                              |
+| -------------- | -------------------------------------------------------------------- |
+| `success`      | The feed was read and everything usable in it was stored             |
+| `not_modified` | The publisher answered 304; the previous collection is still current |
+| `partial`      | Articles were stored, but entries were dropped or the feed was cut   |
+| `failed`       | Nothing was collected; `error` says why                              |
+
+`partial` is separate from `success` on purpose: both stored what they could, but a
+source shedding entries on every poll is worth being able to find.
+
+```bash
+curl -s 'localhost:8080/api/v1/collection-runs?status=failed&limit=20'
+curl -s 'localhost:8080/api/v1/collection-runs?source_id=<id>'
+curl -s localhost:8080/api/v1/collection-runs/<run-id>
+```
+
+The stored `error` is a fixed phrase — "the publisher answered HTTP 404", "the feed
+could not be parsed as RSS, RDF or Atom" — chosen from the failure class rather than
+copied from the underlying error. The same phrase becomes the source's `last_error`.
+Both fields are served by the API, and a raw error there would publish a DNS message, a
+driver error or an internal host name to anyone who can reach the port; the full error
+goes to the logs instead.
+
+Collections are never triggered over HTTP. The history is read-only.
+
+## Collecting by hand
+
+```bash
+make collect                       # everything currently due, once
+make collect-source SOURCE=<id>    # one feed now, whatever its schedule says
+
+go run ./cmd/collector -limit 5    # the first five due sources
+```
+
+The CLI takes the same leases the scheduler does, so running it against a live
+deployment cannot collide with the scheduled collection of the same source. A feed that
+fails is a recorded run, not a command failure: the exit code stays zero so one broken
+publisher does not abandon the rest of the batch.
+
 ## Article processing
 
 Each collected item is normalised, checked against what is already stored, and inserted
@@ -250,11 +343,12 @@ hash) is enforced by three unique indexes on `articles`. `content_hash` is index
 ## Project layout
 
 ```text
-cmd/api           HTTP server
+cmd/api           HTTP server and the collection scheduler
 cmd/migrate       collection and index migration
 cmd/seed          source seeding CLI
-cmd/collector     manual collection CLI            (Milestone 5)
+cmd/collector     manual collection CLI
 
+internal/app             composition root shared by the commands
 internal/config          layered configuration
 internal/observability   slog setup, request ID, access log, panic recovery
 internal/mongodb         connection management, collection names, index plan
@@ -266,7 +360,7 @@ internal/service         application orchestration
 internal/httpclient      SSRF-guarded HTTP client
 internal/collector/rss   gofeed-based RSS/Atom collector
 internal/processor       staged processing pipeline
-internal/scheduler       cron scheduling and locking       (Milestone 5)
+internal/scheduler       the collection loop and its concurrency bounds
 
 configs/      default configuration and the source seed file
 fixtures/     offline feed fixtures for tests
@@ -310,6 +404,19 @@ they sort chronologically the `_id` index alone gives listings a stable order.
 - Feed content is stored as plain text with its markup removed, and every article field
   is bounded before it reaches the database, so a publisher cannot use a feed to plant
   markup or an unbounded document in the store.
+- A collection failure is stored as a fixed phrase chosen from its failure class, never
+  the underlying error, so the run history and a source's `last_error` cannot leak a
+  DNS message, a driver error or an internal host name to an API caller.
+- Each collector process holds its leases under an identifier of its own, so one
+  collector cannot release another's lease, and every lease expires on its own whether
+  or not it is released.
+- The scheduler bounds both how many sources one tick takes and how many it collects at
+  once, so a backlog cannot open unbounded sockets or exhaust the MongoDB pool the API
+  shares.
+- A panic inside a collection is contained in its own goroutine: a background worker
+  must not take down the API it shares a process with.
+- The collection history is read-only over HTTP; a collection can only be started by the
+  scheduler or by an operator running the collector command.
 
 Every outbound request in the application goes through `internal/httpclient`, so no
 caller can reach the network without those guards.

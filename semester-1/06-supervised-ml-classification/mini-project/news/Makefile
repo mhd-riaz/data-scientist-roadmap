@@ -33,6 +33,7 @@ build: ## Build every command into $(BIN_DIR)
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/api ./cmd/api
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/migrate ./cmd/migrate
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/seed ./cmd/seed
+	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/collector ./cmd/collector
 
 .PHONY: test
 test: ## Run unit tests (no external dependencies)
@@ -69,6 +70,14 @@ seed: ## Apply the sources declared in $(SOURCES)
 .PHONY: seed-check
 seed-check: ## Validate the seed file without writing to the database
 	go run ./cmd/seed -config $(CONFIG) -sources $(SOURCES) -dry-run
+
+.PHONY: collect
+collect: ## Collect every source that is currently due
+	go run ./cmd/collector -config $(CONFIG)
+
+.PHONY: collect-source
+collect-source: ## Collect one source now: make collect-source SOURCE=<id>
+	go run ./cmd/collector -config $(CONFIG) -source $(SOURCE)
 
 .PHONY: up
 up: ## Start MongoDB, run the migration and start the API
