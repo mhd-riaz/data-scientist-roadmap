@@ -20,6 +20,12 @@ services:
       # The 64-character variant is free of symbols, so it needs no escaping
       # when it is embedded in the connection URI below.
       - MONGO_INITDB_ROOT_PASSWORD=${SERVICE_PASSWORD_64_MONGO}
+    # Published for direct Compass/mongosh access from trusted LAN clients.
+    # Root auth is already enforced above; restrict at the host firewall too
+    # (e.g. `ufw allow from <client-ip> to any port 27017`) since anyone who
+    # can reach this port can attempt to authenticate.
+    ports:
+      - "27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
