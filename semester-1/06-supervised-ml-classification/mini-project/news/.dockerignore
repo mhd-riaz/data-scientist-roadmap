@@ -1,0 +1,21 @@
+# Keep the build context small and free of local state and secrets.
+.git
+.gitignore
+.github
+
+bin/
+out/
+*.test
+coverage.out
+coverage.html
+
+.env
+.env.*
+configs/config.local.yaml
+
+deployments/docker-compose.yml
+readme.md
+
+.DS_Store
+.idea/
+.vscode/

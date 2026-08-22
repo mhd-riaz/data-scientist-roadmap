@@ -1,0 +1,19 @@
+# Build output
+/bin/
+/out/
+*.exe
+
+# Test and coverage artefacts
+*.test
+coverage.out
+coverage.html
+
+# Local overrides
+configs/config.local.yaml
+.env
+.env.*
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
