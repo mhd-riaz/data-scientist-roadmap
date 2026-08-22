@@ -284,6 +284,37 @@ func TestAuthValidation(t *testing.T) {
 	}
 }
 
+func TestSkipAuthValidationIgnoresAuthProblems(t *testing.T) {
+	cfg := Default()
+	cfg.App.Environment = "production"
+	cfg.Auth.Enabled = false
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("without the option, disabled auth in production must be refused")
+	}
+	if err := cfg.Validate(SkipAuthValidation); err != nil {
+		t.Fatalf("auth problems must be ignored for non-serving binaries, got: %v", err)
+	}
+
+	// Only the auth checks are dropped; the rest still run.
+	cfg.Logging.Level = "verbose"
+	if err := cfg.Validate(SkipAuthValidation); err == nil {
+		t.Fatal("non-auth problems must still be reported")
+	}
+}
+
+func TestLoadSkipAuthValidationInProduction(t *testing.T) {
+	t.Setenv(EnvPrefix+"APP_ENVIRONMENT", "production")
+	t.Setenv(EnvPrefix+"AUTH_ENABLED", "false")
+
+	if _, err := Load(""); err == nil {
+		t.Fatal("the API server must still refuse disabled auth in production")
+	}
+	if _, err := Load("", SkipAuthValidation); err != nil {
+		t.Fatalf("migrate and seed must load with auth disabled, got: %v", err)
+	}
+}
+
 func TestAuthAcceptsEitherCredentialKind(t *testing.T) {
 	const (
 		validKey      = "9f2c1d4e8a6b0c3d5e7f9a1b2c3d4e5f60718293"

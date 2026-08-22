@@ -196,10 +196,32 @@ func Default() *Config {
 	}
 }
 
+// Option adjusts which checks a load or validation performs.
+type Option func(*options)
+
+type options struct {
+	skipAuth bool
+}
+
+// SkipAuthValidation drops the auth checks. It is for the binaries that never
+// serve HTTP — migrate and seed — where auth settings are not theirs to hold,
+// so an API-server-only setting such as a deliberately disabled auth must not
+// stop a migration. The API server never passes it, so a production server
+// still refuses to start with auth off.
+func SkipAuthValidation(o *options) { o.skipAuth = true }
+
+func newOptions(opts []Option) options {
+	var o options
+	for _, apply := range opts {
+		apply(&o)
+	}
+	return o
+}
+
 // Load resolves configuration from defaults, the YAML file at path when it is
 // non-empty, and environment variables, then validates the result. A path that
 // does not exist is reported as an error; pass "" to skip the file layer.
-func Load(path string) (*Config, error) {
+func Load(path string, opts ...Option) (*Config, error) {
 	cfg := Default()
 
 	if path != "" {
@@ -210,7 +232,7 @@ func Load(path string) (*Config, error) {
 	if err := cfg.applyEnv(); err != nil {
 		return nil, err
 	}
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.Validate(opts...); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 	return cfg, nil
@@ -280,7 +302,9 @@ func (c *Config) applyEnv() error {
 }
 
 // Validate reports every configuration problem at once rather than only the first.
-func (c *Config) Validate() error {
+func (c *Config) Validate(opts ...Option) error {
+	o := newOptions(opts)
+
 	var errs []error
 
 	if strings.TrimSpace(c.App.Name) == "" {
@@ -321,7 +345,9 @@ func (c *Config) Validate() error {
 		oneOf("logging.level", c.Logging.Level, "debug", "info", "warn", "error"),
 		oneOf("logging.format", c.Logging.Format, "json", "text"),
 	)
-	errs = append(errs, c.Auth.validate(c.App.Environment)...)
+	if !o.skipAuth {
+		errs = append(errs, c.Auth.validate(c.App.Environment)...)
+	}
 	errs = append(errs, c.Collector.validate(c.App.Environment)...)
 	errs = append(errs, c.Scheduler.validate(c.Collector.RequestTimeout)...)
 
