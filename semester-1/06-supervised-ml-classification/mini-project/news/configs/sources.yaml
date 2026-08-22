@@ -1,0 +1,48 @@
+# Sources applied by `make seed`. Re-running is safe: an entry is matched on its
+# feed_url, so an existing source is updated rather than duplicated.
+#
+# Required: name, feed_url, type (rss|atom), language (ISO 639-1), country
+# (ISO 3166-1 alpha-2). Optional: state, city, enabled, priority (0-100),
+# fetch_interval_seconds (60-604800). An omitted optional key keeps whatever is
+# already stored, so a value tuned through the API is not reset by a re-seed.
+
+sources:
+  - name: The Hindu — Bengaluru
+    feed_url: https://www.thehindu.com/news/cities/bangalore/feeder/default.rss
+    type: rss
+    language: en
+    country: IN
+    state: Karnataka
+    city: Bengaluru
+    priority: 70
+
+  - name: The Hindu — National
+    feed_url: https://www.thehindu.com/news/national/feeder/default.rss
+    type: rss
+    language: en
+    country: IN
+    priority: 60
+
+  - name: Deccan Herald — Bengaluru
+    feed_url: https://www.deccanherald.com/rss/bengaluru.xml
+    type: rss
+    language: en
+    country: IN
+    state: Karnataka
+    city: Bengaluru
+    priority: 65
+
+  - name: The Times of India — India
+    feed_url: https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms
+    type: rss
+    language: en
+    country: IN
+    priority: 55
+
+  - name: NDTV — Latest
+    feed_url: https://feeds.feedburner.com/ndtvnews-latest
+    type: rss
+    language: en
+    country: IN
+    priority: 50
+    fetch_interval_seconds: 600

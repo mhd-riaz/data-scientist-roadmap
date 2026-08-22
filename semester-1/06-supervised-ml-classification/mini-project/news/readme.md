@@ -6,10 +6,12 @@ Phase 1 is **data collection only**. Topic classification, bias analysis, locati
 matching, LLMs, site scraping, browser automation, social media and any frontend are
 explicitly out of scope.
 
-> **Status: Milestone 1 complete.** Configuration, structured logging, MongoDB
-> connection management, health endpoints, the migration command and the container
-> stack are in place. Source APIs, the collector, the processing pipeline, the
-> scheduler and the article query APIs arrive in Milestones 2–6.
+> **Status: Milestone 2 complete.** On top of Milestone 1's configuration,
+> logging, MongoDB connection management, health endpoints, migration and
+> container stack, the source model and its rules, the persistence layer, source
+> management APIs and the seeding CLI are now in place. The feed collector, the
+> processing pipeline, the scheduler and the article query APIs arrive in
+> Milestones 3-6.
 
 ## Requirements
 
@@ -24,6 +26,7 @@ Starts MongoDB, runs the migration to completion, then starts the API:
 make up
 curl -s localhost:8080/health/live
 curl -s localhost:8080/health/ready
+make seed          # apply the feeds in configs/sources.yaml
 make logs
 make down          # stops the stack and deletes the volume
 ```
@@ -33,6 +36,7 @@ make down          # stops the stack and deletes the volume
 ```bash
 make mongo-up                      # MongoDB only, on localhost:27017
 make migrate                       # create collections and indexes
+make seed                          # apply the feeds in configs/sources.yaml
 make run                           # serve on localhost:8080
 ```
 
@@ -43,6 +47,7 @@ make check                         # gofmt check + go vet + go test ./...
 make test-race                     # unit tests under the race detector
 make cover                         # coverage summary
 make test-integration              # needs MongoDB on localhost:27017
+make seed-check                    # validate configs/sources.yaml, write nothing
 make build                         # binaries into ./bin
 ```
 
@@ -79,18 +84,85 @@ Three layers, each overriding the one before: built-in defaults →
 
 `NEWS_CONFIG_PATH` selects a different config file without passing `-config`.
 
+## Sources
+
+Feeds are declared in [configs/sources.yaml](configs/sources.yaml) and applied with
+`make seed`. Seeding is idempotent and matches on `feed_url`, so re-running updates
+rather than duplicates. An omitted optional key keeps whatever is already stored, so a
+value tuned through the API is never reset by a re-seed. `make seed-check` validates the
+whole file without writing, and a file containing an invalid entry is rejected in full
+rather than applied halfway.
+
+| Field                    | Required | Rule                                   |
+| ------------------------ | -------- | -------------------------------------- |
+| `name`                   | yes      | 1-200 characters                       |
+| `feed_url`               | yes      | `http`/`https`, no credentials, unique |
+| `type`                   | yes      | `rss` or `atom`                        |
+| `language`               | yes      | two-letter ISO 639-1 code              |
+| `country`                | yes      | two-letter ISO 3166-1 alpha-2 code     |
+| `state`, `city`          | no       | up to 100 characters                   |
+| `enabled`                | no       | defaults to `true`                     |
+| `priority`               | no       | 0-100, defaults to 50                  |
+| `fetch_interval_seconds` | no       | 60-604800, defaults to 900             |
+
+`health_status`, `consecutive_failures`, `last_error`, `last_collected_at`,
+`next_scheduled_at` and the timestamps are owned by the server. A request that tries to
+set one is rejected rather than ignored.
+
 ## Endpoints
 
-| Method | Path                         | Purpose                                     | Milestone |
-| ------ | ---------------------------- | ------------------------------------------- | --------- |
-| `GET`  | `/health/live`               | Process is running; never touches MongoDB   | 1         |
-| `GET`  | `/health/ready`              | `200` when MongoDB answers, `503` otherwise | 1         |
-|        | `/api/v1/sources...`         | Source management                           | 2         |
-|        | `/api/v1/articles...`        | Article queries                             | 6         |
-|        | `/api/v1/collection-runs...` | Run history                                 | 5         |
+| Method   | Path                         | Purpose                                     | Milestone |
+| -------- | ---------------------------- | ------------------------------------------- | --------- |
+| `GET`    | `/health/live`               | Process is running; never touches MongoDB   | 1         |
+| `GET`    | `/health/ready`              | `200` when MongoDB answers, `503` otherwise | 1         |
+| `POST`   | `/api/v1/sources`            | Register a feed                             | 2         |
+| `GET`    | `/api/v1/sources`            | List feeds, filtered and paginated          | 2         |
+| `GET`    | `/api/v1/sources/{id}`       | Fetch one feed                              | 2         |
+| `PATCH`  | `/api/v1/sources/{id}`       | Partially update a feed                     | 2         |
+| `DELETE` | `/api/v1/sources/{id}`       | Remove a feed                               | 2         |
+|          | `/api/v1/articles...`        | Article queries                             | 6         |
+|          | `/api/v1/collection-runs...` | Run history                                 | 5         |
 
 Liveness is deliberately independent of MongoDB so a transient database outage causes
 a `503` on readiness rather than a restart loop.
+
+Listing accepts `enabled`, `type`, `health_status`, `country`, `state`, `city`, `limit`
+and `offset`. `limit` defaults to 50 and is capped at 100; asking for more is an error
+rather than a silently truncated page, so nobody builds against a page size the server
+will not honour.
+
+```bash
+curl -s 'localhost:8080/api/v1/sources?country=IN&enabled=true&limit=10'
+
+curl -s -X POST localhost:8080/api/v1/sources \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Deccan Herald — Mysuru","feed_url":"https://www.deccanherald.com/rss/mysuru.xml",
+       "type":"rss","language":"en","country":"IN","state":"Karnataka","city":"Mysuru"}'
+
+curl -s -X PATCH localhost:8080/api/v1/sources/<id> \
+  -H 'Content-Type: application/json' -d '{"enabled":false}'
+```
+
+Every error uses one envelope. Validation failures report every broken rule at once, so
+one round trip is enough to fix a payload:
+
+```json
+{
+  "error": {
+    "code": "invalid_input",
+    "message": "the request payload is invalid",
+    "fields": [{ "field": "priority", "message": "must be between 0 and 100, got 500" }]
+  }
+}
+```
+
+| Code             | Status | Meaning                                 |
+| ---------------- | ------ | --------------------------------------- |
+| `invalid_input`  | 400    | The payload or a query parameter is bad |
+| `not_found`      | 404    | No such source                          |
+| `conflict`       | 409    | That feed URL is already registered     |
+| `unavailable`    | 503    | A dependency did not answer in time     |
+| `internal_error` | 500    | Anything else; detail stays in the logs |
 
 ## Data model
 
@@ -114,22 +186,23 @@ hash) is enforced by three unique indexes on `articles`. `content_hash` is index
 ```text
 cmd/api           HTTP server
 cmd/migrate       collection and index migration
+cmd/seed          source seeding CLI
 cmd/collector     manual collection CLI            (Milestone 5)
-cmd/seed          source seeding CLI               (Milestone 2)
 
 internal/config          layered configuration
 internal/observability   slog setup, request ID, access log, panic recovery
 internal/mongodb         connection management, collection names, index plan
-internal/handler         thin HTTP handlers
-internal/domain          models and rules                  (Milestone 2)
-internal/repository      persistence interfaces            (Milestone 2)
-internal/service         application orchestration         (Milestone 2)
+internal/handler         thin HTTP handlers, request and response contracts
+internal/domain          models and rules
+internal/repository      persistence interfaces and storage-neutral errors
+internal/repository/mongo MongoDB implementations
+internal/service         application orchestration
 internal/httpclient      SSRF-guarded HTTP client          (Milestone 3)
 internal/collector/rss   gofeed-based RSS/Atom collector   (Milestone 3)
 internal/processor       staged processing pipeline        (Milestone 4)
 internal/scheduler       cron scheduling and locking       (Milestone 5)
 
-configs/      default configuration
+configs/      default configuration and the source seed file
 fixtures/     offline feed fixtures for tests    (Milestone 3)
 deployments/  Dockerfile and Docker Compose
 scripts/      developer helper scripts
@@ -137,6 +210,8 @@ scripts/      developer helper scripts
 
 Dependencies point inward only: handlers depend on services, services depend on
 repository interfaces, and the MongoDB implementation is never imported by domain code.
+Source identifiers are UUIDv7, so they are neither guessable nor enumerable, and because
+they sort chronologically the `_id` index alone gives listings a stable order.
 
 ## Security posture in this milestone
 
@@ -149,5 +224,18 @@ repository interfaces, and the MongoDB implementation is never imported by domai
 - All JSON responses carry `X-Content-Type-Options: nosniff`.
 - Configuration is validated at startup, including the MongoDB URI scheme and database name.
 - The container image runs as UID 10001, never root.
+- Request bodies are capped at 64 KiB and must be `application/json`; unknown fields are
+  rejected, so a caller cannot set a server-owned field such as `health_status`.
+- Query filters are assembled field by field from typed, enum-validated values, so no
+  part of a request is ever spliced into a query document as an operator.
+- Feed URLs must be `http` or `https` and must not embed credentials, so a stored feed
+  cannot leak a password into a log line.
+- Source identifiers are UUIDv7 rather than sequential or timestamp-derived values.
 
 The SSRF guard for user-supplied feed URLs arrives with the HTTP client in Milestone 3.
+Until then the URL rules above reject only what can be judged without a DNS lookup: a
+feed pointing at a private address is still accepted, because nothing fetches it yet.
+
+**The source management API is unauthenticated.** Phase 1 has no identity layer, so
+anyone who can reach the port can add or remove feeds. Do not expose it beyond a trusted
+network.

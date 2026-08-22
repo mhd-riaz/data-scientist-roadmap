@@ -16,6 +16,8 @@ import (
 	"github.com/riaz/newscollector/internal/handler"
 	"github.com/riaz/newscollector/internal/mongodb"
 	"github.com/riaz/newscollector/internal/observability"
+	mongorepo "github.com/riaz/newscollector/internal/repository/mongo"
+	"github.com/riaz/newscollector/internal/service"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -78,9 +80,15 @@ func run() error {
 	}
 	cancelPing()
 
+	sourceService := service.NewSourceService(mongorepo.NewSourceRepository(mongoClient.Database()), time.Now)
+
 	srv := &http.Server{
-		Addr:              cfg.Server.Address(),
-		Handler:           handler.NewRouter(handler.NewHealth(mongoClient, readinessCheckTimeout, version, logger), logger),
+		Addr: cfg.Server.Address(),
+		Handler: handler.NewRouter(
+			handler.NewHealth(mongoClient, readinessCheckTimeout, version, logger),
+			handler.NewSource(sourceService, logger),
+			logger,
+		),
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Server.ReadTimeout,
 		WriteTimeout:      cfg.Server.WriteTimeout,

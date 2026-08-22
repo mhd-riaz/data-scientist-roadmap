@@ -36,7 +36,11 @@ func discardLogger() *slog.Logger {
 func newTestServer(t *testing.T, p Pinger) http.Handler {
 	t.Helper()
 	logger := discardLogger()
-	return NewRouter(NewHealth(p, 100*time.Millisecond, "test", logger), logger)
+	return NewRouter(
+		NewHealth(p, 100*time.Millisecond, "test", logger),
+		NewSource(&fakeSourceManager{}, logger),
+		logger,
+	)
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {

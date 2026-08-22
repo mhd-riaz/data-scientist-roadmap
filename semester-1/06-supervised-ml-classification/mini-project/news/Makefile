@@ -3,6 +3,7 @@ VERSION   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 COMPOSE   := docker compose -f deployments/docker-compose.yml
 CONFIG    ?= configs/config.yaml
+SOURCES   ?= configs/sources.yaml
 
 .DEFAULT_GOAL := help
 
@@ -31,6 +32,7 @@ vet: ## Run go vet
 build: ## Build every command into $(BIN_DIR)
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/api ./cmd/api
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/migrate ./cmd/migrate
+	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/seed ./cmd/seed
 
 .PHONY: test
 test: ## Run unit tests (no external dependencies)
@@ -59,6 +61,14 @@ run: ## Run the API against the local config
 .PHONY: migrate
 migrate: ## Create MongoDB collections and indexes
 	go run ./cmd/migrate -config $(CONFIG)
+
+.PHONY: seed
+seed: ## Apply the sources declared in $(SOURCES)
+	go run ./cmd/seed -config $(CONFIG) -sources $(SOURCES)
+
+.PHONY: seed-check
+seed-check: ## Validate the seed file without writing to the database
+	go run ./cmd/seed -config $(CONFIG) -sources $(SOURCES) -dry-run
 
 .PHONY: up
 up: ## Start MongoDB, run the migration and start the API
