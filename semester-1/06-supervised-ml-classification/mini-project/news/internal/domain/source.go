@@ -270,8 +270,9 @@ func (s *Source) Validate() error {
 }
 
 // validateFeedURL checks the shape of a feed URL. The network-level SSRF guard
-// (DNS resolution and private-range blocking) belongs to the HTTP client in
-// Milestone 3; this rejects the URLs that never need resolving in the first place.
+// (DNS resolution and private-range blocking) lives in internal/httpclient,
+// because it can only be applied at connection time; this rejects the URLs that
+// never need resolving in the first place.
 func validateFeedURL(v *validator, raw string) {
 	if raw == "" {
 		v.add("feed_url", "must not be empty")

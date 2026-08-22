@@ -25,10 +25,11 @@ const DefaultPath = "configs/config.yaml"
 
 // Config is the fully resolved application configuration.
 type Config struct {
-	App     App     `yaml:"app"`
-	Server  Server  `yaml:"server"`
-	Mongo   Mongo   `yaml:"mongo"`
-	Logging Logging `yaml:"logging"`
+	App       App       `yaml:"app"`
+	Server    Server    `yaml:"server"`
+	Mongo     Mongo     `yaml:"mongo"`
+	Collector Collector `yaml:"collector"`
+	Logging   Logging   `yaml:"logging"`
 }
 
 // App holds process identity settings.
@@ -58,6 +59,21 @@ type Mongo struct {
 	OperationTimeout       time.Duration `yaml:"operation_timeout"`
 	MaxPoolSize            uint64        `yaml:"max_pool_size"`
 	MinPoolSize            uint64        `yaml:"min_pool_size"`
+}
+
+// Collector holds the settings for fetching and parsing feeds.
+type Collector struct {
+	UserAgent        string        `yaml:"user_agent"`
+	RequestTimeout   time.Duration `yaml:"request_timeout"`
+	MaxResponseBytes int64         `yaml:"max_response_bytes"`
+	MaxRedirects     int           `yaml:"max_redirects"`
+	MaxItemsPerFeed  int           `yaml:"max_items_per_feed"`
+
+	// AllowPrivateNetworks turns off the outbound address guard so a feed can be
+	// served from localhost during development. It is refused outright in
+	// production, because with it on any operator who can register a feed URL can
+	// make the collector read internal services.
+	AllowPrivateNetworks bool `yaml:"allow_private_networks"`
 }
 
 // Logging holds structured-logging settings.
@@ -109,6 +125,14 @@ func Default() *Config {
 			OperationTimeout:       30 * time.Second,
 			MaxPoolSize:            50,
 			MinPoolSize:            0,
+		},
+		Collector: Collector{
+			UserAgent:            "news-collector/1.0 (+https://github.com/riaz/newscollector)",
+			RequestTimeout:       20 * time.Second,
+			MaxResponseBytes:     10 << 20,
+			MaxRedirects:         5,
+			MaxItemsPerFeed:      500,
+			AllowPrivateNetworks: false,
 		},
 		Logging: Logging{
 			Level:  "info",
@@ -175,6 +199,13 @@ func (c *Config) applyEnv() error {
 	b.unsigned("MONGO_MAX_POOL_SIZE", &c.Mongo.MaxPoolSize)
 	b.unsigned("MONGO_MIN_POOL_SIZE", &c.Mongo.MinPoolSize)
 
+	b.str("COLLECTOR_USER_AGENT", &c.Collector.UserAgent)
+	b.duration("COLLECTOR_REQUEST_TIMEOUT", &c.Collector.RequestTimeout)
+	b.integer64("COLLECTOR_MAX_RESPONSE_BYTES", &c.Collector.MaxResponseBytes)
+	b.integer("COLLECTOR_MAX_REDIRECTS", &c.Collector.MaxRedirects)
+	b.integer("COLLECTOR_MAX_ITEMS_PER_FEED", &c.Collector.MaxItemsPerFeed)
+	b.boolean("COLLECTOR_ALLOW_PRIVATE_NETWORKS", &c.Collector.AllowPrivateNetworks)
+
 	b.str("LOGGING_LEVEL", &c.Logging.Level)
 	b.str("LOGGING_FORMAT", &c.Logging.Format)
 
@@ -223,8 +254,45 @@ func (c *Config) Validate() error {
 		oneOf("logging.level", c.Logging.Level, "debug", "info", "warn", "error"),
 		oneOf("logging.format", c.Logging.Format, "json", "text"),
 	)
+	errs = append(errs, c.Collector.validate(c.App.Environment)...)
 
 	return errors.Join(errs...)
+}
+
+// maxCollectorResponseBytes is the ceiling on the per-response cap itself. A
+// feed larger than this is not a feed, and allowing an arbitrary limit would
+// let one misconfigured source exhaust the process's memory.
+const maxCollectorResponseBytes = 64 << 20
+
+// maxCollectorRedirects bounds the configurable redirect budget. Every hop is a
+// fresh chance for a publisher to point the collector somewhere else, so the
+// chain stays short even when an operator asks for more.
+const maxCollectorRedirects = 10
+
+func (c Collector) validate(environment string) []error {
+	var errs []error
+
+	if strings.TrimSpace(c.UserAgent) == "" {
+		errs = append(errs, errors.New("collector.user_agent must not be empty"))
+	}
+	errs = append(errs, positive("collector.request_timeout", c.RequestTimeout))
+
+	if c.MaxResponseBytes <= 0 || c.MaxResponseBytes > maxCollectorResponseBytes {
+		errs = append(errs, fmt.Errorf("collector.max_response_bytes must be between 1 and %d, got %d",
+			maxCollectorResponseBytes, c.MaxResponseBytes))
+	}
+	if c.MaxRedirects < 0 || c.MaxRedirects > maxCollectorRedirects {
+		errs = append(errs, fmt.Errorf("collector.max_redirects must be between 0 and %d, got %d",
+			maxCollectorRedirects, c.MaxRedirects))
+	}
+	if c.MaxItemsPerFeed <= 0 {
+		errs = append(errs, fmt.Errorf("collector.max_items_per_feed must be greater than zero, got %d", c.MaxItemsPerFeed))
+	}
+	if c.AllowPrivateNetworks && environment == "production" {
+		errs = append(errs, errors.New("collector.allow_private_networks must not be enabled in production"))
+	}
+
+	return errs
 }
 
 func validateMongoURI(uri string) error {
@@ -324,6 +392,32 @@ func (b *envBinder) unsigned(key string, dst *uint64) {
 		return
 	}
 	*dst = n
+}
+
+func (b *envBinder) integer64(key string, dst *int64) {
+	v, ok := b.lookup(key)
+	if !ok {
+		return
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		b.fail(key, fmt.Errorf("expected an integer, got %q", v))
+		return
+	}
+	*dst = n
+}
+
+func (b *envBinder) boolean(key string, dst *bool) {
+	v, ok := b.lookup(key)
+	if !ok {
+		return
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		b.fail(key, fmt.Errorf("expected true or false, got %q", v))
+		return
+	}
+	*dst = parsed
 }
 
 func (b *envBinder) duration(key string, dst *time.Duration) {

@@ -6,12 +6,12 @@ Phase 1 is **data collection only**. Topic classification, bias analysis, locati
 matching, LLMs, site scraping, browser automation, social media and any frontend are
 explicitly out of scope.
 
-> **Status: Milestone 2 complete.** On top of Milestone 1's configuration,
+> **Status: Milestone 3 complete.** On top of Milestone 1's configuration,
 > logging, MongoDB connection management, health endpoints, migration and
-> container stack, the source model and its rules, the persistence layer, source
-> management APIs and the seeding CLI are now in place. The feed collector, the
-> processing pipeline, the scheduler and the article query APIs arrive in
-> Milestones 3-6.
+> container stack, and Milestone 2's source model, persistence layer, source
+> management APIs and seeding CLI, the SSRF-guarded HTTP client and the
+> RSS/Atom feed collector are now in place. The processing pipeline, the
+> scheduler and the article query APIs arrive in Milestones 4-6.
 
 ## Requirements
 
@@ -79,6 +79,12 @@ Three layers, each overriding the one before: built-in defaults →
 | `mongo.operation_timeout`        | `NEWS_MONGO_OPERATION_TIMEOUT`        | `30s`                       |
 | `mongo.max_pool_size`            | `NEWS_MONGO_MAX_POOL_SIZE`            | `50`                        |
 | `mongo.min_pool_size`            | `NEWS_MONGO_MIN_POOL_SIZE`            | `0`                         |
+| `collector.user_agent`           | `NEWS_COLLECTOR_USER_AGENT`           | `news-collector/1.0 (...)`  |
+| `collector.request_timeout`      | `NEWS_COLLECTOR_REQUEST_TIMEOUT`      | `20s`                       |
+| `collector.max_response_bytes`   | `NEWS_COLLECTOR_MAX_RESPONSE_BYTES`   | `10485760`                  |
+| `collector.max_redirects`        | `NEWS_COLLECTOR_MAX_REDIRECTS`        | `5`                         |
+| `collector.max_items_per_feed`   | `NEWS_COLLECTOR_MAX_ITEMS_PER_FEED`   | `500`                       |
+| `collector.allow_private_networks` | `NEWS_COLLECTOR_ALLOW_PRIVATE_NETWORKS` | `false`                 |
 | `logging.level`                  | `NEWS_LOGGING_LEVEL`                  | `info`                      |
 | `logging.format`                 | `NEWS_LOGGING_FORMAT`                 | `json`                      |
 
@@ -164,6 +170,27 @@ one round trip is enough to fix a payload:
 | `unavailable`    | 503    | A dependency did not answer in time     |
 | `internal_error` | 500    | Anything else; detail stays in the logs |
 
+## Feed collection
+
+A collection is one conditional `GET` through the guarded HTTP client, followed by a
+parse. RSS 2.0, RSS 1.0/RDF and Atom are all handled, and the dialect is detected from
+the body rather than trusted from the source's `type`, because publishers relabel feeds
+more often than they tell anyone.
+
+The stored `ETag` and `Last-Modified` are replayed as `If-None-Match` and
+`If-Modified-Since`. A `304` returns no items and leaves the previous collection
+standing, which is the cheapest possible poll for both sides.
+
+An entry is dropped when it has no link, or a link that is not an absolute `http`/`https`
+URL — a `javascript:` link, for instance. Dropping is counted rather than fatal: one
+unusable row must not cost the other fifty articles in the feed. Relative links are
+resolved against the feed's declared home page, titles have their line breaks collapsed,
+author emails are discarded, and every field is capped before it can reach the database.
+An Atom entry that carries only `updated` uses it as its publication date.
+
+Nothing schedules a collection yet: the scheduler and the manual collection CLI arrive
+in Milestone 5.
+
 ## Data model
 
 Five collections, created and indexed by `make migrate`:
@@ -197,13 +224,13 @@ internal/domain          models and rules
 internal/repository      persistence interfaces and storage-neutral errors
 internal/repository/mongo MongoDB implementations
 internal/service         application orchestration
-internal/httpclient      SSRF-guarded HTTP client          (Milestone 3)
-internal/collector/rss   gofeed-based RSS/Atom collector   (Milestone 3)
+internal/httpclient      SSRF-guarded HTTP client
+internal/collector/rss   gofeed-based RSS/Atom collector
 internal/processor       staged processing pipeline        (Milestone 4)
 internal/scheduler       cron scheduling and locking       (Milestone 5)
 
 configs/      default configuration and the source seed file
-fixtures/     offline feed fixtures for tests    (Milestone 3)
+fixtures/     offline feed fixtures for tests
 deployments/  Dockerfile and Docker Compose
 scripts/      developer helper scripts
 ```
@@ -231,10 +258,19 @@ they sort chronologically the `_id` index alone gives listings a stable order.
 - Feed URLs must be `http` or `https` and must not embed credentials, so a stored feed
   cannot leak a password into a log line.
 - Source identifiers are UUIDv7 rather than sequential or timestamp-derived values.
+- Outbound fetches refuse any destination that is not publicly routable — loopback,
+  private, link-local (including the `169.254.169.254` metadata endpoint), multicast,
+  carrier-grade NAT and the reserved ranges — and any port other than 80 and 443.
+- That check runs in the dialer, after DNS resolution and immediately before the socket
+  connects, so a name that resolves to a public address and is then re-pointed at an
+  internal one is still refused. Every redirect hop is re-validated the same way.
+- Redirects are capped, response bodies are capped after decompression so a compression
+  bomb is inert, and an over-large body is rejected rather than truncated.
+- `collector.allow_private_networks` turns the address guard off for local development
+  and is refused outright when `app.environment` is `production`.
 
-The SSRF guard for user-supplied feed URLs arrives with the HTTP client in Milestone 3.
-Until then the URL rules above reject only what can be judged without a DNS lookup: a
-feed pointing at a private address is still accepted, because nothing fetches it yet.
+Every outbound request in the application goes through `internal/httpclient`, so no
+caller can reach the network without those guards.
 
 **The source management API is unauthenticated.** Phase 1 has no identity layer, so
 anyone who can reach the port can add or remove feeds. Do not expose it beyond a trusted

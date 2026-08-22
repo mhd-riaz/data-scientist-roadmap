@@ -163,6 +163,18 @@ func TestValidate(t *testing.T) {
 		{"min above max", func(c *Config) { c.Mongo.MinPoolSize = 100; c.Mongo.MaxPoolSize = 10 }, "mongo.min_pool_size"},
 		{"unknown log level", func(c *Config) { c.Logging.Level = "verbose" }, "logging.level"},
 		{"unknown log format", func(c *Config) { c.Logging.Format = "xml" }, "logging.format"},
+		{"empty user agent", func(c *Config) { c.Collector.UserAgent = " " }, "collector.user_agent"},
+		{"zero request timeout", func(c *Config) { c.Collector.RequestTimeout = 0 }, "collector.request_timeout"},
+		{"zero response cap", func(c *Config) { c.Collector.MaxResponseBytes = 0 }, "collector.max_response_bytes"},
+		{"response cap too high", func(c *Config) { c.Collector.MaxResponseBytes = 1 << 40 }, "collector.max_response_bytes"},
+		{"negative redirects", func(c *Config) { c.Collector.MaxRedirects = -1 }, "collector.max_redirects"},
+		{"too many redirects", func(c *Config) { c.Collector.MaxRedirects = 50 }, "collector.max_redirects"},
+		{"zero item cap", func(c *Config) { c.Collector.MaxItemsPerFeed = 0 }, "collector.max_items_per_feed"},
+		{
+			"private networks in production",
+			func(c *Config) { c.App.Environment = "production"; c.Collector.AllowPrivateNetworks = true },
+			"collector.allow_private_networks",
+		},
 	}
 
 	for _, tc := range tests {
@@ -211,5 +223,39 @@ func TestServerAddress(t *testing.T) {
 	s := Server{Host: "127.0.0.1", Port: 8080}
 	if got := s.Address(); got != "127.0.0.1:8080" {
 		t.Errorf("Address() = %q, want %q", got, "127.0.0.1:8080")
+	}
+}
+
+func TestCollectorEnvOverrides(t *testing.T) {
+	t.Setenv(EnvPrefix+"COLLECTOR_MAX_RESPONSE_BYTES", "2097152")
+	t.Setenv(EnvPrefix+"COLLECTOR_MAX_REDIRECTS", "2")
+	t.Setenv(EnvPrefix+"COLLECTOR_ALLOW_PRIVATE_NETWORKS", "true")
+	t.Setenv(EnvPrefix+"COLLECTOR_REQUEST_TIMEOUT", "7s")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.Collector.MaxResponseBytes != 2<<20 {
+		t.Errorf("MaxResponseBytes = %d, want 2097152", cfg.Collector.MaxResponseBytes)
+	}
+	if cfg.Collector.MaxRedirects != 2 {
+		t.Errorf("MaxRedirects = %d, want 2", cfg.Collector.MaxRedirects)
+	}
+	if !cfg.Collector.AllowPrivateNetworks {
+		t.Error("AllowPrivateNetworks = false, want the env override applied")
+	}
+	if cfg.Collector.RequestTimeout != 7*time.Second {
+		t.Errorf("RequestTimeout = %s, want 7s", cfg.Collector.RequestTimeout)
+	}
+}
+
+func TestCollectorMalformedBooleanIsReported(t *testing.T) {
+	t.Setenv(EnvPrefix+"COLLECTOR_ALLOW_PRIVATE_NETWORKS", "yes-please")
+
+	_, err := Load("")
+	if err == nil || !strings.Contains(err.Error(), "COLLECTOR_ALLOW_PRIVATE_NETWORKS") {
+		t.Fatalf("error should name the malformed variable, got: %v", err)
 	}
 }
