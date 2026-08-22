@@ -87,7 +87,7 @@ func run() error {
 		return err
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(*configPath, config.SkipAuthValidation)
 	if err != nil {
 		return err
 	}
