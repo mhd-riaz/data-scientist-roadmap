@@ -69,6 +69,15 @@ type ArticleRepository interface {
 	// normalized URL, canonical URL, source plus feed GUID, then the content
 	// hash within the same source.
 	FindByIdentity(ctx context.Context, identity domain.ArticleIdentity) (*domain.Article, error)
+
+	// GetByID returns one article in full, or ErrNotFound.
+	GetByID(ctx context.Context, id string) (*domain.Article, error)
+
+	// List returns the page of articles matching filter, newest first. The page
+	// carries the cursor that resumes it rather than a total, and its items
+	// carry no content: a listing of fifty full articles is megabytes nobody
+	// asked for.
+	List(ctx context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error)
 }
 
 // CollectionRunRepository persists the audit record of every collection

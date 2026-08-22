@@ -84,6 +84,7 @@ func run() error {
 	cancelPing()
 
 	sourceService := service.NewSourceService(mongorepo.NewSourceRepository(mongoClient.Database()), time.Now)
+	articleService := service.NewArticleService(mongorepo.NewArticleRepository(mongoClient.Database()))
 
 	collectionService, err := app.NewCollectionService(cfg, mongoClient.Database(), time.Now, logger)
 	if err != nil {
@@ -96,6 +97,7 @@ func run() error {
 			handler.NewHealth(mongoClient, readinessCheckTimeout, version, logger),
 			handler.NewSource(sourceService, logger),
 			handler.NewCollectionRun(collectionService, logger),
+			handler.NewArticle(articleService, logger),
 			logger,
 		),
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,

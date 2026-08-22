@@ -6,15 +6,13 @@ Phase 1 is **data collection only**. Topic classification, bias analysis, locati
 matching, LLMs, site scraping, browser automation, social media and any frontend are
 explicitly out of scope.
 
-> **Status: Milestone 5 complete.** On top of Milestone 1's configuration,
-> logging, MongoDB connection management, health endpoints, migration and
-> container stack, Milestone 2's source model, persistence layer, source
-> management APIs and seeding CLI, Milestone 3's SSRF-guarded HTTP client
-> and RSS/Atom collector, and Milestone 4's article model and processing
-> pipeline, feeds are now actually collected: the scheduler polls what is due,
-> leases stop two collectors sharing a source, every attempt is recorded, and
-> the collector CLI runs a collection by hand. The article query APIs arrive in
-> Milestone 6.
+> **Status: Phase 1 complete (Milestone 6).** Configuration, logging, MongoDB
+> connection management, health endpoints, the migration and the container stack
+> (M1); the source model, persistence layer, management APIs and seeding CLI
+> (M2); the SSRF-guarded HTTP client and the RSS/Atom collector (M3); the article
+> model and the processing pipeline (M4); the scheduler, per-source leases, run
+> history and the collector CLI (M5); and now the article query APIs (M6). Feeds
+> are configured, collected on a schedule, deduplicated, stored and readable.
 
 ## Requirements
 
@@ -31,6 +29,7 @@ curl -s localhost:8080/health/live
 curl -s localhost:8080/health/ready
 make seed          # apply the feeds in configs/sources.yaml
 curl -s 'localhost:8080/api/v1/collection-runs?limit=5'
+curl -s 'localhost:8080/api/v1/articles?limit=5'
 make logs
 make down          # stops the stack and deletes the volume
 ```
@@ -141,15 +140,16 @@ set one is rejected rather than ignored.
 | `DELETE` | `/api/v1/sources/{id}`         | Remove a feed                               | 2         |
 | `GET`    | `/api/v1/collection-runs`      | List collection attempts                    | 5         |
 | `GET`    | `/api/v1/collection-runs/{id}` | Fetch one collection attempt                | 5         |
-|          | `/api/v1/articles...`          | Article queries                             | 6         |
+| `GET`    | `/api/v1/articles`             | List articles, filtered and paginated       | 6         |
+| `GET`    | `/api/v1/articles/{id}`        | Fetch one article, content included         | 6         |
 
 Liveness is deliberately independent of MongoDB so a transient database outage causes
 a `503` on readiness rather than a restart loop.
 
-Listing accepts `enabled`, `type`, `health_status`, `country`, `state`, `city`, `limit`
-and `offset`. `limit` defaults to 50 and is capped at 100; asking for more is an error
-rather than a silently truncated page, so nobody builds against a page size the server
-will not honour.
+Listing sources accepts `enabled`, `type`, `health_status`, `country`, `state`, `city`,
+`limit` and `offset`. `limit` defaults to 50 and is capped at 100; asking for more is an
+error rather than a silently truncated page, so nobody builds against a page size the
+server will not honour.
 
 ```bash
 curl -s 'localhost:8080/api/v1/sources?country=IN&enabled=true&limit=10'
@@ -176,13 +176,66 @@ one round trip is enough to fix a payload:
 }
 ```
 
-| Code             | Status | Meaning                                 |
-| ---------------- | ------ | --------------------------------------- |
-| `invalid_input`  | 400    | The payload or a query parameter is bad |
-| `not_found`      | 404    | No such source                          |
-| `conflict`       | 409    | That feed URL is already registered     |
-| `unavailable`    | 503    | A dependency did not answer in time     |
-| `internal_error` | 500    | Anything else; detail stays in the logs |
+| Code             | Status | Meaning                                   |
+| ---------------- | ------ | ----------------------------------------- |
+| `invalid_input`  | 400    | The payload or a query parameter is bad   |
+| `not_found`      | 404    | No such source, collection run or article |
+| `conflict`       | 409    | That feed URL is already registered       |
+| `unavailable`    | 503    | A dependency did not answer in time       |
+| `internal_error` | 500    | Anything else; detail stays in the logs   |
+
+## Article queries
+
+```bash
+curl -s 'localhost:8080/api/v1/articles?country=IN&state=Karnataka&limit=20'
+curl -s 'localhost:8080/api/v1/articles?source_id=<id>&sort=collected_at'
+curl -s 'localhost:8080/api/v1/articles?published_from=2026-08-01T00:00:00Z'
+curl -s localhost:8080/api/v1/articles/<id>
+```
+
+| Parameter                        | Effect                                     |
+| -------------------------------- | ------------------------------------------ |
+| `source_id`                      | Only articles from one feed                |
+| `language`                       | Two-letter ISO 639-1 code                  |
+| `country`, `state`, `city`       | The region the source is registered under  |
+| `published_from`, `published_to` | RFC 3339 bounds on the publication date    |
+| `sort`                           | `published_at` (default) or `collected_at` |
+| `limit`                          | Defaults to 50, capped at 100              |
+| `cursor`                         | The `next_cursor` of the previous page     |
+
+Both orders are newest first, and each is served by its own index. `collected_at` is the
+one to poll on: a publisher back-dating an article cannot make it appear behind a reader
+who has already paged past that date.
+
+### Paging is by cursor, not offset
+
+Sources page by `offset` and articles do not, and the inconsistency is deliberate.
+Sources are an operator-sized set; articles accumulate without bound and arrive
+continuously. `offset=10000` makes MongoDB walk and discard ten thousand index entries,
+and because new articles land above the reader, an offset walk shows some articles twice
+and skips others.
+
+A page therefore returns `has_more` and an opaque `next_cursor` naming the last article
+on it; passing that back resumes strictly after it. The token encodes the sort value and
+the article id, and both halves are validated on the way in, so a tampered cursor is a
+`400` rather than a silent restart from the top — a reader that quietly restarted would
+process the same articles again.
+
+```bash
+curl -s 'localhost:8080/api/v1/articles?limit=2'
+curl -s 'localhost:8080/api/v1/articles?limit=2&cursor=MTc2Njk5MDgwMDAwMC4wMTk4...'
+```
+
+There is no `total`. Counting a filtered set of an unbounded collection on every page is
+the same walk the cursor exists to avoid.
+
+### Listings omit the article text
+
+An article's `content` is capped at 200 KB, so fifty of them is a response nobody asked
+for. A listing projects it away and a caller who wants the text reads the article
+itself, where it is always present. The deduplication keys — `dedup_id`,
+`normalized_url`, `content_hash` and `feed_guid` — are internal machinery and are never
+served.
 
 ## Feed collection
 
@@ -340,6 +393,16 @@ hash) is enforced by three unique indexes on `articles`. `content_hash` is index
 **not** unique, because two sources may legitimately syndicate identical content.
 `application_locks` carries a TTL index so a crashed collector cannot hold a lock forever.
 
+Every article listing is index-served: `ix_published_cursor` and `ix_collected_cursor`
+carry the two timelines and their `_id` tiebreaker, `ix_source_published` and
+`ix_language_published` carry those filters, and `ix_region_published`
+(`country, state, city, published_at`) carries the regional query this system exists to
+answer. An integration test explains each listing shape and fails the build if MongoDB
+answers it with a collection scan.
+
+Milestone 6 added `ix_region_published`; it is the only schema change since Milestone 1.
+`createIndexes` is idempotent, so applying it is `make migrate` and nothing else.
+
 ## Project layout
 
 ```text
@@ -417,10 +480,16 @@ they sort chronologically the `_id` index alone gives listings a stable order.
   must not take down the API it shares a process with.
 - The collection history is read-only over HTTP; a collection can only be started by the
   scheduler or by an operator running the collector command.
+- Article listings are cursor-paged and index-served, and the cursor's two halves are
+  parsed and validated before either reaches a query, so a crafted token cannot smuggle
+  a comparison operator into one — nor can any filter, which are all enum-, UUID- or
+  date-validated and assembled field by field.
+- Article responses expose no deduplication key, so how articles are matched is not
+  inferable from the API.
 
 Every outbound request in the application goes through `internal/httpclient`, so no
 caller can reach the network without those guards.
 
-**The source management API is unauthenticated.** Phase 1 has no identity layer, so
-anyone who can reach the port can add or remove feeds. Do not expose it beyond a trusted
-network.
+**The API is unauthenticated.** Phase 1 has no identity layer, so anyone who can reach
+the port can add or remove feeds and read every collected article. Do not expose it
+beyond a trusted network.

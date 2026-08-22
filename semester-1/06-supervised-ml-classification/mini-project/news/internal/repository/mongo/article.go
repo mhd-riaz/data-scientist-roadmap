@@ -7,6 +7,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	driver "go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/riaz/newscollector/internal/domain"
 	"github.com/riaz/newscollector/internal/mongodb"
@@ -90,4 +91,109 @@ func (r *ArticleRepository) findOne(ctx context.Context, filter bson.D) (*domain
 		return nil, fmt.Errorf("mongo: find article: %w", err)
 	}
 	return &a, nil
+}
+
+// GetByID returns one article in full, content included.
+func (r *ArticleRepository) GetByID(ctx context.Context, id string) (*domain.Article, error) {
+	return r.findOne(ctx, bson.D{{Key: "_id", Value: id}})
+}
+
+// List returns a page of articles, newest first.
+//
+// One more article than the caller asked for is read, which is how the page
+// knows whether another one follows without counting the whole match. The
+// content is projected away: fifty articles at up to 200 KB each is a response
+// nobody wants, and a caller who needs the text reads the article itself.
+func (r *ArticleRepository) List(ctx context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error) {
+	field := articleSortField(filter.Sort)
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: field, Value: -1}, {Key: "_id", Value: -1}}).
+		SetLimit(int64(filter.Limit) + 1).
+		SetProjection(bson.D{{Key: "content", Value: 0}})
+
+	cursor, err := r.coll.Find(ctx, articleQuery(filter, field), opts)
+	if err != nil {
+		return domain.ArticlePage{}, fmt.Errorf("mongo: find articles: %w", err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	items := make([]domain.Article, 0, filter.Limit+1)
+	if err := cursor.All(ctx, &items); err != nil {
+		return domain.ArticlePage{}, fmt.Errorf("mongo: decode articles: %w", err)
+	}
+
+	page := domain.ArticlePage{Limit: filter.Limit}
+	if len(items) > filter.Limit {
+		items = items[:filter.Limit]
+		page.HasMore = true
+		page.NextCursor = filter.CursorFor(items[len(items)-1])
+	}
+	page.Items = items
+	return page, nil
+}
+
+// articleSortField maps the requested order onto the field that carries it. The
+// enum is validated in the domain, so anything unexpected here means a caller
+// inside this process got it wrong, and the safe default is the published
+// timeline rather than an unindexed field name.
+func articleSortField(sort domain.ArticleSort) string {
+	if sort == domain.SortCollectedAt {
+		return "collected_at"
+	}
+	return "published_at"
+}
+
+// articleQuery builds the filter document field by field from typed,
+// already-validated values. Nothing the caller supplied is ever spliced in as a
+// document, so a crafted parameter or cursor cannot inject a query operator.
+func articleQuery(f domain.ArticleFilter, sortField string) bson.D {
+	query := bson.D{}
+
+	if f.SourceID != "" {
+		query = append(query, bson.E{Key: "source_id", Value: f.SourceID})
+	}
+	if f.Language != "" {
+		query = append(query, bson.E{Key: "language", Value: f.Language})
+	}
+	if f.Country != "" {
+		query = append(query, bson.E{Key: "country", Value: f.Country})
+	}
+	if f.State != "" {
+		query = append(query, bson.E{Key: "state", Value: f.State})
+	}
+	if f.City != "" {
+		query = append(query, bson.E{Key: "city", Value: f.City})
+	}
+
+	if bounds := publishedBounds(f); len(bounds) > 0 {
+		query = append(query, bson.E{Key: "published_at", Value: bounds})
+	}
+
+	// Resume strictly after the last article of the previous page. Both arms
+	// are served by the same (sort field, _id) index, and because an article id
+	// is a UUIDv7 its lexicographic order is chronological, so the tiebreaker
+	// orders ties the same way the sort field would have.
+	if c := f.Cursor; c != nil {
+		query = append(query, bson.E{Key: "$or", Value: bson.A{
+			bson.D{{Key: sortField, Value: bson.D{{Key: "$lt", Value: c.Value}}}},
+			bson.D{
+				{Key: sortField, Value: c.Value},
+				{Key: "_id", Value: bson.D{{Key: "$lt", Value: c.ID}}},
+			},
+		}})
+	}
+
+	return query
+}
+
+func publishedBounds(f domain.ArticleFilter) bson.D {
+	bounds := bson.D{}
+	if f.PublishedFrom != nil {
+		bounds = append(bounds, bson.E{Key: "$gte", Value: *f.PublishedFrom})
+	}
+	if f.PublishedTo != nil {
+		bounds = append(bounds, bson.E{Key: "$lte", Value: *f.PublishedTo})
+	}
+	return bounds
 }

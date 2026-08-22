@@ -108,6 +108,19 @@ func IndexPlan() []CollectionIndexes {
 					Keys:    bson.D{{Key: "language", Value: 1}, {Key: "published_at", Value: -1}},
 					Options: options.Index().SetName("ix_language_published"),
 				},
+				// Region is the axis this whole system is organised around, so
+				// filtering by it must not be a collection scan. The prefix
+				// order matches how a caller narrows: country, then state,
+				// then city.
+				{
+					Keys: bson.D{
+						{Key: "country", Value: 1},
+						{Key: "state", Value: 1},
+						{Key: "city", Value: 1},
+						{Key: "published_at", Value: -1},
+					},
+					Options: options.Index().SetName("ix_region_published"),
+				},
 				{
 					Keys:    bson.D{{Key: "processing_status", Value: 1}, {Key: "collected_at", Value: -1}},
 					Options: options.Index().SetName("ix_status_collected"),

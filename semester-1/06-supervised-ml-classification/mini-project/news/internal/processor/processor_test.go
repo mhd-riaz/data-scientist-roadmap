@@ -67,6 +67,21 @@ func (f *fakeArticleRepo) FindByIdentity(_ context.Context, id domain.ArticleIde
 	return nil, repository.ErrNotFound
 }
 
+// The reading half of the contract is not what this package does; it is
+// implemented only so the fake satisfies the interface.
+func (f *fakeArticleRepo) GetByID(_ context.Context, id string) (*domain.Article, error) {
+	for i := range f.stored {
+		if f.stored[i].ID == id {
+			return &f.stored[i], nil
+		}
+	}
+	return nil, repository.ErrNotFound
+}
+
+func (f *fakeArticleRepo) List(_ context.Context, filter domain.ArticleFilter) (domain.ArticlePage, error) {
+	return domain.ArticlePage{Items: f.stored, Limit: filter.Limit}, nil
+}
+
 func testSource() *domain.Source {
 	return &domain.Source{
 		ID:       "018f3f7e-1c2a-7f24-9a3f-8f9f2a0a5c11",

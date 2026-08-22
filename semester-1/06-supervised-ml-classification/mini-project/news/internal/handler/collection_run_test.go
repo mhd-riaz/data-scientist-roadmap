@@ -61,6 +61,7 @@ func newRunServer(t *testing.T, runs CollectionRunReader) http.Handler {
 		NewHealth(stubPinger{}, 100*time.Millisecond, "test", logger),
 		NewSource(&fakeSourceManager{}, logger),
 		NewCollectionRun(runs, logger),
+		NewArticle(&fakeArticleReader{}, logger),
 		logger,
 	)
 }

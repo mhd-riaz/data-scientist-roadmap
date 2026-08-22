@@ -7,9 +7,8 @@ import (
 	"github.com/riaz/newscollector/internal/observability"
 )
 
-// NewRouter wires the routes available in this milestone. Article endpoints are
-// added in a later milestone.
-func NewRouter(health *Health, sources *Source, runs *CollectionRun, logger *slog.Logger) http.Handler {
+// NewRouter wires every route the API serves.
+func NewRouter(health *Health, sources *Source, runs *CollectionRun, articles *Article, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health/live", health.Live)
@@ -25,6 +24,10 @@ func NewRouter(health *Health, sources *Source, runs *CollectionRun, logger *slo
 	// caller, so the history is read-only over HTTP.
 	mux.HandleFunc("GET /api/v1/collection-runs", runs.List)
 	mux.HandleFunc("GET /api/v1/collection-runs/{id}", runs.Get)
+
+	// Articles are written only by the collection pipeline.
+	mux.HandleFunc("GET /api/v1/articles", articles.List)
+	mux.HandleFunc("GET /api/v1/articles/{id}", articles.Get)
 
 	mux.HandleFunc("/", notFound)
 
