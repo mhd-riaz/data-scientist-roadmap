@@ -133,5 +133,5 @@ jobs:
           fi
           # --fail turns an HTTP error into a non-zero exit, so a rejected
           # webhook fails the run instead of passing silently.
-          curl --fail --silent --show-error --request GET "$COOLIFY_WEBHOOK" \
+          curl --fail --silent --show-error --request POST "$COOLIFY_WEBHOOK" \
             --header "Authorization: Bearer $COOLIFY_TOKEN"
