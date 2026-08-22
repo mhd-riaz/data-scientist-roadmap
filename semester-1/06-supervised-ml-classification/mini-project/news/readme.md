@@ -60,33 +60,33 @@ Three layers, each overriding the one before: built-in defaults →
 [configs/config.yaml](configs/config.yaml) → environment variables. Every key maps to
 `NEWS_<SECTION>_<KEY>`. Unknown YAML keys are rejected at startup so a typo fails fast.
 
-| Key                              | Environment variable                  | Default                     |
-| -------------------------------- | ------------------------------------- | --------------------------- |
-| `app.name`                       | `NEWS_APP_NAME`                       | `news-collector`            |
-| `app.environment`                | `NEWS_APP_ENVIRONMENT`                | `development`               |
-| `server.host`                    | `NEWS_SERVER_HOST`                    | `0.0.0.0`                   |
-| `server.port`                    | `NEWS_SERVER_PORT`                    | `8080`                      |
-| `server.read_header_timeout`     | `NEWS_SERVER_READ_HEADER_TIMEOUT`     | `5s`                        |
-| `server.read_timeout`            | `NEWS_SERVER_READ_TIMEOUT`            | `15s`                       |
-| `server.write_timeout`           | `NEWS_SERVER_WRITE_TIMEOUT`           | `30s`                       |
-| `server.idle_timeout`            | `NEWS_SERVER_IDLE_TIMEOUT`            | `60s`                       |
-| `server.shutdown_timeout`        | `NEWS_SERVER_SHUTDOWN_TIMEOUT`        | `15s`                       |
-| `server.max_header_bytes`        | `NEWS_SERVER_MAX_HEADER_BYTES`        | `1048576`                   |
-| `mongo.uri`                      | `NEWS_MONGO_URI`                      | `mongodb://localhost:27017` |
-| `mongo.database`                 | `NEWS_MONGO_DATABASE`                 | `news`                      |
-| `mongo.connect_timeout`          | `NEWS_MONGO_CONNECT_TIMEOUT`          | `10s`                       |
-| `mongo.server_selection_timeout` | `NEWS_MONGO_SERVER_SELECTION_TIMEOUT` | `10s`                       |
-| `mongo.operation_timeout`        | `NEWS_MONGO_OPERATION_TIMEOUT`        | `30s`                       |
-| `mongo.max_pool_size`            | `NEWS_MONGO_MAX_POOL_SIZE`            | `50`                        |
-| `mongo.min_pool_size`            | `NEWS_MONGO_MIN_POOL_SIZE`            | `0`                         |
-| `collector.user_agent`           | `NEWS_COLLECTOR_USER_AGENT`           | `news-collector/1.0 (...)`  |
-| `collector.request_timeout`      | `NEWS_COLLECTOR_REQUEST_TIMEOUT`      | `20s`                       |
-| `collector.max_response_bytes`   | `NEWS_COLLECTOR_MAX_RESPONSE_BYTES`   | `10485760`                  |
-| `collector.max_redirects`        | `NEWS_COLLECTOR_MAX_REDIRECTS`        | `5`                         |
-| `collector.max_items_per_feed`   | `NEWS_COLLECTOR_MAX_ITEMS_PER_FEED`   | `500`                       |
-| `collector.allow_private_networks` | `NEWS_COLLECTOR_ALLOW_PRIVATE_NETWORKS` | `false`                 |
-| `logging.level`                  | `NEWS_LOGGING_LEVEL`                  | `info`                      |
-| `logging.format`                 | `NEWS_LOGGING_FORMAT`                 | `json`                      |
+| Key                                | Environment variable                    | Default                     |
+| ---------------------------------- | --------------------------------------- | --------------------------- |
+| `app.name`                         | `NEWS_APP_NAME`                         | `news-collector`            |
+| `app.environment`                  | `NEWS_APP_ENVIRONMENT`                  | `development`               |
+| `server.host`                      | `NEWS_SERVER_HOST`                      | `0.0.0.0`                   |
+| `server.port`                      | `NEWS_SERVER_PORT`                      | `8080`                      |
+| `server.read_header_timeout`       | `NEWS_SERVER_READ_HEADER_TIMEOUT`       | `5s`                        |
+| `server.read_timeout`              | `NEWS_SERVER_READ_TIMEOUT`              | `15s`                       |
+| `server.write_timeout`             | `NEWS_SERVER_WRITE_TIMEOUT`             | `30s`                       |
+| `server.idle_timeout`              | `NEWS_SERVER_IDLE_TIMEOUT`              | `60s`                       |
+| `server.shutdown_timeout`          | `NEWS_SERVER_SHUTDOWN_TIMEOUT`          | `15s`                       |
+| `server.max_header_bytes`          | `NEWS_SERVER_MAX_HEADER_BYTES`          | `1048576`                   |
+| `mongo.uri`                        | `NEWS_MONGO_URI`                        | `mongodb://localhost:27017` |
+| `mongo.database`                   | `NEWS_MONGO_DATABASE`                   | `news`                      |
+| `mongo.connect_timeout`            | `NEWS_MONGO_CONNECT_TIMEOUT`            | `10s`                       |
+| `mongo.server_selection_timeout`   | `NEWS_MONGO_SERVER_SELECTION_TIMEOUT`   | `10s`                       |
+| `mongo.operation_timeout`          | `NEWS_MONGO_OPERATION_TIMEOUT`          | `30s`                       |
+| `mongo.max_pool_size`              | `NEWS_MONGO_MAX_POOL_SIZE`              | `50`                        |
+| `mongo.min_pool_size`              | `NEWS_MONGO_MIN_POOL_SIZE`              | `0`                         |
+| `collector.user_agent`             | `NEWS_COLLECTOR_USER_AGENT`             | `news-collector/1.0 (...)`  |
+| `collector.request_timeout`        | `NEWS_COLLECTOR_REQUEST_TIMEOUT`        | `20s`                       |
+| `collector.max_response_bytes`     | `NEWS_COLLECTOR_MAX_RESPONSE_BYTES`     | `10485760`                  |
+| `collector.max_redirects`          | `NEWS_COLLECTOR_MAX_REDIRECTS`          | `5`                         |
+| `collector.max_items_per_feed`     | `NEWS_COLLECTOR_MAX_ITEMS_PER_FEED`     | `500`                       |
+| `collector.allow_private_networks` | `NEWS_COLLECTOR_ALLOW_PRIVATE_NETWORKS` | `false`                     |
+| `logging.level`                    | `NEWS_LOGGING_LEVEL`                    | `info`                      |
+| `logging.format`                   | `NEWS_LOGGING_FORMAT`                   | `json`                      |
 
 `NEWS_CONFIG_PATH` selects a different config file without passing `-config`.
 
