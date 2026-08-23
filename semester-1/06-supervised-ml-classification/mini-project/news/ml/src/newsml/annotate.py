@@ -23,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from .labels import Label, LabelSource, Taxonomy
+from .labels import Label, LabelSource, Taxonomy, from_categories, from_publisher, is_geography_only
 from .load import Article
 
 COLUMNS = ("article_id", "title", "summary", "label", "notes")
@@ -281,3 +281,71 @@ def disagreements(labels: list[Label]) -> dict[str, set[str]]:
     for label in labels:
         by_article[label.article_id].add(label.topic)
     return {article: topics for article, topics in by_article.items() if len(topics) > 1}
+
+
+@dataclass(frozen=True, slots=True)
+class Agreement:
+    """How well the weak signals match the humans. The ceiling on Phase 3."""
+
+    gold_count: int
+    covered: int
+    exact: int
+    same_group: int
+    wrong_group: int
+    no_weak_label: int
+    geography_only: int
+    examples: tuple[tuple[str, str, str], ...]
+
+    @property
+    def coverage(self) -> float:
+        return self.covered / self.gold_count if self.gold_count else 0.0
+
+    @property
+    def group_agreement(self) -> float:
+        return (self.exact + self.same_group) / self.covered if self.covered else 0.0
+
+
+def weak_vs_gold(gold: dict[str, str], articles: dict[str, Article], taxonomy: Taxonomy) -> Agreement:
+    """Compare every weak signal against the human label.
+
+    This is the number Phase 3 cannot exceed: a classifier trained on weak labels
+    inherits their error. Measured at the *group* level as well as the exact
+    class, because a publisher prior can only ever name a group, so scoring it on
+    exact-child match would understate it for a reason that is not its fault.
+    """
+    parent_of = {c.id: (c.parent or c.id) for c in taxonomy.classes}
+
+    exact = same_group = wrong = no_weak = geo_only = 0
+    examples: list[tuple[str, str, str]] = []
+
+    for article_id, truth in sorted(gold.items()):
+        article = articles.get(article_id)
+        if article is None:
+            continue
+
+        weak = from_publisher(article, taxonomy) or from_categories(article, taxonomy)
+        if weak is None:
+            if is_geography_only(article, taxonomy):
+                geo_only += 1
+            else:
+                no_weak += 1
+            continue
+
+        if weak.topic == truth:
+            exact += 1
+        elif parent_of.get(weak.topic, weak.topic) == parent_of.get(truth, truth):
+            same_group += 1
+        else:
+            wrong += 1
+            examples.append((truth, weak.topic, article.title[:64]))
+
+    return Agreement(
+        gold_count=len(gold),
+        covered=exact + same_group + wrong,
+        exact=exact,
+        same_group=same_group,
+        wrong_group=wrong,
+        no_weak_label=no_weak,
+        geography_only=geo_only,
+        examples=tuple(examples[:10]),
+    )

@@ -235,10 +235,16 @@ classes:
       Matches, tournaments, players, teams, transfers, doping and the bodies
       that govern sport.
 
-# A feed whose URL already names a section is a deterministic label: every
-# article arriving on it belongs to that section. Mapped by source name as
-# stored on the article. Sources absent from this map carry no feed label.
-feed_topics:
+# The topic a publisher mostly covers. This is a prior, NOT a fact: measured
+# against the 150-article pilot gold set it named the wrong group 42% of the
+# time, because a general-interest tech outlet also covers courts, culture and
+# space. "TikTok reaches $400M privacy settlement" arrived on Wired's feed and
+# is judiciary_courts.
+#
+# A genuine *section* feed (thehindu.com/business/...) would be deterministic and
+# belongs in a separate trusted map. None are subscribed yet, so every entry
+# here is publisher-level and none is trusted on its own.
+publisher_topics:
   Wired: technology
   The Register: technology
   Engadget: technology

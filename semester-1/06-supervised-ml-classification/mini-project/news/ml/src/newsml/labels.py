@@ -1,14 +1,13 @@
 """Weak labels, their provenance, and how disagreement between them is resolved.
 
-Provenance is load-bearing: every label records where it came from, so a feed
-section, a publisher's category and a human decision stay distinguishable after
-the fact and can be measured against one another.
+Provenance is load-bearing: every label records where it came from, so a
+publisher prior, a publisher's category and a human decision stay distinguishable
+after the fact and can be measured against one another.
 
-Two signals are available before any human looks at an article: the section feed
-it arrived on, and the publisher's own categories. Where they agree the label is
-accepted; where they disagree the article goes to review. That concentrates human
-effort on the cases that change an outcome rather than spreading it over articles
-two sources already agree on.
+Two signals are available before any human looks at an article: the topic its
+publisher mostly covers, and the publisher's own categories. Neither is trusted
+alone — the pilot gold set measured a lone signal at 58% group-level agreement.
+Where the two concur the label is accepted; otherwise the article goes to review.
 """
 
 from __future__ import annotations
@@ -24,16 +23,17 @@ class LabelSource(StrEnum):
     """Where a label came from. Ordered by how much it should be trusted."""
 
     HUMAN = "human"
-    FEED = "feed"
+    PUBLISHER = "publisher"
     CATEGORY = "category"
 
 
-# A human decision is final. A feed section is structural and near-deterministic.
-# A publisher's own category is the noisiest of the three, since publishers
-# fragment and reuse their vocabulary freely.
+# A human decision is final. Everything else is a proposal: the pilot showed a
+# lone publisher prior naming the wrong group 42% of the time, and a publisher's
+# own categories are noisier still, since publishers fragment and reuse their
+# vocabulary freely.
 _PRIORITY = {
     LabelSource.HUMAN: 0,
-    LabelSource.FEED: 1,
+    LabelSource.PUBLISHER: 1,
     LabelSource.CATEGORY: 2,
 }
 
@@ -72,7 +72,7 @@ class Taxonomy:
     version: int
     unsorted: str
     classes: tuple[TopicClass, ...]
-    feed_topics: dict[str, str]
+    publisher_topics: dict[str, str]
     category_map: dict[str, str]
     geography: frozenset[str]
     non_topical: frozenset[str]
@@ -131,19 +131,19 @@ def load_taxonomy(path: Path) -> Taxonomy:
                        parent=str(c.get("parent", "")).strip())
             for c in raw["classes"]
         ),
-        feed_topics={str(k): str(v) for k, v in (raw.get("feed_topics") or {}).items()},
+        publisher_topics={str(k): str(v) for k, v in (raw.get("publisher_topics") or {}).items()},
         category_map={str(k).casefold(): str(v) for k, v in (raw.get("category_map") or {}).items()},
         geography=frozenset(str(g).casefold() for g in (raw.get("geography") or [])),
         non_topical=frozenset(str(n).casefold() for n in (raw.get("non_topical") or [])),
     )
 
 
-def from_feed(article: Article, taxonomy: Taxonomy) -> Label | None:
-    """The section a feed names applies to every article that arrives on it."""
-    topic = taxonomy.feed_topics.get(article.source_name)
+def from_publisher(article: Article, taxonomy: Taxonomy) -> Label | None:
+    """The topic a publisher mostly covers. A prior, never a fact on its own."""
+    topic = taxonomy.publisher_topics.get(article.source_name)
     if topic is None or taxonomy.canonical(topic) is None:
         return None
-    return Label(article.id, topic, LabelSource.FEED, article.source_name)
+    return Label(article.id, topic, LabelSource.PUBLISHER, article.source_name)
 
 
 def from_categories(article: Article, taxonomy: Taxonomy) -> Label | None:
@@ -178,15 +178,8 @@ def resolve(article_id: str, candidates: list[Label], taxonomy: Taxonomy) -> Res
     best = ordered[0]
     topics = {c.topic for c in ordered}
 
-    # Two independent signals concurring is the whole point: it is what lets most
-    # of the corpus skip review without anyone having read it.
-    if len(ordered) > 1 and len(topics) == 1:
-        return Resolved(article_id, best.topic, best.source, True, False, ordered)
-
-    if len(topics) > 1:
-        return Resolved(article_id, best.topic, best.source, False, True, ordered)
-
-    # A lone feed label is structural and stands on its own. A lone category
-    # label is one unverified publisher opinion, so it waits for a human.
-    solo_is_trusted = best.source is LabelSource.FEED
-    return Resolved(article_id, best.topic, best.source, False, not solo_is_trusted, ordered)
+    # Two independent signals concurring is the only thing that skips review.
+    # A lone weak signal is one unverified opinion, and the pilot measured those
+    # at 58% group-level agreement with gold — not good enough to accept unseen.
+    agreed = len(ordered) > 1 and len(topics) == 1
+    return Resolved(article_id, best.topic, best.source, agreed, not agreed, ordered)

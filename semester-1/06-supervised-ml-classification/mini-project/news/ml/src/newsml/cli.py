@@ -160,7 +160,7 @@ def cmd_export_labels(args: argparse.Namespace) -> int:
 def cmd_import_labels(args: argparse.Namespace) -> int:
     """Read completed sheets, validate every cell, and write the gold set."""
     taxonomy = load_taxonomy(TAXONOMY_PATH)
-    known = frozenset(a.id for a in load_articles(args.uri, limit=args.limit))
+    articles = {a.id: a for a in load_articles(args.uri, limit=args.limit)}
 
     labels: list = []
     problems: list = []
@@ -169,26 +169,56 @@ def cmd_import_labels(args: argparse.Namespace) -> int:
         if not path.exists():
             print(f"no such sheet: {path}", file=sys.stderr)
             return 1
-        found, issues = annotate_mod.read_sheet(path, taxonomy, known_ids=known, annotator=path.stem)
+        found, issues = annotate_mod.read_sheet(
+            path, taxonomy, known_ids=frozenset(articles), annotator=path.stem
+        )
         labels.extend(found)
         problems.extend(issues)
 
     for problem in problems:
         print(f"  {problem.sheet}:{problem.row} {problem.article_id} \u2014 {problem.detail}", file=sys.stderr)
 
+    gold = {label.article_id: label.topic for label in labels}
     disagreed = annotate_mod.disagreements(labels)
-    counts: dict[str, int] = {}
-    for label in labels:
-        counts[label.topic] = counts.get(label.topic, 0) + 1
+    parent_of = {c.id: (c.parent or c.id) for c in taxonomy.classes}
 
-    print(f"{len(labels)} label(s) across {len({lbl.article_id for lbl in labels})} article(s)")
+    print(f"{len(labels)} label(s) over {len(gold)} article(s) from {len(args.sheets)} sheet(s)")
     print(f"{len(problems)} problem(s), {len(disagreed)} article(s) with annotator disagreement")
-    for topic in sorted(taxonomy.ids | {taxonomy.unsorted}):
-        starved = "" if counts.get(topic, 0) >= args.min_per_class else "  <-- starved"
-        print(f"  {topic:<22} {counts.get(topic, 0):>5}{starved}")
+
+    print("\n=== distribution ===")
+    coarse: dict[str, int] = {}
+    fine: dict[str, int] = {}
+    for topic in gold.values():
+        coarse[parent_of.get(topic, topic)] = coarse.get(parent_of.get(topic, topic), 0) + 1
+        fine[topic] = fine.get(topic, 0) + 1
+
+    for group, total in sorted(coarse.items(), key=lambda kv: -kv[1]):
+        flag = "  <-- starved" if total < args.min_per_class else ""
+        print(f"{group:<22} {total:>4}  {100 * total / len(gold):5.1f}%{flag}")
+        for topic, count in sorted(fine.items(), key=lambda kv: -kv[1]):
+            if parent_of.get(topic, topic) == group and topic != group:
+                print(f"   {topic:<19} {count:>4}")
+
+    unsorted_n = fine.get(taxonomy.unsorted, 0)
+    fallback = sum(c for t, c in fine.items() if taxonomy.children_of(t))
+    print(f"\nunsorted           {unsorted_n:>4}  {100 * unsorted_n / len(gold):5.1f}%   (taxonomy fits if < 15%)")
+    print(f"group fallback     {fallback:>4}  {100 * fallback / len(gold):5.1f}%   (children are specific if rare)")
+
+    report = annotate_mod.weak_vs_gold(gold, articles, taxonomy)
+    print("\n=== weak label vs gold: the ceiling Phase 3 cannot exceed ===")
+    print(f"coverage           {report.covered:>4}  {100 * report.coverage:5.1f}%")
+    print(f"  no weak label    {report.no_weak_label:>4}")
+    print(f"  geography only   {report.geography_only:>4}")
+    if report.covered:
+        print(f"exact class        {report.exact:>4}  {100 * report.exact / report.covered:5.1f}%")
+        print(f"right group        {report.same_group:>4}  {100 * report.same_group / report.covered:5.1f}%")
+        print(f"wrong group        {report.wrong_group:>4}  {100 * report.wrong_group / report.covered:5.1f}%")
+        print(f"group agreement    {'':>4}  {100 * report.group_agreement:5.1f}%")
+    for truth, weak, title in report.examples:
+        print(f"  gold={truth:<20} weak={weak:<18} {title}")
 
     if problems and not args.force:
-        print("refusing to write while problems remain; fix them or pass --force", file=sys.stderr)
+        print("\nrefusing to write while problems remain; fix them or pass --force", file=sys.stderr)
         return 1
 
     out = Path(args.out)
@@ -202,7 +232,7 @@ def cmd_import_labels(args: argparse.Namespace) -> int:
                 "annotator": label.detail,
                 "taxonomy_version": taxonomy.version,
             }, sort_keys=True) + "\n")
-    print(f"gold set -> {out}")
+    print(f"\ngold set -> {out}")
     return 0
 
 

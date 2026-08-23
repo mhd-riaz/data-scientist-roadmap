@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from newsml.labels import LabelSource, from_categories, from_feed, is_geography_only, resolve
+from newsml.labels import (
+    LabelSource,
+    from_categories,
+    from_publisher,
+    is_geography_only,
+    resolve,
+)
 
 
 def test_taxonomy_has_thirteen_groups(taxonomy):
@@ -63,9 +69,9 @@ def test_every_mapped_category_points_at_a_real_class(taxonomy):
         assert topic in taxonomy.ids, f"category {value!r} maps to unknown class {topic!r}"
 
 
-def test_every_feed_topic_points_at_a_real_class(taxonomy):
-    for source, topic in taxonomy.feed_topics.items():
-        assert topic in taxonomy.ids, f"feed {source!r} maps to unknown class {topic!r}"
+def test_every_publisher_topic_points_at_a_real_class(taxonomy):
+    for source, topic in taxonomy.publisher_topics.items():
+        assert topic in taxonomy.ids, f"publisher {source!r} maps to unknown class {topic!r}"
 
 
 def test_geography_and_categories_do_not_overlap(taxonomy):
@@ -110,14 +116,14 @@ def test_canonical_rejects_anything_not_a_class(taxonomy, raw):
     assert taxonomy.canonical(raw) is None
 
 
-def test_feed_label_uses_the_declared_section(taxonomy, make_article):
-    label = from_feed(make_article(source_name="Wired"), taxonomy)
+def test_publisher_label_uses_the_declared_topic(taxonomy, make_article):
+    label = from_publisher(make_article(source_name="Wired"), taxonomy)
     assert label is not None and label.topic == "technology"
-    assert label.source is LabelSource.FEED
+    assert label.source is LabelSource.PUBLISHER
 
 
-def test_unknown_source_has_no_feed_label(taxonomy, make_article):
-    assert from_feed(make_article(source_name="Some Blog"), taxonomy) is None
+def test_unknown_source_has_no_publisher_label(taxonomy, make_article):
+    assert from_publisher(make_article(source_name="Some Blog"), taxonomy) is None
 
 
 def test_category_label_is_independent_of_publisher_ordering(taxonomy, make_article):
@@ -134,7 +140,7 @@ def test_geography_only_article_yields_no_label(taxonomy, make_article):
 
 def test_agreeing_signals_skip_review(taxonomy, make_article):
     article = make_article(source_name="Wired", categories=("tech",))
-    candidates = [c for c in (from_feed(article, taxonomy), from_categories(article, taxonomy)) if c]
+    candidates = [c for c in (from_publisher(article, taxonomy), from_categories(article, taxonomy)) if c]
     outcome = resolve(article.id, candidates, taxonomy)
 
     assert outcome.topic == "technology"
@@ -143,10 +149,21 @@ def test_agreeing_signals_skip_review(taxonomy, make_article):
 
 def test_conflicting_signals_route_to_review(taxonomy, make_article):
     article = make_article(source_name="Wired", categories=("cricket",))
-    candidates = [c for c in (from_feed(article, taxonomy), from_categories(article, taxonomy)) if c]
+    candidates = [c for c in (from_publisher(article, taxonomy), from_categories(article, taxonomy)) if c]
     outcome = resolve(article.id, candidates, taxonomy)
 
     assert not outcome.agreement and outcome.needs_review
+
+
+def test_a_lone_publisher_prior_is_not_trusted(taxonomy, make_article):
+    """Measured on the pilot gold set, a lone publisher prior named the wrong
+    group 42% of the time. "TikTok reaches $400M privacy settlement" arrives on
+    Wired's feed and is judiciary_courts, not technology."""
+    article = make_article(source_name="Wired", categories=())
+    outcome = resolve(article.id, [from_publisher(article, taxonomy)], taxonomy)
+
+    assert outcome.topic == "technology"
+    assert outcome.needs_review
 
 
 def test_a_lone_category_waits_for_a_human(taxonomy, make_article):
@@ -165,7 +182,7 @@ def test_a_human_label_overrides_every_other_signal(taxonomy, make_article):
 
     article = make_article(source_name="Wired", categories=("tech",))
     candidates = [
-        from_feed(article, taxonomy),
+        from_publisher(article, taxonomy),
         from_categories(article, taxonomy),
         Label(article.id, "politics", LabelSource.HUMAN, "riaz"),
     ]
