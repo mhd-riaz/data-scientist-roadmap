@@ -8,6 +8,7 @@ const (
 	CollectionCollectionRuns = "collection_runs"
 	CollectionFeedCache      = "feed_cache_metadata"
 	CollectionLocks          = "application_locks"
+	CollectionReadEvents     = "read_events"
 )
 
 // Collections lists every collection the application owns, in creation order.
@@ -18,5 +19,6 @@ func Collections() []string {
 		CollectionCollectionRuns,
 		CollectionFeedCache,
 		CollectionLocks,
+		CollectionReadEvents,
 	}
 }

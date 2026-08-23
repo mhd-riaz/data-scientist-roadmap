@@ -27,8 +27,9 @@ built, surfaced and measured beat seven that are gestured at.
 - Work **one phase at a time**, in order. A phase is done when every one of its
   acceptance criteria is met and the evidence exists in the repository — not when
   the code appears finished.
-- **Do not start a phase whose predecessor's criteria are unmet.** The one
-  exception is stated explicitly in Phase 5.
+- **Do not start a phase whose predecessor's criteria are unmet.** There are two
+  recorded exceptions: Phase 5, which states its own, and Phase 4.5, which was
+  moved ahead of Phases 3 and 4 on 2026-08-23 — see the decision log.
 - Acceptance thresholds marked *provisional* are first estimates made before any
   data was seen. Recalibrate them against the first honest baseline, record the
   new number and the reason in the decision log, and move on. Do not silently
@@ -357,10 +358,13 @@ demonstrate, and read-event data begins accumulating.
 
 This phase is deliberately small and deliberately ugly. **Do not style it.**
 
+**Status: built 2026-08-23**, ahead of Phases 3 and 4 — see the decision log.
+
 ### In scope
 
-- `internal/web/`: `html/template` templates, `go:embed`, three routes — feed
-  list, article detail (`/articles/{id}`), cluster view (`/clusters/{id}`).
+- `internal/web/`: `html/template` templates, `go:embed`, two routes — feed list
+  and article detail (`/articles/{id}`). The cluster view moved to Phase 5,
+  where its data arrives.
 - Card content: topic label, title, server-truncated summary (~180–220 chars at a
   word boundary), source, relative time.
 - Browser auth via the **existing Basic auth** — no new auth code. Session
@@ -372,18 +376,26 @@ This phase is deliberately small and deliberately ugly. **Do not style it.**
     dwell, batched and flushed with `navigator.sendBeacon`.
   - Record `article_id`, `cluster_id`, `timestamp`, `position_in_feed`, `dwell`.
     **Position matters** — it is what lets Phase 8 correct for the fact that
-    items at the top get clicked regardless of quality.
+    items at the top get clicked regardless of quality. `cluster_id` is added in
+    Phase 5 with the clusters themselves.
 
 ### Acceptance criteria
 
-- [ ] Three routes render real data from MongoDB.
-- [ ] Page works fully with JavaScript disabled. Telemetry is the only thing lost.
-- [ ] Read events persist and are queryable.
-- [ ] Impressions are recorded, not just clicks. **A shown-and-not-clicked card is
+- [x] Both routes render real data from MongoDB. *(the third, `/clusters/{id}`,
+      moved to Phase 5)*
+- [x] Page works fully with JavaScript disabled. Telemetry is the only thing lost.
+- [x] Read events persist and are queryable — `read_events`, indexed on
+      `occurred_at`, `article_id` and `kind`.
+- [x] Impressions are recorded, not just clicks. **A shown-and-not-clicked card is
       the only source of negative labels Phase 8 will ever have.**
-- [ ] Cross-origin writes to the read-event endpoint are rejected.
-- [ ] All article text renders through `html/template` escaping.
-- [ ] No JavaScript build step introduced.
+- [x] Cross-origin writes to the read-event endpoint are rejected, on
+      `Sec-Fetch-Site` with `Origin` as the fallback, and refused outright when
+      neither is present.
+- [x] All article text renders through `html/template` escaping, behind a CSP of
+      `default-src 'none'`.
+- [x] No JavaScript build step introduced.
+- [x] Telemetry failure never breaks a page — asserted by a test that fails the
+      recorder and requires the article to render anyway.
 
 ---
 
@@ -431,7 +443,9 @@ helps the schedule.
       than one source when the cluster has more than one.
 - [ ] Summary quality measured: ROUGE against **≥ 30 hand-written** cluster
       summaries, or a documented human evaluation.
-- [ ] Cluster view in the UI shows all versions ordered by time.
+- [ ] Cluster view in the UI shows all versions ordered by time. The route
+      `/clusters/{id}` and the `cluster_id` field on both `Article` and
+      `ReadEvent` are built here, having been deferred out of Phase 4.5.
 
 ---
 
@@ -631,6 +645,12 @@ assignments applies. Figures worth generating:
 | 2026-08-23 | Every label carries a `label_source`                      | `feed`, `category` or `human`, plus the taxonomy version. Without it the weak-vs-gold agreement study cannot be run, because the two kinds of label become indistinguishable after the fact.                                                                                                                                       |
 | 2026-08-23 | Feed and category labels cross-check each other           | The section a feed declares and the publisher's own categories are independent signals. Agreement auto-accepts; disagreement routes to human review. This concentrates review effort where it changes an outcome instead of spreading it over articles two signals already agree on.                                               |
 | 2026-08-23 | Gold sheets carry an **overlap block** across annotators  | The same articles appear in every sheet. Without it there is no way to separate a genuinely ambiguous taxonomy from a careless annotator, and inter-annotator agreement is unmeasurable.                                                                                                                                           |
+| 2026-08-23 | **Phase 4.5 built ahead of Phases 3 and 4**               | An explicit amendment to the ordering rule, not a slip. Phase 2's remaining criteria are gated on corpus size and cannot be closed by working harder, and read events are the one project input that cannot be back-filled: Phase 8 needs ≥ 2,000 of them and a single reader generates them slowly. Every day the telemetry is not live is a day Phase 8 recedes. The rest of Phase 4.5 needs no model, so nothing about it depends on Phase 3. |
+| 2026-08-23 | Cluster view and `cluster_id` deferred to Phase 5         | The plan's own criterion is that the routes render **real data**. Until clustering exists, `/clusters/{id}` can only render an empty page, and a `cluster_id` on every read event would be permanently null. Phase 5 already owns "cluster view shows all versions ordered by time", so both move there rather than shipping as scaffolding. |
+| 2026-08-23 | Read events carry an **age, not a timestamp**             | The browser queues events and flushes them when the page is hidden, so the client would otherwise have to date them. Reporting elapsed time instead lets the server date every event from its own clock, which keeps a wrong or hostile client clock out of the training data entirely.                                                        |
+| 2026-08-23 | `PositionUnknown` is `-1`, never `0`                      | A bookmarked or shared link has no feed position. Recording it as zero would claim it was the top story — the slot with the strongest position bias of all — and would poison exactly the correction Phase 8 exists to make.                                                                                                                  |
+| 2026-08-23 | One invalid event rejects the **whole** telemetry batch   | The only client is this application's own page, so an invalid event is this system's bug. Dropping the offender and storing the rest would hide a telemetry defect behind data that merely looks thinner than expected.                                                                                                                        |
+| 2026-08-23 | No HTTP read path for `read_events`                       | They are consumed offline by the training pipeline, which reads MongoDB directly the way `ml/` already reads `articles`. A listing endpoint nobody calls is a surface to defend for no gain.                                                                                                                                                  |
 
 ## Open questions
 

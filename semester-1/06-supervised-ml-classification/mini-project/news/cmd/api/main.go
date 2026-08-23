@@ -21,6 +21,7 @@ import (
 	mongorepo "github.com/riaz/newscollector/internal/repository/mongo"
 	"github.com/riaz/newscollector/internal/scheduler"
 	"github.com/riaz/newscollector/internal/service"
+	"github.com/riaz/newscollector/internal/web"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -92,6 +93,7 @@ func run() error {
 
 	sourceService := service.NewSourceService(mongorepo.NewSourceRepository(mongoClient.Database()), time.Now)
 	articleService := service.NewArticleService(mongorepo.NewArticleRepository(mongoClient.Database()))
+	readEventService := service.NewReadEventService(mongorepo.NewReadEventRepository(mongoClient.Database()), time.Now)
 
 	// Reconciling here rather than in a one-shot container is what makes a
 	// redeploy actually pick up an edited source list: a container that has
@@ -133,6 +135,18 @@ func run() error {
 		logger.Warn("api authentication is disabled; every endpoint is open to anyone who can reach the port")
 	}
 
+	// The reader-facing site is what makes read events accumulate, and read
+	// events are the one input a later ranker cannot be given retroactively.
+	var pages http.Handler
+	if cfg.Web.Enabled {
+		site, err := web.New(articleService, readEventService, cfg.Web.PageSize, logger)
+		if err != nil {
+			return err
+		}
+		pages = site.Routes()
+		logger.Info("reader pages enabled", "page_size", cfg.Web.PageSize)
+	}
+
 	srv := &http.Server{
 		Addr: cfg.Server.Address(),
 		Handler: handler.NewRouter(
@@ -140,6 +154,7 @@ func run() error {
 			handler.NewSource(sourceService, logger),
 			handler.NewCollectionRun(collectionService, logger),
 			handler.NewArticle(articleService, logger),
+			pages,
 			authenticator,
 			logger,
 		),
