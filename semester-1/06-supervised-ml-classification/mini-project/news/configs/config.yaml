@@ -60,6 +60,34 @@ scheduler:
   # first is still fetching.
   lock_ttl: 5m
 
+# The enrichment stage: fetching an article's own page for the sources whose
+# feed sends only a teaser. See fixtures/articles and internal/extract for why
+# it needs several extractors and a never-regress rule rather than one library.
+scraper:
+  enabled: true
+  interval: 5m
+  batch_size: 50
+  user_agent: news-collector/1.0 (+https://github.com/riaz/newscollector)
+  request_timeout: 20s
+  # Looser than collector.max_response_bytes: an ad-heavy article page runs
+  # larger than a feed document.
+  max_response_bytes: 20971520
+  allow_private_networks: false
+  # Below this an extraction is nav furniture or a bot-check page, not a story.
+  min_content_words: 80
+  max_attempts: 3
+  retry_base: 15m
+  # Chasing a three-week-old article mostly buys 404s.
+  max_article_age: 720h
+  # A publisher's own Crawl-delay overrides this when it asks for more.
+  per_host_delay: 2s
+  circuit_failure_threshold: 3
+  circuit_open_for: 15m
+  robots_cache_ttl: 24h
+  # Comfortably longer than request_timeout: a claim outliving this is assumed
+  # to belong to a worker that died, not one that is merely slow.
+  claim_ttl: 10m
+
 logging:
   level: info
   format: json
