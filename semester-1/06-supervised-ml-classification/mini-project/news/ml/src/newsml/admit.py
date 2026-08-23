@@ -49,7 +49,15 @@ NON_ARTICLE = re.compile(
     r"|scorecard|points\s+table|full\s+schedule|winning\s+numbers?|lottery\s+result)\b"
 )
 LISTICLE = re.compile(r"(?i)^\s*(?:top|best|worst)\s+\d{1,3}\b|\b\d{1,3}\s+(?:things|ways|reasons|tips)\b")
-SPONSORED = re.compile(r"(?i)\b(?:sponsored(?:\s+(?:content|post|feature))?|partner\s+content|paid\s+post|advertorial|brand\s+(?:post|desk))\b")
+# Commercial content wearing a newsroom byline. Affiliate deals copy is the
+# common case and matters more than it looks: it carries a real publisher's
+# vocabulary, so left in, it teaches the technology class to recognise discount
+# copy. Matched on specific bigrams, since a genuine story may mention a discount.
+SPONSORED = re.compile(
+    r"(?i)\b(?:sponsored(?:\s+(?:content|post|feature))?|partner\s+content|paid\s+post|advertorial"
+    r"|brand\s+(?:post|desk)|(?:coupon|promo|discount|voucher)\s+codes?"
+    r"|deal\s+of\s+the\s+day|best\s+deals?\b|save\s+\d{1,3}%)\b"
+)
 PAYWALL = re.compile(
     r"(?i)\b(?:subscribe\s+to\s+(?:read|continue)|this\s+(?:article|story)\s+is\s+for\s+subscribers"
     r"|to\s+continue\s+reading|premium\s+(?:article|story)|already\s+a\s+subscriber)\b"

@@ -1,0 +1,235 @@
+# Canonical topic taxonomy. One topical axis only: geography is a separate
+# field, not a class, because `categories` interleaves the two and a classifier
+# trained on the mixture learns "where" rather than "what".
+#
+# The descriptions below are the single source of truth for the human labelling
+# guide, which is generated from them. One definition means every annotator is
+# answering the same question, which is what makes their agreement measurable.
+#
+# The classes follow IPTC Media Topics, the standard the wire agencies tag
+# against, so the choice is defensible rather than invented. Each class records
+# the IPTC parent it collapses.
+#
+# Granularity is deliberately finer than the corpus can currently support.
+# Merging two classes after labelling is a dictionary lookup; splitting one is a
+# full relabel. `merges_into` names the fallback parent for a class that turns
+# out to be starved, applied at training time and recorded in the model card.
+#
+# Bump `version` on any change to the class list or the definitions. Labels
+# record the version they were assigned under, so a taxonomy change invalidates
+# the affected labels instead of silently reinterpreting them.
+
+version: 2
+unsorted: unsorted
+
+classes:
+  - id: politics
+    iptc: politics
+    description: >-
+      Government, elections, legislation, parliament, diplomacy, political
+      parties, protest and public administration.
+    excludes: A crime prosecuted in court, which is crime_justice. Armed conflict, which is conflict_war.
+
+  - id: business_economy
+    iptc: economy, business and finance
+    description: >-
+      Companies, markets, earnings, banking, the economy, trade, inflation,
+      employment, real estate and personal finance.
+    excludes: A tech company's product launch, which is technology.
+
+  - id: technology
+    iptc: science and technology
+    description: >-
+      Computing, software, consumer electronics, telecom, AI, cybersecurity,
+      the internet, and the companies and products behind them.
+    excludes: Government regulation of tech, which is politics. Research findings, which is science_space.
+
+  - id: science_space
+    iptc: science and technology
+    description: >-
+      Research findings, space and astronomy, physics, biology, archaeology
+      and scientific discovery.
+    excludes: Medical and public-health research, which is health.
+    merges_into: technology
+
+  - id: health
+    iptc: health
+    description: >-
+      Medicine, disease, public health, hospitals, mental health, nutrition
+      and drugs.
+    excludes: Health insurance markets, which is business_economy.
+    merges_into: science_space
+
+  - id: environment_climate
+    iptc: environment
+    description: >-
+      Climate change, pollution, conservation, wildlife, the energy transition
+      and natural resources.
+    excludes: A natural disaster as it happens, which is disaster_accident.
+    merges_into: science_space
+
+  - id: sport
+    iptc: sport
+    description: >-
+      Matches, tournaments, players, teams, transfers, doping and the bodies
+      that govern sport.
+
+  - id: entertainment_arts
+    iptc: arts, culture, entertainment and media
+    description: >-
+      Film, television, music, celebrity, streaming, books, visual art,
+      theatre, fashion and cultural events.
+
+  - id: crime_justice
+    iptc: crime, law and justice
+    description: >-
+      Crime, police, investigations, arrests, trials, sentencing, prisons and
+      the legal system.
+    excludes: Legislation being debated, which is politics.
+
+  - id: conflict_war
+    iptc: conflict, war and peace
+    description: >-
+      Armed conflict, military operations, terrorism, insurgency, peace talks
+      and their humanitarian consequences.
+    excludes: Defence procurement debated in parliament, which is politics.
+    merges_into: politics
+
+  - id: disaster_accident
+    iptc: disaster, accident and emergency incident
+    description: >-
+      Earthquakes, floods, storms, fires, industrial and transport accidents,
+      and the emergency response to them.
+    excludes: The long-run climate context, which is environment_climate.
+
+  - id: education
+    iptc: education
+    description: >-
+      Schools, universities, exams, admissions, curriculum, teachers, students
+      and careers.
+    merges_into: society_lifestyle
+
+  - id: society_lifestyle
+    iptc: society, human interest, labour, religion, lifestyle and leisure
+    description: >-
+      Human interest, religion, community, labour and unions, migration,
+      travel, food, relationships and daily life.
+
+# A feed whose URL already names a section is a deterministic label: every
+# article arriving on it belongs to that section. Mapped by source name as
+# stored on the article. Sources absent from this map carry no feed label.
+feed_topics:
+  Wired: technology
+  The Register: technology
+  Engadget: technology
+  Ars Technica: technology
+  TechCrunch: technology
+  The Verge: technology
+  MIT Technology Review: technology
+  ZDNET: technology
+
+# RSS `categories` values that map cleanly onto a class. Publishers fragment
+# their own vocabulary, so several strings collapse to one class.
+category_map:
+  ai: technology
+  ai and ml: technology
+  app: technology
+  apple: technology
+  cyber-crime: technology
+  gadgets: technology
+  gear: technology
+  gear / buying guides: technology
+  gear / products / home: technology
+  gear / reviews: technology
+  google: technology
+  os platforms: technology
+  security: technology
+  startups: technology
+  systems: technology
+  tech: technology
+  business: business_economy
+  companies: business_economy
+  economy: business_economy
+  markets: business_economy
+  money: business_economy
+  government & policy: politics
+  policy: politics
+  politics: politics
+  trump administration: politics
+  us politics: politics
+  cricket: sport
+  football: sport
+  sport: sport
+  sports: sport
+  books: entertainment_arts
+  culture: entertainment_arts
+  entertainment: entertainment_arts
+  film: entertainment_arts
+  movies: entertainment_arts
+  music: entertainment_arts
+  television: entertainment_arts
+  science: science_space
+  space: science_space
+  climate: environment_climate
+  environment: environment_climate
+  health: health
+  education: education
+
+# Recognised as place, never as topic. Kept explicit so that "india" is
+# understood to be an unlabelled article rather than a labelled one.
+geography:
+  - africa
+  - americas
+  - andhra pradesh
+  - asia pacific
+  - assam
+  - australia news
+  - bengaluru
+  - bihar
+  - chennai
+  - china
+  - delhi
+  - europe
+  - india
+  - india-news
+  - israel
+  - japan
+  - karnataka
+  - kerala
+  - keralam
+  - maharashtra
+  - middle east and north africa
+  - palestine
+  - rajasthan
+  - russia
+  - south and central asia
+  - tamil nadu
+  - telangana
+  - uk news
+  - ukraine
+  - us news
+  - uttar pradesh
+  - west bengal
+  - world
+  - world news
+
+# Values that describe placement, format or commerce rather than subject. An
+# opinion piece about cricket is still sport, so format never becomes a label.
+# Affiliate content is not news at all and should not reach the classifier.
+non_topical:
+  - analysis
+  - cities
+  - coupons
+  - deals
+  - editorial
+  - exclusive
+  - features
+  - gear / deals
+  - interview
+  - latest news
+  - news
+  - obituaries
+  - opinion
+  - specials
+  - states
+  - top stories

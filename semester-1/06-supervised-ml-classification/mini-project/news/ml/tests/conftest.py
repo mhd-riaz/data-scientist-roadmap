@@ -4,9 +4,17 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from newsml.config import TAXONOMY_PATH
+from newsml.labels import load_taxonomy
 from newsml.load import Article
 
 BASE = datetime(2026, 8, 20, 9, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(scope="session")
+def taxonomy():
+    """The real taxonomy.yaml, so tests fail when it stops parsing."""
+    return load_taxonomy(TAXONOMY_PATH)
 
 
 @pytest.fixture

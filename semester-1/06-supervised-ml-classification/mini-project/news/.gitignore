@@ -30,3 +30,8 @@ ml/.venv/
 # study. The manifest and data card describe them; the text itself is never
 # redistributed. Regenerate with `make ml-snapshot`.
 ml/data/snapshots/*/*.jsonl
+
+# Labelling sheets carry article titles and summaries, so they stay local too.
+# The completed gold set (ml/data/labels/gold.jsonl) is ids and labels only and
+# is committed, because every reported metric depends on it.
+ml/data/labels/*/

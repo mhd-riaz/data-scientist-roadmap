@@ -50,6 +50,8 @@ def test_every_article_is_accounted_for(make_article):
         ({"title": "Daily horoscope for Friday, all sun signs", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
         ({"title": "Top 10 things to see in the city this weekend", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
         ({"summary": "Sponsored content produced by the brand desk for a partner."}, Reason.SPONSORED),
+        ({"title": "TurboTax service codes and discounts",
+          "summary": "Save with our TurboTax coupon codes and exclusive discount codes on WIRED."}, Reason.SPONSORED),
         ({"summary": "Subscribe to read the rest of this exclusive report from our desk."}, Reason.PAYWALL),
     ],
 )

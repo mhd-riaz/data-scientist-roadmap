@@ -132,6 +132,14 @@ ml-boilerplate: ## Discover per-source template lines for review
 ml-snapshot: ## Freeze a dataset: make ml-snapshot ID=20260823-100
 	cd ml && uv run newsml snapshot $(if $(ID),--id $(ID),)
 
+.PHONY: ml-labels-export
+ml-labels-export: ## Write blind labelling sheets: make ml-labels-export SIZE=150 SHARDS=4
+	cd ml && uv run newsml export-labels $(if $(SIZE),--size $(SIZE),) $(if $(SHARDS),--shards $(SHARDS),) $(if $(OVERLAP),--overlap $(OVERLAP),)
+
+.PHONY: ml-labels-import
+ml-labels-import: ## Validate completed sheets and write the gold set: make ml-labels-import SHEETS="a.csv b.csv"
+	cd ml && uv run newsml import-labels --sheets $(SHEETS)
+
 .PHONY: ml-verify
 ml-verify: ## Rebuild a snapshot and confirm byte-identical digests
 	cd ml && uv run newsml verify $(if $(ID),--id $(ID),)

@@ -21,6 +21,7 @@ DATA_DIR = ML_ROOT / "data"
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
 ARTIFACT_DIR = ML_ROOT / "artifacts"
 REPORT_DIR = ML_ROOT / "reports"
+TAXONOMY_PATH = ML_ROOT / "taxonomy.yaml"
 
 DEFAULT_MONGO_URI = "mongodb://127.0.0.1:27017/news"
 
