@@ -32,6 +32,7 @@ type Config struct {
 	Mongo     Mongo     `yaml:"mongo"`
 	Collector Collector `yaml:"collector"`
 	Scheduler Scheduler `yaml:"scheduler"`
+	Scraper   Scraper   `yaml:"scraper"`
 	Logging   Logging   `yaml:"logging"`
 }
 
@@ -123,6 +124,75 @@ type Logging struct {
 	Format string `yaml:"format"`
 }
 
+// Scraper holds the settings for the full-text enrichment stage: fetching an
+// article's own page for the sources whose feed sends only a teaser.
+type Scraper struct {
+	// Enabled turns the enrichment scheduler off without removing its
+	// configuration, mirroring Scheduler.Enabled.
+	Enabled bool `yaml:"enabled"`
+
+	// Interval is how often the backlog is looked at.
+	Interval time.Duration `yaml:"interval"`
+
+	// BatchSize bounds one tick's work.
+	BatchSize int `yaml:"batch_size"`
+
+	// UserAgent identifies this collector when fetching article pages and
+	// robots.txt files, distinct from collector.user_agent so the two stages'
+	// traffic can be told apart in a publisher's own logs if it ever matters.
+	UserAgent string `yaml:"user_agent"`
+
+	// RequestTimeout bounds one article fetch.
+	RequestTimeout time.Duration `yaml:"request_timeout"`
+
+	// MaxResponseBytes caps one article page. Pages carry more markup than a
+	// feed document, so this is deliberately looser than
+	// collector.max_response_bytes.
+	MaxResponseBytes int64 `yaml:"max_response_bytes"`
+
+	// AllowPrivateNetworks mirrors collector.allow_private_networks for article
+	// fetches, and is refused the same way outside development.
+	AllowPrivateNetworks bool `yaml:"allow_private_networks"`
+
+	// MinContentWords is the shortest extraction accepted as an article; a
+	// shorter result is treated as a failed attempt rather than being stored.
+	MinContentWords int `yaml:"min_content_words"`
+
+	// MaxAttempts bounds how many times one article is tried before it is
+	// abandoned.
+	MaxAttempts int `yaml:"max_attempts"`
+
+	// RetryBase is the wait after a first transient failure, doubling per
+	// attempt up to a fixed cap.
+	RetryBase time.Duration `yaml:"retry_base"`
+
+	// MaxArticleAge drops articles published before it from the backlog. Zero
+	// means no bound, which a backfill wants; a steady-state deployment wants
+	// one, or the backlog grows with every publisher that goes quiet for a week.
+	MaxArticleAge time.Duration `yaml:"max_article_age"`
+
+	// PerHostDelay is the minimum gap between two article requests to the same
+	// host. A publisher's own Crawl-delay overrides it when longer.
+	PerHostDelay time.Duration `yaml:"per_host_delay"`
+
+	// CircuitFailureThreshold is how many consecutive failures rest a host, and
+	// CircuitOpenFor is how long the rest lasts. Resting a host protects the
+	// rest of its queued articles from a publisher's temporary outage: without
+	// it, an hour of 503s would spend every one of them their whole attempt
+	// budget and mark them all permanently failed.
+	CircuitFailureThreshold int           `yaml:"circuit_failure_threshold"`
+	CircuitOpenFor          time.Duration `yaml:"circuit_open_for"`
+
+	// RobotsCacheTTL is how long one publisher's robots.txt rules are reused
+	// before they are read again.
+	RobotsCacheTTL time.Duration `yaml:"robots_cache_ttl"`
+
+	// ClaimTTL is how long an article may sit claimed before it is assumed
+	// abandoned and returned to the backlog. It must comfortably outlast one
+	// attempt, or a fetch that is merely slow gets reclaimed as if it were dead.
+	ClaimTTL time.Duration `yaml:"claim_ttl"`
+}
+
 // Address returns the host:port the HTTP server should listen on.
 func (s Server) Address() string {
 	return net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
@@ -188,6 +258,24 @@ func Default() *Config {
 			BatchSize:     50,
 			MaxConcurrent: 4,
 			LockTTL:       5 * time.Minute,
+		},
+		Scraper: Scraper{
+			Enabled:                 true,
+			Interval:                5 * time.Minute,
+			BatchSize:               50,
+			UserAgent:               "news-collector/1.0 (+https://github.com/riaz/newscollector)",
+			RequestTimeout:          20 * time.Second,
+			MaxResponseBytes:        20 << 20,
+			AllowPrivateNetworks:    false,
+			MinContentWords:         80,
+			MaxAttempts:             3,
+			RetryBase:               15 * time.Minute,
+			MaxArticleAge:           30 * 24 * time.Hour,
+			PerHostDelay:            2 * time.Second,
+			CircuitFailureThreshold: 3,
+			CircuitOpenFor:          15 * time.Minute,
+			RobotsCacheTTL:          24 * time.Hour,
+			ClaimTTL:                10 * time.Minute,
 		},
 		Logging: Logging{
 			Level:  "info",
@@ -295,6 +383,23 @@ func (c *Config) applyEnv() error {
 	b.integer("SCHEDULER_MAX_CONCURRENT", &c.Scheduler.MaxConcurrent)
 	b.duration("SCHEDULER_LOCK_TTL", &c.Scheduler.LockTTL)
 
+	b.boolean("SCRAPER_ENABLED", &c.Scraper.Enabled)
+	b.duration("SCRAPER_INTERVAL", &c.Scraper.Interval)
+	b.integer("SCRAPER_BATCH_SIZE", &c.Scraper.BatchSize)
+	b.str("SCRAPER_USER_AGENT", &c.Scraper.UserAgent)
+	b.duration("SCRAPER_REQUEST_TIMEOUT", &c.Scraper.RequestTimeout)
+	b.integer64("SCRAPER_MAX_RESPONSE_BYTES", &c.Scraper.MaxResponseBytes)
+	b.boolean("SCRAPER_ALLOW_PRIVATE_NETWORKS", &c.Scraper.AllowPrivateNetworks)
+	b.integer("SCRAPER_MIN_CONTENT_WORDS", &c.Scraper.MinContentWords)
+	b.integer("SCRAPER_MAX_ATTEMPTS", &c.Scraper.MaxAttempts)
+	b.duration("SCRAPER_RETRY_BASE", &c.Scraper.RetryBase)
+	b.duration("SCRAPER_MAX_ARTICLE_AGE", &c.Scraper.MaxArticleAge)
+	b.duration("SCRAPER_PER_HOST_DELAY", &c.Scraper.PerHostDelay)
+	b.integer("SCRAPER_CIRCUIT_FAILURE_THRESHOLD", &c.Scraper.CircuitFailureThreshold)
+	b.duration("SCRAPER_CIRCUIT_OPEN_FOR", &c.Scraper.CircuitOpenFor)
+	b.duration("SCRAPER_ROBOTS_CACHE_TTL", &c.Scraper.RobotsCacheTTL)
+	b.duration("SCRAPER_CLAIM_TTL", &c.Scraper.ClaimTTL)
+
 	b.str("LOGGING_LEVEL", &c.Logging.Level)
 	b.str("LOGGING_FORMAT", &c.Logging.Format)
 
@@ -350,6 +455,7 @@ func (c *Config) Validate(opts ...Option) error {
 	}
 	errs = append(errs, c.Collector.validate(c.App.Environment)...)
 	errs = append(errs, c.Scheduler.validate(c.Collector.RequestTimeout)...)
+	errs = append(errs, c.Scraper.validate(c.App.Environment)...)
 
 	return errors.Join(errs...)
 }
@@ -504,6 +610,58 @@ func (s Scheduler) validate(requestTimeout time.Duration) []error {
 	if s.LockTTL <= requestTimeout {
 		errs = append(errs, fmt.Errorf("scheduler.lock_ttl (%s) must be greater than collector.request_timeout (%s)",
 			s.LockTTL, requestTimeout))
+	}
+
+	return errs
+}
+
+// maxScraperResponseBytes bounds an article page. It is looser than
+// maxCollectorResponseBytes: an ad-heavy article page routinely runs larger
+// than a feed document ever does.
+const maxScraperResponseBytes = 64 << 20
+
+func (s Scraper) validate(environment string) []error {
+	if !s.Enabled {
+		return nil
+	}
+
+	var errs []error
+
+	if strings.TrimSpace(s.UserAgent) == "" {
+		errs = append(errs, errors.New("scraper.user_agent must not be empty"))
+	}
+	errs = append(errs,
+		positive("scraper.interval", s.Interval),
+		positive("scraper.request_timeout", s.RequestTimeout),
+		positive("scraper.retry_base", s.RetryBase),
+		positive("scraper.per_host_delay", s.PerHostDelay),
+		positive("scraper.circuit_open_for", s.CircuitOpenFor),
+		positive("scraper.robots_cache_ttl", s.RobotsCacheTTL),
+		positive("scraper.claim_ttl", s.ClaimTTL),
+	)
+
+	if s.BatchSize < 1 {
+		errs = append(errs, fmt.Errorf("scraper.batch_size must be greater than zero, got %d", s.BatchSize))
+	}
+	if s.MaxResponseBytes <= 0 || s.MaxResponseBytes > maxScraperResponseBytes {
+		errs = append(errs, fmt.Errorf("scraper.max_response_bytes must be between 1 and %d, got %d",
+			maxScraperResponseBytes, s.MaxResponseBytes))
+	}
+	if s.MinContentWords < 1 {
+		errs = append(errs, fmt.Errorf("scraper.min_content_words must be greater than zero, got %d", s.MinContentWords))
+	}
+	if s.MaxAttempts < 1 {
+		errs = append(errs, fmt.Errorf("scraper.max_attempts must be greater than zero, got %d", s.MaxAttempts))
+	}
+	if s.MaxArticleAge < 0 {
+		errs = append(errs, errors.New("scraper.max_article_age must not be negative"))
+	}
+	if s.CircuitFailureThreshold < 1 {
+		errs = append(errs, fmt.Errorf("scraper.circuit_failure_threshold must be greater than zero, got %d",
+			s.CircuitFailureThreshold))
+	}
+	if s.AllowPrivateNetworks && environment == "production" {
+		errs = append(errs, errors.New("scraper.allow_private_networks must not be enabled in production"))
 	}
 
 	return errs

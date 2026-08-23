@@ -146,6 +146,14 @@ func IndexPlan() []CollectionIndexes {
 					Keys:    bson.D{{Key: "processing_status", Value: 1}, {Key: "collected_at", Value: -1}},
 					Options: options.Index().SetName("ix_status_collected"),
 				},
+				// The enrichment backlog. Both the claim and the stale-claim
+				// sweep filter on scrape_status first, and the claim then takes
+				// the oldest due article, so the ascending next_scrape_at both
+				// narrows the match and supplies the sort.
+				{
+					Keys:    bson.D{{Key: "scrape_status", Value: 1}, {Key: "next_scrape_at", Value: 1}},
+					Options: options.Index().SetName("ix_scrape_backlog"),
+				},
 			},
 		},
 		{

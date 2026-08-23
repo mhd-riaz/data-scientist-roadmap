@@ -34,6 +34,7 @@ build: ## Build every command into $(BIN_DIR)
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/migrate ./cmd/migrate
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/seed ./cmd/seed
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/collector ./cmd/collector
+	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/scrape ./cmd/scrape
 
 .PHONY: test
 test: ## Run unit tests (no external dependencies)
@@ -78,6 +79,14 @@ collect: ## Collect every source that is currently due
 .PHONY: collect-source
 collect-source: ## Collect one source now: make collect-source SOURCE=<id>
 	go run ./cmd/collector -config $(CONFIG) -source $(SOURCE)
+
+.PHONY: scrape
+scrape: ## Run one full-text enrichment batch against scraper.batch_size
+	go run ./cmd/scrape -config $(CONFIG)
+
+.PHONY: scrape-limit
+scrape-limit: ## Run one enrichment batch of a given size: make scrape-limit LIMIT=10
+	go run ./cmd/scrape -config $(CONFIG) -limit $(LIMIT)
 
 .PHONY: up
 up: ## Start MongoDB, run the migration and start the API

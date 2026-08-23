@@ -64,6 +64,14 @@ const (
 	acceptHeader = "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.1"
 )
 
+// Accept headers for the things this client fetches that are not feeds. A page
+// asked for as a feed is still usually served, but a publisher is entitled to
+// answer 406, and content negotiation on some sites turns on it.
+const (
+	AcceptHTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+	AcceptText = "text/plain,*/*;q=0.8"
+)
+
 // Config tunes the client. The zero value is usable and yields the defaults above.
 type Config struct {
 	// Timeout bounds the whole exchange, body included.
@@ -109,6 +117,10 @@ type Request struct {
 	URL          string
 	ETag         string
 	LastModified string
+
+	// Accept overrides the feed-oriented default, for the article pages and
+	// robots.txt files the enrichment stage reads.
+	Accept string
 }
 
 // Response is a completed fetch. Body is empty when NotModified is set.
@@ -184,7 +196,7 @@ func (c *Client) Fetch(ctx context.Context, r Request) (*Response, error) {
 		return nil, fmt.Errorf("httpclient: build request: %w", err)
 	}
 	req.Header.Set("User-Agent", c.cfg.UserAgent)
-	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("Accept", firstNonEmpty(r.Accept, acceptHeader))
 	if r.ETag != "" {
 		req.Header.Set("If-None-Match", r.ETag)
 	}

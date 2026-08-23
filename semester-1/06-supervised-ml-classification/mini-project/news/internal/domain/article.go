@@ -16,10 +16,20 @@ import (
 // ProcessingStatus is how far an article has travelled through the pipeline.
 type ProcessingStatus string
 
-// Phase 1 finishes an article the moment it is collected, so "collected" is the
-// only status it produces. The field exists because later phases add stages
-// after this one, and ix_status_collected is how they will find their backlog.
-const ProcessingStatusCollected ProcessingStatus = "collected"
+// The stages an article passes through. Collection produces "collected";
+// enrichment promotes an article to "enriched" once its stored text is the whole
+// story, whether the feed supplied it or a fetch did. An article whose full text
+// could not be obtained stays "collected", which is an honest description of
+// what is held rather than a failure flag.
+const (
+	ProcessingStatusCollected ProcessingStatus = "collected"
+	ProcessingStatusEnriched  ProcessingStatus = "enriched"
+)
+
+// Valid reports whether p is a status this package defines.
+func (p ProcessingStatus) Valid() bool {
+	return p == ProcessingStatusCollected || p == ProcessingStatusEnriched
+}
 
 // Bounds for a stored article. The text fields reuse the feed item's bounds,
 // because an article is what a feed item becomes.
@@ -73,6 +83,14 @@ type Article struct {
 	CollectedAt time.Time `bson:"collected_at"`
 
 	ProcessingStatus ProcessingStatus `bson:"processing_status"`
+
+	// Enrichment state. ScrapeStatus records what the last full-text attempt
+	// produced; NextScrapeAt is stored rather than derived so the backlog is a
+	// single indexed comparison instead of a per-document backoff calculation.
+	ScrapeStatus   ScrapeStatus `bson:"scrape_status"`
+	ScrapeAttempts int          `bson:"scrape_attempts"`
+	ScrapedAt      *time.Time   `bson:"scraped_at,omitempty"`
+	NextScrapeAt   *time.Time   `bson:"next_scrape_at,omitempty"`
 }
 
 // ArticleIdentity is everything that can identify an article as one already
@@ -145,8 +163,19 @@ func NewArticle(src Source, item FeedItem, now time.Time) (*Article, error) {
 	if a.Summary == "" {
 		a.Summary = truncate(a.Content, MaxItemSummaryLength)
 	}
+	// ContentHash is computed once, from what the feed gave, and never
+	// recomputed. It is a deduplication key: re-deriving it after enrichment
+	// would stop an already-stored article matching itself.
 	a.ContentHash = contentHash(a.Title, a.Content, a.Summary)
 	a.DedupID = dedupID(a.CanonicalURL, a.NormalizedURL)
+
+	if NeedsScrape(a) {
+		a.ScrapeStatus = ScrapeStatusPending
+		a.NextScrapeAt = &collected
+	} else {
+		a.ScrapeStatus = ScrapeStatusNotNeeded
+		a.ProcessingStatus = ProcessingStatusEnriched
+	}
 
 	a.Normalize()
 	if err := a.Validate(); err != nil {
@@ -218,8 +247,15 @@ func (a *Article) Validate() error {
 	if a.CollectedAt.IsZero() {
 		v.add("collected_at", "must not be zero")
 	}
-	if a.ProcessingStatus != ProcessingStatusCollected {
-		v.add("processing_status", "must be %s", ProcessingStatusCollected)
+	if !a.ProcessingStatus.Valid() {
+		v.add("processing_status", "must be %s or %s",
+			ProcessingStatusCollected, ProcessingStatusEnriched)
+	}
+	if !a.ScrapeStatus.Valid() {
+		v.add("scrape_status", "must be a known scrape status")
+	}
+	if a.ScrapeAttempts < 0 {
+		v.add("scrape_attempts", "must not be negative")
 	}
 
 	return v.err()

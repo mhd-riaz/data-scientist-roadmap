@@ -86,6 +86,20 @@ func (f *fakeArticleRepo) DeleteOlderThan(context.Context, domain.ArticleDeletio
 	return 0, nil
 }
 
+// The enrichment stage runs after this package's, so these exist only to
+// satisfy the interface.
+func (f *fakeArticleRepo) ClaimForScraping(context.Context, domain.ScrapeClaim) (*domain.Article, error) {
+	return nil, repository.ErrNotFound
+}
+
+func (f *fakeArticleRepo) UpdateScrapeResult(context.Context, string, domain.ScrapeResult) error {
+	return nil
+}
+
+func (f *fakeArticleRepo) ReleaseStaleScrapeClaims(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func testSource() *domain.Source {
 	return &domain.Source{
 		ID:       "018f3f7e-1c2a-7f24-9a3f-8f9f2a0a5c11",

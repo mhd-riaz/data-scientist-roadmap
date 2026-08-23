@@ -37,6 +37,27 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Applies configs/sources.yaml, then exits. Matched on feed_url and patched
+  # rather than replaced, so re-running it never resets a hand-tuned interval.
+  seed:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    entrypoint: ["/app/seed"]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NEWS_MONGO_URI: mongodb://mongo:27017
+      NEWS_MONGO_DATABASE: news
+      NEWS_LOGGING_FORMAT: json
+    depends_on:
+      mongo:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: ..
@@ -62,6 +83,8 @@ services:
       mongo:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health/ready"]

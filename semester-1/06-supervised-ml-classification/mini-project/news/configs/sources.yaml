@@ -39,6 +39,10 @@ sources:
     country: IN
     priority: 55
 
+  # NDTV serves its feed from FeedBurner, which is reachable, but www.ndtv.com
+  # itself answers 403 to every non-browser client — including /robots.txt. Its
+  # articles therefore stay summary-only; the robots check will mark them
+  # blocked on the first attempt rather than retrying daily.
   - name: NDTV — Latest
     feed_url: https://feeds.feedburner.com/ndtvnews-latest
     type: rss
@@ -46,3 +50,149 @@ sources:
     country: IN
     priority: 50
     fetch_interval_seconds: 600
+
+  # ---------------------------------------------------------------------------
+  # India — national. All four publish teaser-only feeds (0-36 words per item)
+  # but permit article fetches, so full text comes from the scraping stage.
+  # ---------------------------------------------------------------------------
+
+  - name: The Indian Express — India
+    feed_url: https://indianexpress.com/section/india/feed/
+    type: rss
+    language: en
+    country: IN
+    priority: 60
+
+  - name: Hindustan Times — India
+    feed_url: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
+    type: rss
+    language: en
+    country: IN
+    priority: 58
+
+  - name: Livemint — News
+    feed_url: https://www.livemint.com/rss/news
+    type: rss
+    language: en
+    country: IN
+    priority: 52
+
+  # ---------------------------------------------------------------------------
+  # Global. Feeds carry headlines and a short dek; article pages extract cleanly.
+  # ---------------------------------------------------------------------------
+
+  - name: BBC News — World
+    feed_url: https://feeds.bbci.co.uk/news/world/rss.xml
+    type: rss
+    language: en
+    country: GB
+    priority: 60
+
+  - name: The Guardian — World
+    feed_url: https://www.theguardian.com/world/rss
+    type: rss
+    language: en
+    country: GB
+    priority: 58
+
+  - name: NPR — News
+    feed_url: https://feeds.npr.org/1001/rss.xml
+    type: rss
+    language: en
+    country: US
+    priority: 50
+
+  - name: France 24 — World
+    feed_url: https://www.france24.com/en/rss
+    type: rss
+    language: en
+    country: FR
+    priority: 45
+
+  # ---------------------------------------------------------------------------
+  # Technology.
+  # ---------------------------------------------------------------------------
+
+  - name: TechCrunch
+    feed_url: https://techcrunch.com/feed/
+    type: rss
+    language: en
+    country: US
+    priority: 55
+    fetch_interval_seconds: 1800
+
+  - name: The Verge
+    feed_url: https://www.theverge.com/rss/index.xml
+    type: atom
+    language: en
+    country: US
+    priority: 52
+    fetch_interval_seconds: 1800
+
+  - name: Wired
+    feed_url: https://www.wired.com/feed/rss
+    type: rss
+    language: en
+    country: US
+    priority: 48
+    fetch_interval_seconds: 1800
+
+  - name: Engadget
+    feed_url: https://www.engadget.com/rss.xml
+    type: rss
+    language: en
+    country: US
+    priority: 45
+    fetch_interval_seconds: 1800
+
+  - name: ZDNET
+    feed_url: https://www.zdnet.com/news/rss.xml
+    type: rss
+    language: en
+    country: US
+    priority: 42
+    fetch_interval_seconds: 1800
+
+  # MIT Technology Review ships the whole article in the feed (~1500 words per
+  # item), so its stories need no scrape at all.
+  - name: MIT Technology Review
+    feed_url: https://www.technologyreview.com/feed/
+    type: rss
+    language: en
+    country: US
+    priority: 50
+    fetch_interval_seconds: 3600
+
+  # The Register's feed is likewise full-text (~660 words per item), which is
+  # just as well: its robots.txt is default-deny and does not list this
+  # collector, so article pages must not be fetched.
+  - name: The Register
+    feed_url: https://www.theregister.com/headlines.atom
+    type: atom
+    language: en
+    country: GB
+    priority: 48
+    fetch_interval_seconds: 1800
+
+  # Ars Technica's feed carries a usable excerpt (~165 words). Its article pages
+  # answer 202 with a JavaScript bot-check instead of the story, so they are not
+  # worth fetching.
+  - name: Ars Technica
+    feed_url: https://feeds.arstechnica.com/arstechnica/index
+    type: rss
+    language: en
+    country: US
+    priority: 46
+    fetch_interval_seconds: 1800
+
+  # Al Jazeera is deliberately left out. Its robots.txt permits the paths, but
+  # the file's own header forbids using the content for machine learning, text
+  # and data mining, or automated scraping without written permission — which is
+  # exactly what this project does. Enable it only if you obtain that permission.
+  #
+  # - name: Al Jazeera — All
+  #   feed_url: https://www.aljazeera.com/xml/rss/all.xml
+  #   type: rss
+  #   language: en
+  #   country: QA
+  #   priority: 50

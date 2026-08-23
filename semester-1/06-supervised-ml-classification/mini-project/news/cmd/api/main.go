@@ -94,6 +94,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	enrichmentService := app.NewEnrichmentService(cfg, mongoClient.Database(), time.Now, logger)
 
 	var authenticator *handler.Authenticator
 	if cfg.Auth.Enabled {
@@ -149,6 +150,27 @@ func run() error {
 		logger.Warn("scheduler is disabled; feeds will only be collected by the collector command")
 	}
 
+	// Enrichment shares the process the same way collection does: it reaches for
+	// its own claim on an article before fetching it, so a second instance of
+	// this same command cannot duplicate the work.
+	enrichmentStopped := make(chan struct{})
+	if cfg.Scraper.Enabled {
+		esch := scheduler.NewEnrichment(enrichmentService, scheduler.EnrichmentConfig{
+			Interval:  cfg.Scraper.Interval,
+			BatchSize: cfg.Scraper.BatchSize,
+		}, logger)
+
+		go func() {
+			defer close(enrichmentStopped)
+			if err := esch.Run(ctx); err != nil {
+				logger.Error("enrichment scheduler stopped early", "error", err)
+			}
+		}()
+	} else {
+		close(enrichmentStopped)
+		logger.Warn("enrichment scheduler is disabled; articles will only be scraped by the scrape command")
+	}
+
 	serverErr := make(chan error, 1)
 	go func() {
 		logger.Info("http server listening", "address", srv.Addr)
@@ -187,6 +209,12 @@ func run() error {
 	case <-shutdownCtx.Done():
 		logger.Warn("scheduler did not stop within the shutdown timeout; " +
 			"any lease it still holds will expire on its own")
+	}
+	select {
+	case <-enrichmentStopped:
+	case <-shutdownCtx.Done():
+		logger.Warn("enrichment scheduler did not stop within the shutdown timeout; " +
+			"any claim it still holds is released automatically once it goes stale")
 	}
 
 	if err := mongoClient.Close(shutdownCtx); err != nil {
