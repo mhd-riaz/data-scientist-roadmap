@@ -235,15 +235,71 @@ classes:
       Matches, tournaments, players, teams, transfers, doping and the bodies
       that govern sport.
 
+# Section feeds, keyed by the source name in configs/sources.yaml. Every URL
+# behind these names contains the section, so the topic is a property of the
+# feed rather than a guess about the article: everything on
+# theguardian.com/sport/rss is sport. These are trusted on their own.
+#
+# World and International sections are deliberately absent. A world desk files
+# whatever happened abroad, so those sections name a *place*, not a topic — the
+# same confusion that keeps geography out of the class list.
+#
+# Renaming a source in sources.yaml silently drops its label. Asserted by
+# test_every_feed_topic_names_a_configured_source.
+feed_topics:
+  The Hindu — Business: business_economy
+  The Hindu — Sport: sport
+  The Hindu — Entertainment: entertainment_arts
+  The Hindu — Education: education
+  The Hindu — Life and Style: lifestyle_living
+  The Indian Express — Business: business_economy
+  The Indian Express — Sports: sport
+  The Indian Express — Entertainment: entertainment_arts
+  The Indian Express — Health: health
+  The Indian Express — Education: education
+  The Indian Express — Technology: technology
+  Hindustan Times — Sports: sport
+  Hindustan Times — Cricket: sport
+  Hindustan Times — Entertainment: entertainment_arts
+  Livemint — Markets: business_markets
+  Livemint — Companies: business_companies
+  Livemint — Industry: business_economy
+  Livemint — Money: business_economy
+  Livemint — Politics: politics
+  Livemint — Technology: technology
+  Livemint — Sports: sport
+  Livemint — Education: education
+  NDTV — Cricket: sport
+  NDTV — Movies: entertainment_arts
+  The Guardian — Business: business_economy
+  The Guardian — Sport: sport
+  The Guardian — Culture: entertainment_arts
+  The Guardian — Film: entertainment_arts
+  The Guardian — Music: entertainment_arts
+  The Guardian — Science: science_space
+  The Guardian — Environment: environment_climate
+  The Guardian — Education: education
+  The Guardian — Society: society_lifestyle
+  The Guardian — Global Development: society_lifestyle
+  The Guardian — Politics: politics
+  The Guardian — Technology: technology
+  BBC News — Business: business_economy
+  BBC News — Health: health
+  BBC News — Science and Environment: science_space
+  BBC News — Entertainment and Arts: entertainment_arts
+  BBC News — Education: education
+  BBC News — Politics: politics
+  BBC News — Technology: technology
+  NPR — Science: science_space
+  NPR — Health: health
+  NPR — Education: education
+  NPR — Technology: technology
+
 # The topic a publisher mostly covers. This is a prior, NOT a fact: measured
 # against the 150-article pilot gold set it named the wrong group 42% of the
 # time, because a general-interest tech outlet also covers courts, culture and
 # space. "TikTok reaches $400M privacy settlement" arrived on Wired's feed and
-# is judiciary_courts.
-#
-# A genuine *section* feed (thehindu.com/business/...) would be deterministic and
-# belongs in a separate trusted map. None are subscribed yet, so every entry
-# here is publisher-level and none is trusted on its own.
+# is judiciary_courts. Never trusted on its own.
 publisher_topics:
   Wired: technology
   The Register: technology
@@ -253,6 +309,17 @@ publisher_topics:
   The Verge: technology
   MIT Technology Review: technology
   ZDNET: technology
+  ScienceDaily: science_research
+  Phys.org: science_research
+  Nature: science_research
+  Quanta Magazine: science_research
+  New Scientist: science_research
+  NASA — Breaking News: space
+  Moneycontrol: business_economy
+  Business Standard: business_economy
+  The Economic Times: business_economy
+  MarketWatch: business_markets
+  CNBC: business_economy
 
 # RSS `categories` values that map cleanly onto a class. Publishers fragment
 # their own vocabulary, so several strings collapse to one class.

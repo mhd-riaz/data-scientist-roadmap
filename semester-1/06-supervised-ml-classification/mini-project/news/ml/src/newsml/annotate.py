@@ -23,7 +23,15 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from .labels import Label, LabelSource, Taxonomy, from_categories, from_publisher, is_geography_only
+from .labels import (
+    Label,
+    LabelSource,
+    Taxonomy,
+    from_categories,
+    from_feed,
+    from_publisher,
+    is_geography_only,
+)
 from .load import Article
 
 COLUMNS = ("article_id", "title", "summary", "label", "notes")
@@ -323,7 +331,11 @@ def weak_vs_gold(gold: dict[str, str], articles: dict[str, Article], taxonomy: T
         if article is None:
             continue
 
-        weak = from_publisher(article, taxonomy) or from_categories(article, taxonomy)
+        weak = (
+            from_feed(article, taxonomy)
+            or from_publisher(article, taxonomy)
+            or from_categories(article, taxonomy)
+        )
         if weak is None:
             if is_geography_only(article, taxonomy):
                 geo_only += 1

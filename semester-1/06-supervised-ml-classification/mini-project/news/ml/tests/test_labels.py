@@ -7,6 +7,7 @@ import pytest
 from newsml.labels import (
     LabelSource,
     from_categories,
+    from_feed,
     from_publisher,
     is_geography_only,
     resolve,
@@ -72,6 +73,56 @@ def test_every_mapped_category_points_at_a_real_class(taxonomy):
 def test_every_publisher_topic_points_at_a_real_class(taxonomy):
     for source, topic in taxonomy.publisher_topics.items():
         assert topic in taxonomy.ids, f"publisher {source!r} maps to unknown class {topic!r}"
+
+
+def test_every_feed_topic_points_at_a_real_class(taxonomy):
+    for source, topic in taxonomy.feed_topics.items():
+        assert topic in taxonomy.ids, f"feed {source!r} maps to unknown class {topic!r}"
+
+
+def _configured_source_names() -> set[str]:
+    import yaml
+
+    from newsml.config import SOURCES_PATH
+
+    raw = yaml.safe_load(SOURCES_PATH.read_text(encoding="utf-8"))
+    return {str(s["name"]) for s in (raw.get("sources") or [])}
+
+
+def test_every_feed_topic_names_a_configured_source(taxonomy):
+    """The map is keyed by source name, so a rename in sources.yaml silently
+    drops the label rather than failing. This is what catches that."""
+    configured = _configured_source_names()
+    unknown = sorted(set(taxonomy.feed_topics) - configured)
+    assert not unknown, f"feed_topics names not in sources.yaml: {unknown}"
+
+
+def test_every_publisher_topic_names_a_configured_source(taxonomy):
+    configured = _configured_source_names()
+    unknown = sorted(set(taxonomy.publisher_topics) - configured)
+    assert not unknown, f"publisher_topics names not in sources.yaml: {unknown}"
+
+
+def test_a_source_is_not_both_a_section_feed_and_a_publisher_prior(taxonomy):
+    """The two maps carry different trust. A source in both would have its label
+    accepted or held for review depending only on lookup order."""
+    assert not (set(taxonomy.feed_topics) & set(taxonomy.publisher_topics))
+
+
+def test_world_sections_are_not_treated_as_topics(taxonomy):
+    """A world desk files whatever happened abroad, so those sections name a
+    place, not a subject. Letting one in would relabel every foreign story.
+
+    Matched on the section after the dash, not the whole name: "The Indian
+    Express" contains "India" without being a geographic section.
+    """
+    places = {"world", "world news", "international", "india", "asia", "europe",
+              "us", "uk", "americas", "africa", "middle east", "cities", "bengaluru"}
+    offenders = [
+        name for name in taxonomy.feed_topics
+        if name.split("\u2014")[-1].strip().casefold() in places
+    ]
+    assert not offenders, f"geographic sections must not carry a topic: {offenders}"
 
 
 def test_geography_and_categories_do_not_overlap(taxonomy):
@@ -164,6 +215,26 @@ def test_a_lone_publisher_prior_is_not_trusted(taxonomy, make_article):
 
     assert outcome.topic == "technology"
     assert outcome.needs_review
+
+
+def test_a_lone_section_feed_is_trusted(taxonomy, make_article):
+    """The section is a fact about the feed, not a guess about the article:
+    everything on theguardian.com/sport/rss is sport."""
+    article = make_article(source_name="The Guardian \u2014 Sport", categories=())
+    label = from_feed(article, taxonomy)
+
+    assert label is not None and label.source is LabelSource.FEED
+    outcome = resolve(article.id, [label], taxonomy)
+    assert outcome.topic == "sport" and not outcome.needs_review
+
+
+def test_a_section_feed_outranks_a_conflicting_category(taxonomy, make_article):
+    article = make_article(source_name="The Guardian \u2014 Sport", categories=("ai",))
+    candidates = [c for c in (from_feed(article, taxonomy), from_categories(article, taxonomy)) if c]
+    outcome = resolve(article.id, candidates, taxonomy)
+
+    assert outcome.topic == "sport"
+    assert outcome.needs_review, "a real conflict should still be seen by a human"
 
 
 def test_a_lone_category_waits_for_a_human(taxonomy, make_article):

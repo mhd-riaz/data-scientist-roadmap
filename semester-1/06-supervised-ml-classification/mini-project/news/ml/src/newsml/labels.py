@@ -23,18 +23,20 @@ class LabelSource(StrEnum):
     """Where a label came from. Ordered by how much it should be trusted."""
 
     HUMAN = "human"
+    FEED = "feed"
     PUBLISHER = "publisher"
     CATEGORY = "category"
 
 
-# A human decision is final. Everything else is a proposal: the pilot showed a
-# lone publisher prior naming the wrong group 42% of the time, and a publisher's
-# own categories are noisier still, since publishers fragment and reuse their
-# vocabulary freely.
+# A human decision is final. A section feed is structural: everything on
+# theguardian.com/sport/rss is sport. A publisher prior is not — the pilot caught
+# it naming the wrong group 42% of the time — and a publisher's own categories
+# are noisier still, since publishers fragment and reuse their vocabulary freely.
 _PRIORITY = {
     LabelSource.HUMAN: 0,
-    LabelSource.PUBLISHER: 1,
-    LabelSource.CATEGORY: 2,
+    LabelSource.FEED: 1,
+    LabelSource.PUBLISHER: 2,
+    LabelSource.CATEGORY: 3,
 }
 
 
@@ -72,6 +74,7 @@ class Taxonomy:
     version: int
     unsorted: str
     classes: tuple[TopicClass, ...]
+    feed_topics: dict[str, str]
     publisher_topics: dict[str, str]
     category_map: dict[str, str]
     geography: frozenset[str]
@@ -131,11 +134,20 @@ def load_taxonomy(path: Path) -> Taxonomy:
                        parent=str(c.get("parent", "")).strip())
             for c in raw["classes"]
         ),
+        feed_topics={str(k): str(v) for k, v in (raw.get("feed_topics") or {}).items()},
         publisher_topics={str(k): str(v) for k, v in (raw.get("publisher_topics") or {}).items()},
         category_map={str(k).casefold(): str(v) for k, v in (raw.get("category_map") or {}).items()},
         geography=frozenset(str(g).casefold() for g in (raw.get("geography") or [])),
         non_topical=frozenset(str(n).casefold() for n in (raw.get("non_topical") or [])),
     )
+
+
+def from_feed(article: Article, taxonomy: Taxonomy) -> Label | None:
+    """The section a feed names applies to every article that arrives on it."""
+    topic = taxonomy.feed_topics.get(article.source_name)
+    if topic is None or taxonomy.canonical(topic) is None:
+        return None
+    return Label(article.id, topic, LabelSource.FEED, article.source_name)
 
 
 def from_publisher(article: Article, taxonomy: Taxonomy) -> Label | None:
@@ -178,8 +190,13 @@ def resolve(article_id: str, candidates: list[Label], taxonomy: Taxonomy) -> Res
     best = ordered[0]
     topics = {c.topic for c in ordered}
 
-    # Two independent signals concurring is the only thing that skips review.
-    # A lone weak signal is one unverified opinion, and the pilot measured those
-    # at 58% group-level agreement with gold — not good enough to accept unseen.
-    agreed = len(ordered) > 1 and len(topics) == 1
-    return Resolved(article_id, best.topic, best.source, agreed, not agreed, ordered)
+    # Two signals concurring is the strongest evidence available without a human.
+    if len(ordered) > 1 and len(topics) == 1:
+        return Resolved(article_id, best.topic, best.source, True, False, ordered)
+
+    # A lone section feed still stands on its own, because the section is a fact
+    # about the feed rather than a guess about the article. A lone publisher
+    # prior or category does not: the pilot measured those at 58% group
+    # agreement with gold, which is not good enough to accept unseen.
+    trusted = best.source is LabelSource.FEED and len(topics) == 1
+    return Resolved(article_id, best.topic, best.source, False, not trusted, ordered)
