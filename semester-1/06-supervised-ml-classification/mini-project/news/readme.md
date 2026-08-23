@@ -587,11 +587,11 @@ JavaScript disabled.
 They exist mainly to accumulate read events, which is the one input to a later ranker
 that cannot be back-filled. Three kinds are recorded:
 
-| Kind         | Recorded by                   | Why it matters                                                          |
-| ------------ | ----------------------------- | ----------------------------------------------------------------------- |
-| `click`      | the server, on the page load  | Free, and survives with JavaScript off                                  |
-| `impression` | `IntersectionObserver`        | A card shown and not clicked is the only negative example a ranker gets |
-| `dwell`      | a timer plus `visibilitychange` | Separates a misleading headline from one that delivered                |
+| Kind         | Recorded by                     | Why it matters                                                          |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------- |
+| `click`      | the server, on the page load    | Free, and survives with JavaScript off                                  |
+| `impression` | `IntersectionObserver`          | A card shown and not clicked is the only negative example a ranker gets |
+| `dwell`      | a timer plus `visibilitychange` | Separates a misleading headline from one that delivered                 |
 
 Every event carries its position in the feed, so a later ranker can correct for the
 fact that items at the top are clicked regardless of quality. A visit with no feed
