@@ -47,6 +47,12 @@ services:
   # survives a redeploy.
   api:
     image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
+    # Compose's default pull_policy ("missing") only pulls an image when it is
+    # absent locally, so a floating `:latest` tag already cached on the host is
+    # never refreshed on redeploy — the container silently keeps running the
+    # old image even though CI pushed a new one. Always pulling here ensures a
+    # Coolify redeploy actually picks up the new build.
+    pull_policy: always
     restart: unless-stopped
     environment:
       # Asks Coolify for a domain and routes it to port 8080.
