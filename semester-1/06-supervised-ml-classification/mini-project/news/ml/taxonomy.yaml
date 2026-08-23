@@ -1,0 +1,434 @@
+# Canonical topic taxonomy. One topical axis only: geography is a separate
+# field, not a class, because `categories` interleaves the two and a classifier
+# trained on the mixture learns "where" rather than "what".
+#
+# The descriptions below are the single source of truth for the human labelling
+# guide, which is generated from them. One definition means every annotator is
+# answering the same question, which is what makes their agreement measurable.
+#
+# The classes follow IPTC Media Topics, the standard the wire agencies tag
+# against, so the choice is defensible rather than invented. Each class records
+# the IPTC parent it collapses.
+#
+# Two levels. A class with no `parent` is a group; a class with one is a child.
+# Both are valid labels, but they are not equal choices: the child is what an
+# annotator should reach for, and the group is a fallback for an article that
+# genuinely spans two of its children. "Prime minister campaigns abroad" is both
+# diplomacy and elections, so it is `politics`.
+#
+# Splitting only happens where the corpus has volume AND the vocabulary really
+# differs. `health` and `sport` stay whole because their language is coherent and
+# their counts are thin; splitting them would buy nothing and cost agreement.
+#
+# Merging a child into its parent after labelling is a dictionary lookup;
+# splitting a class is a full relabel. A starved child collapses into its parent
+# at training time and the collapse is recorded in the model card, so widening
+# the corpus later restores the finer taxonomy without anyone relabelling.
+#
+# Bump `version` on any change to the class list or the definitions. Labels
+# record the version they were assigned under, so a taxonomy change invalidates
+# the affected labels instead of silently reinterpreting them.
+
+version: 3
+unsorted: unsorted
+
+classes:
+  # --- politics -------------------------------------------------------------
+  - id: politics
+    iptc: politics
+    description: >-
+      Government, elections, diplomacy, parties and public administration.
+    excludes: A crime prosecuted in court, which is crime_justice. Armed conflict, which is conflict_war.
+
+  - id: politics_government
+    parent: politics
+    description: >-
+      Legislation, parliament, ministries, budgets, official appointments,
+      regulation and the day-to-day running of the state.
+
+  - id: politics_elections
+    parent: politics
+    description: >-
+      Campaigns, candidates, polling, results, party organisation and
+      coalition-building.
+
+  - id: politics_diplomacy
+    parent: politics
+    description: >-
+      Foreign relations, treaties, state visits, sanctions and international
+      organisations.
+
+  - id: politics_protest
+    parent: politics
+    description: >-
+      Demonstrations, activism, civil dissent and political movements.
+    excludes: A strike over pay, which is labour_work.
+
+  # --- crime and justice ----------------------------------------------------
+  - id: crime_justice
+    iptc: crime, law and justice
+    description: >-
+      Crime, policing and the legal system.
+    excludes: Legislation being debated, which is politics_government.
+
+  - id: crime
+    parent: crime_justice
+    description: >-
+      Criminal acts, perpetrators, victims, police investigations, arrests and
+      fraud reported as an offence.
+
+  - id: judiciary_courts
+    parent: crime_justice
+    description: >-
+      Trials, verdicts, sentencing, judges, court rulings and the judiciary as
+      an institution.
+
+  # --- business and economy -------------------------------------------------
+  - id: business_economy
+    iptc: economy, business and finance
+    description: >-
+      Companies, markets and the economy.
+    excludes: A tech company's product launch, which is tech_consumer.
+
+  - id: business_companies
+    parent: business_economy
+    description: >-
+      Corporate results, mergers, executives, layoffs, strategy and the
+      fortunes of individual firms.
+
+  - id: business_markets
+    parent: business_economy
+    description: >-
+      Stocks, currencies, commodities, bonds, investing and public offerings.
+
+  - id: business_macroeconomy
+    parent: business_economy
+    description: >-
+      GDP, inflation, employment figures, trade, taxation and central banks.
+
+  # --- technology -----------------------------------------------------------
+  - id: technology
+    iptc: science and technology
+    description: >-
+      Computing, the internet, devices and the technology industry.
+    excludes: Government regulation of tech, which is politics_government. Research findings, which is science_research.
+
+  - id: tech_ai
+    parent: technology
+    description: >-
+      Artificial intelligence, machine learning, models, chatbots and their
+      applications.
+
+  - id: tech_security
+    parent: technology
+    description: >-
+      Cybersecurity, breaches, hacking, malware, privacy and surveillance.
+    excludes: An arrest for online fraud, which is crime.
+
+  - id: tech_consumer
+    parent: technology
+    description: >-
+      Devices, gadgets, apps, operating systems, product launches and reviews.
+
+  - id: tech_industry
+    parent: technology
+    description: >-
+      Technology companies as businesses, startups, funding, chips, platforms
+      and infrastructure.
+
+  # --- science and space ----------------------------------------------------
+  - id: science_space
+    iptc: science and technology
+    description: >-
+      Scientific research and spaceflight.
+    excludes: Medical and public-health research, which is health.
+
+  - id: science_research
+    parent: science_space
+    description: >-
+      Physics, biology, chemistry, archaeology, palaeontology and discovery.
+
+  - id: space
+    parent: science_space
+    description: >-
+      Astronomy, space missions, satellites, rockets and spaceflight.
+
+  # --- entertainment and arts -----------------------------------------------
+  - id: entertainment_arts
+    iptc: arts, culture, entertainment and media
+    description: >-
+      Entertainment, the arts and cultural life.
+
+  - id: entertainment_media
+    parent: entertainment_arts
+    description: >-
+      Film, television, streaming, music, celebrity and the media industry.
+
+  - id: arts_culture
+    parent: entertainment_arts
+    description: >-
+      Books, visual art, theatre, dance, design, heritage and museums.
+
+  # --- society and lifestyle ------------------------------------------------
+  - id: society_lifestyle
+    iptc: society, human interest, labour, religion, lifestyle and leisure
+    description: >-
+      Society, work and daily life.
+
+  - id: society_community
+    parent: society_lifestyle
+    description: >-
+      Human interest, religion, festivals, migration, communities, charity and
+      social issues.
+
+  - id: labour_work
+    parent: society_lifestyle
+    description: >-
+      Unions, strikes over pay or conditions, wages, hiring, workplace rights
+      and careers.
+
+  - id: lifestyle_living
+    parent: society_lifestyle
+    description: >-
+      Travel, food, fashion, relationships, wellbeing, homes and hobbies.
+
+  # --- standalone -----------------------------------------------------------
+  # Coherent vocabulary and thin counts. Splitting these would cost agreement
+  # and buy nothing.
+  - id: health
+    iptc: health
+    description: >-
+      Medicine, disease, public health, hospitals, mental health, nutrition
+      and drugs.
+    excludes: Health insurance markets, which is business_economy.
+
+  - id: education
+    iptc: education
+    description: >-
+      Schools, universities, exams, admissions, curriculum, teachers and
+      students.
+
+  - id: environment_climate
+    iptc: environment
+    description: >-
+      Climate change, pollution, conservation, wildlife, the energy transition
+      and natural resources.
+    excludes: A natural disaster as it happens, which is disaster_accident.
+
+  - id: disaster_accident
+    iptc: disaster, accident and emergency incident
+    description: >-
+      Earthquakes, floods, storms, fires, industrial and transport accidents,
+      and the emergency response to them.
+    excludes: The long-run climate context, which is environment_climate.
+
+  - id: conflict_war
+    iptc: conflict, war and peace
+    description: >-
+      Armed conflict, military operations, terrorism, insurgency, peace talks
+      and their humanitarian consequences.
+    excludes: Defence procurement debated in parliament, which is politics_government.
+
+  - id: sport
+    iptc: sport
+    description: >-
+      Matches, tournaments, players, teams, transfers, doping and the bodies
+      that govern sport.
+
+# Section feeds, keyed by the source name in configs/sources.yaml. Every URL
+# behind these names contains the section, so the topic is a property of the
+# feed rather than a guess about the article: everything on
+# theguardian.com/sport/rss is sport. These are trusted on their own.
+#
+# World and International sections are deliberately absent. A world desk files
+# whatever happened abroad, so those sections name a *place*, not a topic — the
+# same confusion that keeps geography out of the class list.
+#
+# Renaming a source in sources.yaml silently drops its label. Asserted by
+# test_every_feed_topic_names_a_configured_source.
+feed_topics:
+  The Hindu — Business: business_economy
+  The Hindu — Sport: sport
+  The Hindu — Entertainment: entertainment_arts
+  The Hindu — Education: education
+  The Hindu — Life and Style: lifestyle_living
+  The Indian Express — Business: business_economy
+  The Indian Express — Sports: sport
+  The Indian Express — Entertainment: entertainment_arts
+  The Indian Express — Health: health
+  The Indian Express — Education: education
+  The Indian Express — Technology: technology
+  Hindustan Times — Sports: sport
+  Hindustan Times — Cricket: sport
+  Hindustan Times — Entertainment: entertainment_arts
+  Livemint — Markets: business_markets
+  Livemint — Companies: business_companies
+  Livemint — Industry: business_economy
+  Livemint — Money: business_economy
+  Livemint — Politics: politics
+  Livemint — Technology: technology
+  Livemint — Sports: sport
+  Livemint — Education: education
+  NDTV — Cricket: sport
+  NDTV — Movies: entertainment_arts
+  The Guardian — Business: business_economy
+  The Guardian — Sport: sport
+  The Guardian — Culture: entertainment_arts
+  The Guardian — Film: entertainment_arts
+  The Guardian — Music: entertainment_arts
+  The Guardian — Science: science_space
+  The Guardian — Environment: environment_climate
+  The Guardian — Education: education
+  The Guardian — Society: society_lifestyle
+  The Guardian — Global Development: society_lifestyle
+  The Guardian — Politics: politics
+  The Guardian — Technology: technology
+  BBC News — Business: business_economy
+  BBC News — Health: health
+  BBC News — Science and Environment: science_space
+  BBC News — Entertainment and Arts: entertainment_arts
+  BBC News — Education: education
+  BBC News — Politics: politics
+  BBC News — Technology: technology
+  NPR — Science: science_space
+  NPR — Health: health
+  NPR — Education: education
+  NPR — Technology: technology
+
+# The topic a publisher mostly covers. This is a prior, NOT a fact: measured
+# against the 150-article pilot gold set it named the wrong group 42% of the
+# time, because a general-interest tech outlet also covers courts, culture and
+# space. "TikTok reaches $400M privacy settlement" arrived on Wired's feed and
+# is judiciary_courts. Never trusted on its own.
+publisher_topics:
+  Wired: technology
+  The Register: technology
+  Engadget: technology
+  Ars Technica: technology
+  TechCrunch: technology
+  The Verge: technology
+  MIT Technology Review: technology
+  ZDNET: technology
+  ScienceDaily: science_research
+  Phys.org: science_research
+  Nature: science_research
+  Quanta Magazine: science_research
+  New Scientist: science_research
+  NASA — Breaking News: space
+  Moneycontrol: business_economy
+  Business Standard: business_economy
+  The Economic Times: business_economy
+  MarketWatch: business_markets
+  CNBC: business_economy
+  WHO — News: health
+  The Lancet: health
+  Nature Medicine: health
+  NOAA — News: environment_climate
+  UNEP — News and Stories: environment_climate
+  Bank for International Settlements — Press: business_macroeconomy
+
+# RSS `categories` values that map cleanly onto a class. Publishers fragment
+# their own vocabulary, so several strings collapse to one class.
+category_map:
+  ai: tech_ai
+  ai and ml: tech_ai
+  app: tech_consumer
+  apple: tech_consumer
+  gadgets: tech_consumer
+  gear: tech_consumer
+  gear / buying guides: tech_consumer
+  gear / products / home: tech_consumer
+  gear / reviews: tech_consumer
+  os platforms: tech_consumer
+  cyber-crime: tech_security
+  security: tech_security
+  google: tech_industry
+  startups: tech_industry
+  systems: tech_industry
+  tech: technology
+  business: business_companies
+  companies: business_companies
+  markets: business_markets
+  money: business_markets
+  economy: business_macroeconomy
+  government & policy: politics_government
+  policy: politics_government
+  politics: politics
+  trump administration: politics_government
+  us politics: politics
+  cricket: sport
+  football: sport
+  sport: sport
+  sports: sport
+  entertainment: entertainment_media
+  film: entertainment_media
+  movies: entertainment_media
+  music: entertainment_media
+  television: entertainment_media
+  books: arts_culture
+  culture: arts_culture
+  science: science_research
+  space: space
+  climate: environment_climate
+  environment: environment_climate
+  health: health
+  education: education
+
+# Recognised as place, never as topic. Kept explicit so that "india" is
+# understood to be an unlabelled article rather than a labelled one.
+geography:
+  - africa
+  - americas
+  - andhra pradesh
+  - asia pacific
+  - assam
+  - australia news
+  - bengaluru
+  - bihar
+  - chennai
+  - china
+  - delhi
+  - europe
+  - india
+  - india-news
+  - israel
+  - japan
+  - karnataka
+  - kerala
+  - keralam
+  - maharashtra
+  - middle east and north africa
+  - palestine
+  - rajasthan
+  - russia
+  - south and central asia
+  - tamil nadu
+  - telangana
+  - uk news
+  - ukraine
+  - us news
+  - uttar pradesh
+  - west bengal
+  - world
+  - world news
+
+# Values that describe placement, format or commerce rather than subject. An
+# opinion piece about cricket is still sport, so format never becomes a label.
+# Affiliate content is not news at all and should not reach the classifier.
+non_topical:
+  - analysis
+  - cities
+  - coupons
+  - deals
+  - editorial
+  - exclusive
+  - features
+  - gear / deals
+  - interview
+  - latest news
+  - news
+  - obituaries
+  - opinion
+  - specials
+  - states
+  - top stories

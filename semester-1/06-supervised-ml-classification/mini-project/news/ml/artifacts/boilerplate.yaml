@@ -1,0 +1,8 @@
+# Learned per-source boilerplate. Regenerate with `make ml-boilerplate`.
+# Review before trusting: every line here is removed from every article
+# of its source, and a false positive silently deletes real content.
+sources: {}
+thresholds:
+  max_line_words: 25
+  min_doc_count: 5
+  min_doc_fraction: 0.05
