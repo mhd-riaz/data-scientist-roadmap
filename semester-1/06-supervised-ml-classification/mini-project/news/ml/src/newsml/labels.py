@@ -44,7 +44,7 @@ class TopicClass:
     description: str
     excludes: str = ""
     iptc: str = ""
-    merges_into: str = ""
+    parent: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +81,16 @@ class Taxonomy:
     def ids(self) -> frozenset[str]:
         return frozenset(c.id for c in self.classes)
 
+    @property
+    def groups(self) -> tuple[TopicClass, ...]:
+        """Top-level classes, in declaration order."""
+        return tuple(c for c in self.classes if not c.parent)
+
+    def children_of(self, group_id: str) -> tuple[TopicClass, ...]:
+        return tuple(c for c in self.classes if c.parent == group_id)
+
     def collapse(self, topic: str, starved: frozenset[str]) -> str:
-        """Fold a starved class into its fallback parent, repeatedly if needed.
+        """Fold a starved child into its parent, repeatedly if needed.
 
         Applied at training time only. Labels keep the class they were assigned,
         so widening the corpus later restores the finer taxonomy without anyone
@@ -92,7 +100,7 @@ class Taxonomy:
         seen: set[str] = set()
         while topic in starved and topic not in seen:
             seen.add(topic)
-            parent = by_id[topic].merges_into if topic in by_id else ""
+            parent = by_id[topic].parent if topic in by_id else ""
             if not parent or parent == topic:
                 return topic
             topic = parent
@@ -120,7 +128,7 @@ def load_taxonomy(path: Path) -> Taxonomy:
             TopicClass(id=str(c["id"]), description=str(c.get("description", "")).strip(),
                        excludes=str(c.get("excludes", "")).strip(),
                        iptc=str(c.get("iptc", "")).strip(),
-                       merges_into=str(c.get("merges_into", "")).strip())
+                       parent=str(c.get("parent", "")).strip())
             for c in raw["classes"]
         ),
         feed_topics={str(k): str(v) for k, v in (raw.get("feed_topics") or {}).items()},

@@ -162,24 +162,43 @@ def write_guide(taxonomy: Taxonomy, path: Path, *, overlap: int = 0) -> Path:
         "Fill the **`label`** column with exactly one id from the table below.",
         "Leave `notes` for anything that felt wrong; it is read, not ignored.",
         "",
+        "## How to choose",
+        "",
+        "The classes come in two levels. Work in two steps:",
+        "",
+        "1. Pick the **group** the article belongs to — the bold rows.",
+        "2. Pick the **specific class** inside that group — the indented rows.",
+        "",
+        "**Always give the specific class.** A bare group label is a fallback for the rare",
+        "article that genuinely spans two of its children: \"Prime minister campaigns while",
+        "on a state visit\" is both diplomacy and elections, so it is `politics`. If you find",
+        "yourself reaching for group labels often, something is wrong with this guide — say so.",
+        "",
+        "Groups with no indented rows beneath them are used as they are.",
+        "",
         "## Rules",
         "",
         "1. Label what the article is **about**, not where it happened. "
-        "A Karnataka election story is `politics`, not a geography.",
+        "A Karnataka election story is `politics_elections`, not a geography.",
         f"2. If it fits none of them, or you genuinely cannot tell, write `{taxonomy.unsorted}`. "
         "A forced guess is worse than an honest blank — it becomes silent noise no one can find later.",
         "3. Judge only from the title and summary shown. Do not search for the article. "
         "That is what the model sees, so that is what the label has to be based on.",
         "4. Pick the **dominant** subject when two apply, and say so in `notes`.",
+        "5. Format is not subject. An opinion piece about cricket is still `sport`.",
         "",
         "## Classes",
         "",
         "| id | covers | does not cover |",
         "| --- | --- | --- |",
     ]
-    for topic in taxonomy.classes:
-        lines.append(f"| `{topic.id}` | {topic.description} | {topic.excludes or '—'} |")
-    lines.append(f"| `{taxonomy.unsorted}` | Anything else, or genuinely unclear. | — |")
+    for group in taxonomy.groups:
+        children = taxonomy.children_of(group.id)
+        note = " *(fallback — only if two below apply equally)*" if children else ""
+        lines.append(f"| **`{group.id}`**{note} | {group.description} | {group.excludes or '—'} |")
+        for child in children:
+            lines.append(f"| ↳ `{child.id}` | {child.description} | {child.excludes or '—'} |")
+    lines.append(f"| **`{taxonomy.unsorted}`** | Anything else, or genuinely unclear. | — |")
 
     if overlap:
         lines += [

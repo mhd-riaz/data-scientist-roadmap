@@ -10,55 +10,203 @@
 # against, so the choice is defensible rather than invented. Each class records
 # the IPTC parent it collapses.
 #
-# Granularity is deliberately finer than the corpus can currently support.
-# Merging two classes after labelling is a dictionary lookup; splitting one is a
-# full relabel. `merges_into` names the fallback parent for a class that turns
-# out to be starved, applied at training time and recorded in the model card.
+# Two levels. A class with no `parent` is a group; a class with one is a child.
+# Both are valid labels, but they are not equal choices: the child is what an
+# annotator should reach for, and the group is a fallback for an article that
+# genuinely spans two of its children. "Prime minister campaigns abroad" is both
+# diplomacy and elections, so it is `politics`.
+#
+# Splitting only happens where the corpus has volume AND the vocabulary really
+# differs. `health` and `sport` stay whole because their language is coherent and
+# their counts are thin; splitting them would buy nothing and cost agreement.
+#
+# Merging a child into its parent after labelling is a dictionary lookup;
+# splitting a class is a full relabel. A starved child collapses into its parent
+# at training time and the collapse is recorded in the model card, so widening
+# the corpus later restores the finer taxonomy without anyone relabelling.
 #
 # Bump `version` on any change to the class list or the definitions. Labels
 # record the version they were assigned under, so a taxonomy change invalidates
 # the affected labels instead of silently reinterpreting them.
 
-version: 2
+version: 3
 unsorted: unsorted
 
 classes:
+  # --- politics -------------------------------------------------------------
   - id: politics
     iptc: politics
     description: >-
-      Government, elections, legislation, parliament, diplomacy, political
-      parties, protest and public administration.
+      Government, elections, diplomacy, parties and public administration.
     excludes: A crime prosecuted in court, which is crime_justice. Armed conflict, which is conflict_war.
 
+  - id: politics_government
+    parent: politics
+    description: >-
+      Legislation, parliament, ministries, budgets, official appointments,
+      regulation and the day-to-day running of the state.
+
+  - id: politics_elections
+    parent: politics
+    description: >-
+      Campaigns, candidates, polling, results, party organisation and
+      coalition-building.
+
+  - id: politics_diplomacy
+    parent: politics
+    description: >-
+      Foreign relations, treaties, state visits, sanctions and international
+      organisations.
+
+  - id: politics_protest
+    parent: politics
+    description: >-
+      Demonstrations, activism, civil dissent and political movements.
+    excludes: A strike over pay, which is labour_work.
+
+  # --- crime and justice ----------------------------------------------------
+  - id: crime_justice
+    iptc: crime, law and justice
+    description: >-
+      Crime, policing and the legal system.
+    excludes: Legislation being debated, which is politics_government.
+
+  - id: crime
+    parent: crime_justice
+    description: >-
+      Criminal acts, perpetrators, victims, police investigations, arrests and
+      fraud reported as an offence.
+
+  - id: judiciary_courts
+    parent: crime_justice
+    description: >-
+      Trials, verdicts, sentencing, judges, court rulings and the judiciary as
+      an institution.
+
+  # --- business and economy -------------------------------------------------
   - id: business_economy
     iptc: economy, business and finance
     description: >-
-      Companies, markets, earnings, banking, the economy, trade, inflation,
-      employment, real estate and personal finance.
-    excludes: A tech company's product launch, which is technology.
+      Companies, markets and the economy.
+    excludes: A tech company's product launch, which is tech_consumer.
 
+  - id: business_companies
+    parent: business_economy
+    description: >-
+      Corporate results, mergers, executives, layoffs, strategy and the
+      fortunes of individual firms.
+
+  - id: business_markets
+    parent: business_economy
+    description: >-
+      Stocks, currencies, commodities, bonds, investing and public offerings.
+
+  - id: business_macroeconomy
+    parent: business_economy
+    description: >-
+      GDP, inflation, employment figures, trade, taxation and central banks.
+
+  # --- technology -----------------------------------------------------------
   - id: technology
     iptc: science and technology
     description: >-
-      Computing, software, consumer electronics, telecom, AI, cybersecurity,
-      the internet, and the companies and products behind them.
-    excludes: Government regulation of tech, which is politics. Research findings, which is science_space.
+      Computing, the internet, devices and the technology industry.
+    excludes: Government regulation of tech, which is politics_government. Research findings, which is science_research.
 
+  - id: tech_ai
+    parent: technology
+    description: >-
+      Artificial intelligence, machine learning, models, chatbots and their
+      applications.
+
+  - id: tech_security
+    parent: technology
+    description: >-
+      Cybersecurity, breaches, hacking, malware, privacy and surveillance.
+    excludes: An arrest for online fraud, which is crime.
+
+  - id: tech_consumer
+    parent: technology
+    description: >-
+      Devices, gadgets, apps, operating systems, product launches and reviews.
+
+  - id: tech_industry
+    parent: technology
+    description: >-
+      Technology companies as businesses, startups, funding, chips, platforms
+      and infrastructure.
+
+  # --- science and space ----------------------------------------------------
   - id: science_space
     iptc: science and technology
     description: >-
-      Research findings, space and astronomy, physics, biology, archaeology
-      and scientific discovery.
+      Scientific research and spaceflight.
     excludes: Medical and public-health research, which is health.
-    merges_into: technology
 
+  - id: science_research
+    parent: science_space
+    description: >-
+      Physics, biology, chemistry, archaeology, palaeontology and discovery.
+
+  - id: space
+    parent: science_space
+    description: >-
+      Astronomy, space missions, satellites, rockets and spaceflight.
+
+  # --- entertainment and arts -----------------------------------------------
+  - id: entertainment_arts
+    iptc: arts, culture, entertainment and media
+    description: >-
+      Entertainment, the arts and cultural life.
+
+  - id: entertainment_media
+    parent: entertainment_arts
+    description: >-
+      Film, television, streaming, music, celebrity and the media industry.
+
+  - id: arts_culture
+    parent: entertainment_arts
+    description: >-
+      Books, visual art, theatre, dance, design, heritage and museums.
+
+  # --- society and lifestyle ------------------------------------------------
+  - id: society_lifestyle
+    iptc: society, human interest, labour, religion, lifestyle and leisure
+    description: >-
+      Society, work and daily life.
+
+  - id: society_community
+    parent: society_lifestyle
+    description: >-
+      Human interest, religion, festivals, migration, communities, charity and
+      social issues.
+
+  - id: labour_work
+    parent: society_lifestyle
+    description: >-
+      Unions, strikes over pay or conditions, wages, hiring, workplace rights
+      and careers.
+
+  - id: lifestyle_living
+    parent: society_lifestyle
+    description: >-
+      Travel, food, fashion, relationships, wellbeing, homes and hobbies.
+
+  # --- standalone -----------------------------------------------------------
+  # Coherent vocabulary and thin counts. Splitting these would cost agreement
+  # and buy nothing.
   - id: health
     iptc: health
     description: >-
       Medicine, disease, public health, hospitals, mental health, nutrition
       and drugs.
     excludes: Health insurance markets, which is business_economy.
-    merges_into: science_space
+
+  - id: education
+    iptc: education
+    description: >-
+      Schools, universities, exams, admissions, curriculum, teachers and
+      students.
 
   - id: environment_climate
     iptc: environment
@@ -66,34 +214,6 @@ classes:
       Climate change, pollution, conservation, wildlife, the energy transition
       and natural resources.
     excludes: A natural disaster as it happens, which is disaster_accident.
-    merges_into: science_space
-
-  - id: sport
-    iptc: sport
-    description: >-
-      Matches, tournaments, players, teams, transfers, doping and the bodies
-      that govern sport.
-
-  - id: entertainment_arts
-    iptc: arts, culture, entertainment and media
-    description: >-
-      Film, television, music, celebrity, streaming, books, visual art,
-      theatre, fashion and cultural events.
-
-  - id: crime_justice
-    iptc: crime, law and justice
-    description: >-
-      Crime, police, investigations, arrests, trials, sentencing, prisons and
-      the legal system.
-    excludes: Legislation being debated, which is politics.
-
-  - id: conflict_war
-    iptc: conflict, war and peace
-    description: >-
-      Armed conflict, military operations, terrorism, insurgency, peace talks
-      and their humanitarian consequences.
-    excludes: Defence procurement debated in parliament, which is politics.
-    merges_into: politics
 
   - id: disaster_accident
     iptc: disaster, accident and emergency incident
@@ -102,18 +222,18 @@ classes:
       and the emergency response to them.
     excludes: The long-run climate context, which is environment_climate.
 
-  - id: education
-    iptc: education
+  - id: conflict_war
+    iptc: conflict, war and peace
     description: >-
-      Schools, universities, exams, admissions, curriculum, teachers, students
-      and careers.
-    merges_into: society_lifestyle
+      Armed conflict, military operations, terrorism, insurgency, peace talks
+      and their humanitarian consequences.
+    excludes: Defence procurement debated in parliament, which is politics_government.
 
-  - id: society_lifestyle
-    iptc: society, human interest, labour, religion, lifestyle and leisure
+  - id: sport
+    iptc: sport
     description: >-
-      Human interest, religion, community, labour and unions, migration,
-      travel, food, relationships and daily life.
+      Matches, tournaments, players, teams, transfers, doping and the bodies
+      that govern sport.
 
 # A feed whose URL already names a section is a deterministic label: every
 # article arriving on it belongs to that section. Mapped by source name as
@@ -131,45 +251,45 @@ feed_topics:
 # RSS `categories` values that map cleanly onto a class. Publishers fragment
 # their own vocabulary, so several strings collapse to one class.
 category_map:
-  ai: technology
-  ai and ml: technology
-  app: technology
-  apple: technology
-  cyber-crime: technology
-  gadgets: technology
-  gear: technology
-  gear / buying guides: technology
-  gear / products / home: technology
-  gear / reviews: technology
-  google: technology
-  os platforms: technology
-  security: technology
-  startups: technology
-  systems: technology
+  ai: tech_ai
+  ai and ml: tech_ai
+  app: tech_consumer
+  apple: tech_consumer
+  gadgets: tech_consumer
+  gear: tech_consumer
+  gear / buying guides: tech_consumer
+  gear / products / home: tech_consumer
+  gear / reviews: tech_consumer
+  os platforms: tech_consumer
+  cyber-crime: tech_security
+  security: tech_security
+  google: tech_industry
+  startups: tech_industry
+  systems: tech_industry
   tech: technology
-  business: business_economy
-  companies: business_economy
-  economy: business_economy
-  markets: business_economy
-  money: business_economy
-  government & policy: politics
-  policy: politics
+  business: business_companies
+  companies: business_companies
+  markets: business_markets
+  money: business_markets
+  economy: business_macroeconomy
+  government & policy: politics_government
+  policy: politics_government
   politics: politics
-  trump administration: politics
+  trump administration: politics_government
   us politics: politics
   cricket: sport
   football: sport
   sport: sport
   sports: sport
-  books: entertainment_arts
-  culture: entertainment_arts
-  entertainment: entertainment_arts
-  film: entertainment_arts
-  movies: entertainment_arts
-  music: entertainment_arts
-  television: entertainment_arts
-  science: science_space
-  space: science_space
+  entertainment: entertainment_media
+  film: entertainment_media
+  movies: entertainment_media
+  music: entertainment_media
+  television: entertainment_media
+  books: arts_culture
+  culture: arts_culture
+  science: science_research
+  space: space
   climate: environment_climate
   environment: environment_climate
   health: health
