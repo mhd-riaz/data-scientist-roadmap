@@ -1,6 +1,7 @@
-// Command seed applies a declarative list of sources to the database. It is
-// idempotent: running it twice creates nothing the second time, so it is safe to
-// re-run after editing the file.
+// Command seed applies a declarative list of sources to the database. The API
+// does the same thing at startup; this exists for a local run, and for applying
+// an edited file without restarting anything. It is idempotent: running it
+// twice creates nothing the second time.
 package main
 
 import (
@@ -8,16 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/riaz/newscollector/internal/bootstrap"
 	"github.com/riaz/newscollector/internal/config"
-	"github.com/riaz/newscollector/internal/domain"
 	"github.com/riaz/newscollector/internal/mongodb"
 	"github.com/riaz/newscollector/internal/observability"
 	mongorepo "github.com/riaz/newscollector/internal/repository/mongo"
@@ -26,48 +24,6 @@ import (
 
 // version is overridden at build time with -ldflags "-X main.version=...".
 var version = "dev"
-
-// defaultSourcesPath is the seed file used when none is given.
-const defaultSourcesPath = "configs/sources.yaml"
-
-// maxSeedFileBytes caps the seed file. It is operator-supplied, but a runaway
-// file should fail fast rather than be read into memory in full.
-const maxSeedFileBytes = 4 << 20
-
-// seedFile is the on-disk seed format.
-type seedFile struct {
-	Sources []seedSource `yaml:"sources"`
-}
-
-// seedSource mirrors domain.SourceInput. Optional fields are pointers so an
-// omitted key keeps the stored value instead of resetting it to a default.
-type seedSource struct {
-	Name                 string `yaml:"name"`
-	FeedURL              string `yaml:"feed_url"`
-	Type                 string `yaml:"type"`
-	Language             string `yaml:"language"`
-	Country              string `yaml:"country"`
-	State                string `yaml:"state"`
-	City                 string `yaml:"city"`
-	Enabled              *bool  `yaml:"enabled"`
-	Priority             *int   `yaml:"priority"`
-	FetchIntervalSeconds *int   `yaml:"fetch_interval_seconds"`
-}
-
-func (s seedSource) toInput() domain.SourceInput {
-	return domain.SourceInput{
-		Name:                 s.Name,
-		FeedURL:              s.FeedURL,
-		Type:                 domain.SourceType(s.Type),
-		Language:             s.Language,
-		Country:              s.Country,
-		State:                s.State,
-		City:                 s.City,
-		Enabled:              s.Enabled,
-		Priority:             s.Priority,
-		FetchIntervalSeconds: s.FetchIntervalSeconds,
-	}
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -79,7 +35,7 @@ func main() {
 func run() error {
 	configPath := flag.String("config", defaultConfigPath(), "path to the YAML configuration file")
 	envPath := flag.String("env", config.EnvFilePath(), "path to the dotenv file holding secrets")
-	sourcesPath := flag.String("sources", defaultSourcesPath, "path to the YAML seed file")
+	sourcesPath := flag.String("sources", "", "path or https URL of the YAML seed file; defaults to bootstrap.sources_path")
 	dryRun := flag.Bool("dry-run", false, "validate the seed file without writing to the database")
 	flag.Parse()
 
@@ -91,6 +47,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if *sourcesPath == "" {
+		*sourcesPath = cfg.Bootstrap.SourcesPath
+	}
+	if *sourcesPath == "" {
+		return errors.New("no seed file: pass -sources, or set bootstrap.sources_path")
+	}
 
 	logger, err := observability.NewLogger(cfg.Logging.Level, cfg.Logging.Format, os.Stdout)
 	if err != nil {
@@ -98,17 +60,12 @@ func run() error {
 	}
 	logger = logger.With("service", cfg.App.Name, "command", "seed", "version", version)
 
-	seed, err := readSeedFile(*sourcesPath)
-	if err != nil {
-		return err
-	}
-	if len(seed.Sources) == 0 {
-		return fmt.Errorf("seed file %q declares no sources", *sourcesPath)
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// Validating everything before the first write stops a typo halfway down the
 	// file from leaving the database half-seeded.
-	inputs, err := validateAll(seed.Sources)
+	inputs, err := bootstrap.LoadSources(ctx, *sourcesPath)
 	if err != nil {
 		return err
 	}
@@ -116,9 +73,6 @@ func run() error {
 		logger.Info("seed file is valid", "path", *sourcesPath, "sources", len(inputs))
 		return nil
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	client, err := mongodb.Connect(mongodb.Settings{
 		URI:                    cfg.Mongo.URI,
@@ -146,72 +100,7 @@ func run() error {
 	}
 
 	svc := service.NewSourceService(mongorepo.NewSourceRepository(client.Database()), time.Now)
-
-	var created, updated int
-	for _, in := range inputs {
-		src, wasCreated, err := svc.Ensure(ctx, in)
-		if err != nil {
-			return fmt.Errorf("seed %q: %w", in.FeedURL, err)
-		}
-		if wasCreated {
-			created++
-		} else {
-			updated++
-		}
-		logger.Info("seeded source", "id", src.ID, "feed_url", src.FeedURL, "created", wasCreated)
-	}
-
-	logger.Info("seeding complete", "created", created, "updated", updated, "total", len(inputs))
-	return nil
-}
-
-// readSeedFile parses the seed file, rejecting unknown keys so a typo fails fast
-// rather than being silently ignored.
-func readSeedFile(path string) (*seedFile, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open seed file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	return parseSeedFile(io.LimitReader(f, maxSeedFileBytes))
-}
-
-func parseSeedFile(r io.Reader) (*seedFile, error) {
-	var seed seedFile
-	dec := yaml.NewDecoder(r)
-	dec.KnownFields(true)
-	if err := dec.Decode(&seed); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse seed file: %w", err)
-	}
-	return &seed, nil
-}
-
-// validateAll converts and validates every entry, reporting the file position of
-// each failure so an operator can find it.
-func validateAll(sources []seedSource) ([]domain.SourceInput, error) {
-	inputs := make([]domain.SourceInput, 0, len(sources))
-	seen := make(map[string]int, len(sources))
-	var errs []error
-
-	for i, s := range sources {
-		in := s.toInput()
-		if _, err := domain.NewSource(in, time.Now()); err != nil {
-			errs = append(errs, fmt.Errorf("sources[%d] (%s): %w", i, s.Name, err))
-			continue
-		}
-		if first, duplicate := seen[s.FeedURL]; duplicate {
-			errs = append(errs, fmt.Errorf("sources[%d]: feed_url %q already declared at sources[%d]", i, s.FeedURL, first))
-			continue
-		}
-		seen[s.FeedURL] = i
-		inputs = append(inputs, in)
-	}
-
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return inputs, nil
+	return bootstrap.SyncSources(ctx, svc, inputs, logger)
 }
 
 // defaultConfigPath lets the container point at a mounted config without flags.

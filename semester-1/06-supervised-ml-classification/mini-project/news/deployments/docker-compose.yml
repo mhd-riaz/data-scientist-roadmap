@@ -19,45 +19,9 @@ services:
       retries: 10
       start_period: 20s
 
-  # Runs to completion before the API starts, then exits.
-  migrate:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    entrypoint: ["/app/migrate"]
-    env_file:
-      - path: ../.env
-        required: false
-    environment:
-      NEWS_MONGO_URI: mongodb://mongo:27017
-      NEWS_MONGO_DATABASE: news
-      NEWS_LOGGING_FORMAT: json
-    depends_on:
-      mongo:
-        condition: service_healthy
-    restart: "no"
-
-  # Applies configs/sources.yaml, then exits. Matched on feed_url and patched
-  # rather than replaced, so re-running it never resets a hand-tuned interval.
-  seed:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    entrypoint: ["/app/seed"]
-    env_file:
-      - path: ../.env
-        required: false
-    environment:
-      NEWS_MONGO_URI: mongodb://mongo:27017
-      NEWS_MONGO_DATABASE: news
-      NEWS_LOGGING_FORMAT: json
-    depends_on:
-      mongo:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    restart: "no"
-
+  # The API migrates the database and applies configs/sources.yaml itself, on
+  # every start. `make migrate` and `make seed` still exist for applying either
+  # without a restart.
   api:
     build:
       context: ..
@@ -82,10 +46,6 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-      seed:
-        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health/ready"]
       interval: 15s

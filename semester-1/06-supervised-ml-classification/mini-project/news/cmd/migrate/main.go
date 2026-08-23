@@ -1,5 +1,6 @@
 // Command migrate creates the application's MongoDB collections and indexes.
-// It is idempotent and safe to run before every deployment.
+// The API does the same thing at startup; this exists for a local run and for
+// migrating without restarting anything. It is idempotent.
 package main
 
 import (
@@ -9,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/riaz/newscollector/internal/bootstrap"
 	"github.com/riaz/newscollector/internal/config"
 	"github.com/riaz/newscollector/internal/mongodb"
 	"github.com/riaz/newscollector/internal/observability"
@@ -71,34 +73,13 @@ func run() error {
 		return fmt.Errorf("cannot reach mongodb at %s: %w", cfg.Mongo.RedactedURI(), err)
 	}
 
-	created, err := mongodb.EnsureCollections(ctx, client.Database())
-	if err != nil {
+	if err := bootstrap.Migrate(ctx, client.Database(), logger); err != nil {
 		return err
-	}
-	logger.Info("collections ensured", "created", created, "total", len(mongodb.Collections()))
-
-	// Superseded indexes go before the new ones: MongoDB refuses to recreate an
-	// existing name with different keys.
-	dropped, err := mongodb.DropObsoleteIndexes(ctx, client.Database())
-	if err != nil {
-		return err
-	}
-	for collection, names := range dropped {
-		logger.Info("obsolete indexes dropped", "collection", collection, "indexes", names)
-	}
-
-	applied, err := mongodb.EnsureIndexes(ctx, client.Database())
-	if err != nil {
-		return err
-	}
-	for _, ci := range mongodb.IndexPlan() {
-		logger.Info("indexes ensured", "collection", ci.Collection, "indexes", applied[ci.Collection])
 	}
 
 	logger.Info("migration complete")
 	return nil
 }
-
 func defaultConfigPath() string {
 	if p := os.Getenv(config.EnvPrefix + "CONFIG_PATH"); p != "" {
 		return p

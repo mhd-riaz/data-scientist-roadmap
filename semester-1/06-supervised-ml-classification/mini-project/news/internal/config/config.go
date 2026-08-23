@@ -24,12 +24,16 @@ const EnvPrefix = "NEWS_"
 // DefaultPath is the config file location used when none is supplied.
 const DefaultPath = "configs/config.yaml"
 
+// DefaultSourcesPath is the seed file location used when none is supplied.
+const DefaultSourcesPath = "configs/sources.yaml"
+
 // Config is the fully resolved application configuration.
 type Config struct {
 	App       App       `yaml:"app"`
 	Server    Server    `yaml:"server"`
 	Auth      Auth      `yaml:"auth"`
 	Mongo     Mongo     `yaml:"mongo"`
+	Bootstrap Bootstrap `yaml:"bootstrap"`
 	Collector Collector `yaml:"collector"`
 	Scheduler Scheduler `yaml:"scheduler"`
 	Scraper   Scraper   `yaml:"scraper"`
@@ -40,6 +44,27 @@ type Config struct {
 type App struct {
 	Name        string `yaml:"name"`
 	Environment string `yaml:"environment"`
+}
+
+// Bootstrap holds what the API reconciles against the database before it
+// serves. It exists so a deployment cannot come up against an unmigrated
+// database or a source list older than the image it is running, which is what
+// happens whenever a one-shot migrate or seed container is skipped.
+type Bootstrap struct {
+	// Migrate ensures the collections and indexes the code expects.
+	Migrate bool `yaml:"migrate"`
+
+	// SourcesPath is the seed list applied at startup, matched on feed_url and
+	// patched rather than replaced, so a value tuned through the API survives.
+	// It is a filesystem path, or an https URL so the feed list can live outside
+	// the image and be picked up by a restart instead of a rebuild. Empty
+	// disables the sync, which is what a deployment that manages sources only
+	// through the API wants.
+	SourcesPath string `yaml:"sources_path"`
+
+	// Timeout bounds the whole reconciliation. Index builds on a large database
+	// are the slow part, so it is generous next to the other timeouts here.
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 // Server holds HTTP listener settings.
@@ -244,6 +269,11 @@ func Default() *Config {
 			MaxPoolSize:            50,
 			MinPoolSize:            0,
 		},
+		Bootstrap: Bootstrap{
+			Migrate:     true,
+			SourcesPath: DefaultSourcesPath,
+			Timeout:     2 * time.Minute,
+		},
 		Collector: Collector{
 			UserAgent:            "news-collector/1.0 (+https://github.com/riaz/newscollector)",
 			RequestTimeout:       20 * time.Second,
@@ -370,6 +400,10 @@ func (c *Config) applyEnv() error {
 	b.unsigned("MONGO_MAX_POOL_SIZE", &c.Mongo.MaxPoolSize)
 	b.unsigned("MONGO_MIN_POOL_SIZE", &c.Mongo.MinPoolSize)
 
+	b.boolean("BOOTSTRAP_MIGRATE", &c.Bootstrap.Migrate)
+	b.str("BOOTSTRAP_SOURCES_PATH", &c.Bootstrap.SourcesPath)
+	b.duration("BOOTSTRAP_TIMEOUT", &c.Bootstrap.Timeout)
+
 	b.str("COLLECTOR_USER_AGENT", &c.Collector.UserAgent)
 	b.duration("COLLECTOR_REQUEST_TIMEOUT", &c.Collector.RequestTimeout)
 	b.integer64("COLLECTOR_MAX_RESPONSE_BYTES", &c.Collector.MaxResponseBytes)
@@ -437,6 +471,7 @@ func (c *Config) Validate(opts ...Option) error {
 		positive("mongo.operation_timeout", c.Mongo.OperationTimeout),
 		validateMongoURI(c.Mongo.URI),
 		validateDatabaseName(c.Mongo.Database),
+		positive("bootstrap.timeout", c.Bootstrap.Timeout),
 	)
 
 	if c.Mongo.MaxPoolSize == 0 {
