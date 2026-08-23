@@ -14,6 +14,9 @@ explicitly out of scope.
 > history and the collector CLI (M5); and now the article query APIs (M6). Feeds
 > are configured, collected on a schedule, deduplicated, stored and readable.
 
+Everything after Phase 1 — the ML models and the e-newspaper they assemble — is
+planned in [docs/plan.md](docs/plan.md).
+
 ## Requirements
 
 - Go 1.26+
