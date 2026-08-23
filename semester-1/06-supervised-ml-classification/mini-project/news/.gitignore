@@ -19,3 +19,14 @@ configs/config.local.yaml
 .DS_Store
 .idea/
 .vscode/
+
+# Python (offline ML work under ml/)
+__pycache__/
+*.py[cod]
+ml/.venv/
+.pytest_cache/
+
+# Snapshot payloads are derived from third-party article text collected for
+# study. The manifest and data card describe them; the text itself is never
+# redistributed. Regenerate with `make ml-snapshot`.
+ml/data/snapshots/*/*.jsonl

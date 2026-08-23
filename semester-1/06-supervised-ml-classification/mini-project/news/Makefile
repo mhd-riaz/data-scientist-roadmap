@@ -107,3 +107,31 @@ mongo-up: ## Start only MongoDB, for local test runs
 .PHONY: clean
 clean: ## Remove build and coverage artefacts
 	rm -rf $(BIN_DIR) coverage.out coverage.html
+
+# --- Offline ML (ml/, Python) ------------------------------------------------
+# Training and data preparation never run on the homelab; the 2 GB budget is a
+# serving budget. These targets are laptop-only and never touch the Go build.
+
+.PHONY: ml-setup
+ml-setup: ## Create the ml/ virtualenv and install pinned dependencies
+	cd ml && uv sync --group dev
+
+.PHONY: ml-test
+ml-test: ## Run the offline ML test suite
+	cd ml && uv run pytest
+
+.PHONY: ml-profile
+ml-profile: ## Write the corpus profile report and figures to ml/reports
+	cd ml && uv run newsml profile
+
+.PHONY: ml-boilerplate
+ml-boilerplate: ## Discover per-source template lines for review
+	cd ml && uv run newsml boilerplate
+
+.PHONY: ml-snapshot
+ml-snapshot: ## Freeze a dataset: make ml-snapshot ID=20260823-100
+	cd ml && uv run newsml snapshot $(if $(ID),--id $(ID),)
+
+.PHONY: ml-verify
+ml-verify: ## Rebuild a snapshot and confirm byte-identical digests
+	cd ml && uv run newsml verify $(if $(ID),--id $(ID),)

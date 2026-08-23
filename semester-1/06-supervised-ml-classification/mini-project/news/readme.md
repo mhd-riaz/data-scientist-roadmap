@@ -68,6 +68,7 @@ make cover                         # coverage summary
 make test-integration              # needs MongoDB on localhost:27017
 make seed-check                    # validate configs/sources.yaml, write nothing
 make build                         # binaries into ./bin
+make ml-test                       # offline ML suite (Python, see below)
 ```
 
 Unit tests never contact a network service. The integration tests are behind the
@@ -572,6 +573,33 @@ gains a field is retired under its old name rather than edited in place. `Obsole
 lists those names and `make migrate` drops them before applying the plan, so upgrading an
 existing deployment is still `make migrate` and nothing else.
 
+## Offline ML pipeline
+
+Everything under `ml/` is Python, runs on a laptop, and is never deployed. It reads
+the collection read-only and writes derived artifacts; the collector never depends on
+it, so a failure here cannot affect collection. The phase plan lives in
+[docs/plan.md](docs/plan.md).
+
+```bash
+make ml-setup                      # create ml/.venv and install pinned dependencies
+make ml-test                       # the offline test suite
+make ml-profile                    # corpus profile report and figures -> ml/reports
+make ml-boilerplate                # discover per-source template lines for review
+make ml-snapshot ID=20260823-100   # freeze a dataset
+make ml-verify   ID=20260823-100   # rebuild it and confirm byte-identical digests
+```
+
+Point it at a different database with `NEWS_ML_MONGO_URI`; it defaults to
+`mongodb://127.0.0.1:27017/news`.
+
+A snapshot is the boundary between data preparation and training. Once one exists,
+training reads a directory rather than a database, and its contents are a pure function
+of `(git SHA, cleaning_version, seed, corpus)` — which `make ml-verify` checks by
+rebuilding into a scratch directory and comparing SHA-256 digests.
+
+Snapshot payloads are gitignored. They contain third-party article text collected for
+study, so the manifest and data card are committed and the text itself is not.
+
 ## Project layout
 
 ```text
@@ -599,6 +627,11 @@ fixtures/     offline feed fixtures for tests
 deployments/  Dockerfile, local Docker Compose, Coolify Compose stack
 scripts/      developer helper scripts
 .env.example  template for the gitignored .env holding secrets
+
+ml/src/newsml offline data preparation: profile, clean, admit, neardup, splits, snapshot
+ml/tests      the offline test suite
+ml/reports    corpus profile and figures
+ml/data       frozen dataset snapshots (payloads gitignored)
 ```
 
 Dependencies point inward only: handlers depend on services, services depend on
