@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/riaz/newscollector/internal/app"
+	"github.com/riaz/newscollector/internal/bootstrap"
 	"github.com/riaz/newscollector/internal/config"
 	"github.com/riaz/newscollector/internal/handler"
 	"github.com/riaz/newscollector/internal/mongodb"
@@ -77,7 +78,9 @@ func run() error {
 	}
 
 	// A database outage must not stop the process from starting: liveness stays
-	// green and readiness reports 503 until MongoDB comes back.
+	// green and readiness reports 503 until MongoDB comes back. The bootstrap
+	// below is the exception — it has nothing to reconcile against an absent
+	// database, so it fails and lets the restart policy retry.
 	pingCtx, cancelPing := context.WithTimeout(ctx, cfg.Mongo.ServerSelectionTimeout)
 	if err := mongoClient.Ping(pingCtx); err != nil {
 		logger.Warn("mongodb unreachable at startup; readiness will report not ready",
@@ -89,6 +92,24 @@ func run() error {
 
 	sourceService := service.NewSourceService(mongorepo.NewSourceRepository(mongoClient.Database()), time.Now)
 	articleService := service.NewArticleService(mongorepo.NewArticleRepository(mongoClient.Database()))
+
+	// Reconciling here rather than in a one-shot container is what makes a
+	// redeploy actually pick up an edited source list: a container that has
+	// already exited successfully may simply not be recreated. Failing is
+	// deliberate — the restart policy retries, and serving against an
+	// unmigrated database would be worse than a restart.
+	bootstrapCtx, cancelBootstrap := context.WithTimeout(ctx, cfg.Bootstrap.Timeout)
+	err = bootstrap.Run(bootstrapCtx, bootstrap.Options{
+		Database:    mongoClient.Database(),
+		Migrate:     cfg.Bootstrap.Migrate,
+		SourcesPath: cfg.Bootstrap.SourcesPath,
+		Sources:     sourceService,
+		Logger:      logger,
+	})
+	cancelBootstrap()
+	if err != nil {
+		return fmt.Errorf("startup bootstrap: %w", err)
+	}
 
 	collectionService, err := app.NewCollectionService(cfg, mongoClient.Database(), time.Now, logger)
 	if err != nil {

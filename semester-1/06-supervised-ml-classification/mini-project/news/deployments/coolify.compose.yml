@@ -29,46 +29,16 @@ services:
       retries: 10
       start_period: 20s
 
-  # Creates collections and indexes, then exits. Idempotent, so it runs on every
-  # deployment and the API never starts against an unmigrated database.
-  migrate:
-    image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
-    entrypoint: ["/app/migrate"]
-    restart: "no"
-    environment:
-      - NEWS_MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_64_MONGO}@mongo:27017/?authSource=admin
-      - NEWS_MONGO_DATABASE=${NEWS_MONGO_DATABASE:-news}
-      - NEWS_APP_ENVIRONMENT=production
-      - NEWS_LOGGING_FORMAT=json
-      # Migration talks to nothing but MongoDB, so it needs no API credentials.
-      - NEWS_AUTH_ENABLED=false
-    depends_on:
-      mongo:
-        condition: service_healthy
-
-  # Applies configs/sources.yaml, then exits. Sources are matched on feed_url and
-  # patched rather than replaced, and an omitted optional key is left untouched,
-  # so a value tuned through the API survives a redeploy. Sources already stored
-  # but absent from the file are left alone: this reconciles, it does not prune.
+  # The API migrates the database and applies the source list itself, on every
+  # start, so there are no one-shot migrate or seed containers here. That is
+  # deliberate: a one-shot container that has already exited successfully is not
+  # guaranteed to be recreated on a redeploy, and when it is skipped an edited
+  # feed list silently never reaches the database.
   #
-  # The file is baked into the image, so changing the feed list means rebuilding.
-  seed:
-    image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
-    entrypoint: ["/app/seed"]
-    restart: "no"
-    environment:
-      - NEWS_MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_64_MONGO}@mongo:27017/?authSource=admin
-      - NEWS_MONGO_DATABASE=${NEWS_MONGO_DATABASE:-news}
-      - NEWS_APP_ENVIRONMENT=production
-      - NEWS_LOGGING_FORMAT=json
-      # Seeding talks to nothing but MongoDB, so it needs no API credentials.
-      - NEWS_AUTH_ENABLED=false
-    depends_on:
-      mongo:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
+  # Applying is idempotent — sources are matched on feed_url and patched rather
+  # than replaced, an omitted optional key is left untouched, and a stored source
+  # absent from the file is left alone — so a value tuned through the API
+  # survives a redeploy.
   api:
     image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
     restart: unless-stopped
@@ -79,6 +49,17 @@ services:
       - NEWS_SERVER_PORT=8080
       - NEWS_MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_64_MONGO}@mongo:27017/?authSource=admin
       - NEWS_MONGO_DATABASE=${NEWS_MONGO_DATABASE:-news}
+
+      # The default reads the copy baked into the image, which means a new feed
+      # needs a rebuild. Point this at the raw URL of configs/sources.yaml
+      # instead and the list is read fresh on every start, so adding a feed is a
+      # commit and a restart:
+      #
+      #   https://raw.githubusercontent.com/mhd-riaz/data-scientist-roadmap/main/semester-1/06-supervised-ml-classification/mini-project/news/configs/sources.yaml
+      #
+      # https only, and a fetch that fails leaves the stored sources in place
+      # rather than stopping the collector.
+      - NEWS_BOOTSTRAP_SOURCES_PATH=${NEWS_BOOTSTRAP_SOURCES_PATH:-configs/sources.yaml}
 
       # production also refuses a disabled guard and private-network fetches.
       - NEWS_APP_ENVIRONMENT=production
@@ -97,10 +78,6 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-      seed:
-        condition: service_completed_successfully
     healthcheck:
       # /health is unauthenticated on purpose, so this probe needs no credential.
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health/ready"]

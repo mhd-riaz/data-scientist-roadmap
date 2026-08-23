@@ -41,6 +41,32 @@ mongo:
   max_pool_size: 50
   min_pool_size: 0
 
+# What the API reconciles against the database before it serves. This is why a
+# redeploy picks up an edited sources.yaml without a separate seed step: a
+# one-shot container that has already exited successfully may simply not be
+# recreated, and then the new feeds never reach the database.
+#
+# Both stages are idempotent. Sources are matched on feed_url and patched rather
+# than replaced, and an omitted optional key is left untouched, so a value tuned
+# through the API survives. Sources already stored but absent from the file are
+# left alone: this reconciles, it does not prune.
+#
+# Failing here stops the process rather than serving against an unmigrated
+# database; the restart policy is the retry. A remote sources_path is the one
+# exception: if it cannot be read the stored source list is left in place and
+# the process carries on, because the file's host being down is no reason to
+# stop collecting. Set migrate: false and sources_path: "" to manage both by
+# hand instead.
+bootstrap:
+  migrate: true
+  # A filesystem path, or an https URL. A URL is read on every start, so the
+  # feed list lives outside the image and editing it needs a restart rather
+  # than a rebuild — for example the raw URL of configs/sources.yaml on main.
+  # NEWS_BOOTSTRAP_SOURCES_PATH overrides this per deployment.
+  sources_path: configs/sources.yaml
+  # Generous next to the other timeouts: index builds are the slow part.
+  timeout: 2m
+
 collector:
   user_agent: news-collector/1.0 (+https://github.com/riaz/newscollector)
   request_timeout: 20s

@@ -32,13 +32,13 @@ cp .env.example .env
 openssl rand -hex 32          # paste into NEWS_AUTH_API_KEYS
 ```
 
-Starts MongoDB, runs the migration to completion, then starts the API:
+Starts MongoDB, then the API — which migrates the database and applies
+`configs/sources.yaml` itself before it serves:
 
 ```bash
 make up
 curl -s localhost:8080/health/live
 curl -s localhost:8080/health/ready
-make seed          # apply the feeds in configs/sources.yaml
 curl -s -H "X-API-Key: $KEY" 'localhost:8080/api/v1/collection-runs?limit=5'
 curl -s -H "X-API-Key: $KEY" 'localhost:8080/api/v1/articles?limit=5'
 make logs
@@ -46,17 +46,18 @@ make down          # stops the stack and deletes the volume
 ```
 
 The API process also runs the scheduler, so feeds start being collected as soon
-as they are seeded.
+as it is up.
 
 ## Quick start without Docker
 
 ```bash
 make mongo-up                      # MongoDB only, on localhost:27017
-make migrate                       # create collections and indexes
-make seed                          # apply the feeds in configs/sources.yaml
+make run                           # migrate, apply sources.yaml, serve on :8080
 make collect                       # collect everything currently due, once
-make run                           # serve on localhost:8080
 ```
+
+`make migrate` and `make seed` do the two startup steps on their own, against a
+database the API is already serving.
 
 ## Verification gates
 
@@ -102,6 +103,9 @@ Three layers, each overriding the one before: built-in defaults →
 | `mongo.operation_timeout`          | `NEWS_MONGO_OPERATION_TIMEOUT`          | `30s`                       |
 | `mongo.max_pool_size`              | `NEWS_MONGO_MAX_POOL_SIZE`              | `50`                        |
 | `mongo.min_pool_size`              | `NEWS_MONGO_MIN_POOL_SIZE`              | `0`                         |
+| `bootstrap.migrate`                | `NEWS_BOOTSTRAP_MIGRATE`                | `true`                      |
+| `bootstrap.sources_path`           | `NEWS_BOOTSTRAP_SOURCES_PATH`           | `configs/sources.yaml`      |
+| `bootstrap.timeout`                | `NEWS_BOOTSTRAP_TIMEOUT`                | `2m`                        |
 | `collector.user_agent`             | `NEWS_COLLECTOR_USER_AGENT`             | `news-collector/1.0 (...)`  |
 | `collector.request_timeout`        | `NEWS_COLLECTOR_REQUEST_TIMEOUT`        | `20s`                       |
 | `collector.max_response_bytes`     | `NEWS_COLLECTOR_MAX_RESPONSE_BYTES`     | `10485760`                  |
@@ -171,19 +175,24 @@ Go build runs on it.
 
 On the Coolify side, create a **Docker Compose** resource from
 [deployments/coolify.compose.yml](deployments/coolify.compose.yml). It brings up
-MongoDB with generated credentials, runs the idempotent migration to completion,
-then starts the API behind a Coolify-issued domain.
+MongoDB with generated credentials, then starts the API behind a Coolify-issued
+domain. There are no one-shot migrate or seed containers: the API reconciles the
+schema and the source list itself on every start, because a one-shot container
+that has already exited successfully is not guaranteed to be recreated on a
+redeploy — and when it is skipped, an edited feed list silently never reaches
+the database.
 
 Set these in the Coolify UI before the first deploy — the compose file marks
 them required, so a missing one fails the deployment instead of starting an
 unguarded API:
 
-| Variable                   | Notes                                   |
-| -------------------------- | --------------------------------------- |
-| `NEWS_AUTH_API_KEYS`       | `openssl rand -hex 32`, comma-separated |
-| `NEWS_AUTH_BASIC_USERNAME` |                                         |
-| `NEWS_AUTH_BASIC_PASSWORD` | at least 16 characters                  |
-| `NEWS_IMAGE`               | optional; pin to a SHA tag to roll back |
+| Variable                      | Notes                                            |
+| ----------------------------- | ------------------------------------------------ |
+| `NEWS_AUTH_API_KEYS`          | `openssl rand -hex 32`, comma-separated          |
+| `NEWS_AUTH_BASIC_USERNAME`    |                                                  |
+| `NEWS_AUTH_BASIC_PASSWORD`    | at least 16 characters                           |
+| `NEWS_IMAGE`                  | optional; pin to a SHA tag to roll back          |
+| `NEWS_BOOTSTRAP_SOURCES_PATH` | optional; an https URL to change feeds unrebuilt |
 
 And these as GitHub repository secrets:
 
@@ -205,12 +214,30 @@ echo "$GH_TOKEN" | docker login ghcr.io -u <username> --password-stdin
 
 ## Sources
 
-Feeds are declared in [configs/sources.yaml](configs/sources.yaml) and applied with
-`make seed`. Seeding is idempotent and matches on `feed_url`, so re-running updates
-rather than duplicates. An omitted optional key keeps whatever is already stored, so a
-value tuned through the API is never reset by a re-seed. `make seed-check` validates the
-whole file without writing, and a file containing an invalid entry is rejected in full
-rather than applied halfway.
+Feeds are declared in [configs/sources.yaml](configs/sources.yaml). The API applies
+them at startup, so adding a feed is an edit and a restart; `make seed` applies an
+edited file to a running database without one. Either way it is idempotent and matches
+on `feed_url`, so re-running updates rather than duplicates. An omitted optional key
+keeps whatever is already stored, so a value tuned through the API is never reset. A
+source stored but absent from the file is left alone: this reconciles, it does not
+prune. `make seed-check` validates the whole file without writing, and a file containing
+an invalid entry is rejected in full rather than applied halfway.
+
+`bootstrap.sources_path` takes a filesystem path or an **https URL**. The default reads
+the copy baked into the image, so a new feed needs a rebuild. Point it at the raw URL of
+this file on `main` instead and the list is read fresh on every start — adding a feed is
+then a commit and a restart, with no image rebuild:
+
+```
+NEWS_BOOTSTRAP_SOURCES_PATH=https://raw.githubusercontent.com/mhd-riaz/data-scientist-roadmap/main/semester-1/06-supervised-ml-classification/mini-project/news/configs/sources.yaml
+```
+
+Plaintext `http://` is refused: this file decides which URLs the collector then fetches,
+so anyone able to rewrite it in transit would be choosing that for us. A remote list that
+cannot be read is logged at error level and leaves the stored sources in place rather
+than stopping the collector — unlike a local one, where an unreadable or invalid file is
+an operator mistake and fails the start. Setting `sources_path` to `""` turns the startup
+sync off entirely, for a deployment that manages sources only through the API.
 
 | Field                    | Required | Rule                                   |
 | ------------------------ | -------- | -------------------------------------- |
