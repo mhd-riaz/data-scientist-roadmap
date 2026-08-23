@@ -731,6 +731,81 @@ sources:
     fetch_interval_seconds: 3600
 
   # ---------------------------------------------------------------------------
+  # Global institutions. Single-topic, like the publications above: their
+  # `publisher_topics` prior is high-confidence because a health agency or a
+  # medical journal does not also cover courts or sport.
+  # ---------------------------------------------------------------------------
+
+  - name: WHO — News
+    feed_url: https://www.who.int/rss-feeds/news-english.xml
+    type: rss
+    language: en
+    country: CH
+    priority: 58
+    fetch_interval_seconds: 7200
+
+  - name: The Lancet
+    feed_url: https://www.thelancet.com/rssfeed/lancet_current.xml
+    type: rss
+    language: en
+    country: GB
+    priority: 55
+    fetch_interval_seconds: 7200
+
+  - name: Nature Medicine
+    feed_url: https://www.nature.com/nm.rss
+    type: rss
+    language: en
+    country: GB
+    priority: 55
+    fetch_interval_seconds: 7200
+
+  - name: NOAA — News
+    feed_url: https://www.noaa.gov/rss.xml
+    type: rss
+    language: en
+    country: US
+    priority: 55
+    fetch_interval_seconds: 3600
+
+  - name: UNEP — News and Stories
+    feed_url: https://www.unep.org/rss.xml
+    type: rss
+    language: en
+    country: KE
+    priority: 55
+    fetch_interval_seconds: 7200
+
+  - name: Bank for International Settlements — Press
+    feed_url: https://www.bis.org/doclist/all_pressrels.rss
+    type: rss
+    language: en
+    country: CH
+    priority: 55
+    fetch_interval_seconds: 7200
+
+  # Harvard Gazette covers the whole university, not just education, so it
+  # carries no `publisher_topics` entry — the same choice already made for
+  # MIT News above.
+  - name: Harvard Gazette
+    feed_url: https://news.harvard.edu/gazette/feed/
+    type: rss
+    language: en
+    country: US
+    priority: 50
+    fetch_interval_seconds: 7200
+
+  # Atom, not RSS — the only entry in this file that is. Multi-topic data
+  # journalism, so it also carries no `publisher_topics` entry.
+  - name: Our World in Data
+    feed_url: https://ourworldindata.org/atom.xml
+    type: atom
+    language: en
+    country: GB
+    priority: 50
+    fetch_interval_seconds: 7200
+
+  # ---------------------------------------------------------------------------
   # General national feeds. No topic label: they carry whatever the desk filed.
   # Added sparingly, because the pilot already found politics at 29% and crime
   # at 14%, and these feeds mostly deepen those two.
@@ -786,5 +861,17 @@ sources:
 # Paywalled but still useful for title and summary, which is what the corpus
 # trains on: Financial Times, Bloomberg. Not added yet — check their terms
 # first, the way Al Jazeera was checked above.
+#
+# Verified dead, 2026-08-23 (second pass — global institutions):
+#
+#   RBI                No public RSS; site has no autodiscovery link
+#   SEBI                No public RSS; site has no autodiscovery link
+#   PIB                 /rss.aspx redirects to a 404 HTML page
+#   NIH                 /news-releases/feed answers 403 to non-browser clients
+#   CDC, FDA            RSS index pages answer 403 / 404; no feed URL found
+#   BMJ                 /rss/current.xml answers 403
+#   Stanford News       /feed/ answers 403
+#   Oxford, Cambridge   No autodiscovery link; guessed patterns 403/404
+#   MIT OCW, IEA, IPCC  No autodiscovery link on their news pages
+#   IMF Blog            Already recorded above (?rss=1 403)
 # -----------------------------------------------------------------------------
-

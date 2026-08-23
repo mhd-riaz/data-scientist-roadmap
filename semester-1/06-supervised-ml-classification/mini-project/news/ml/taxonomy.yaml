@@ -320,6 +320,12 @@ publisher_topics:
   The Economic Times: business_economy
   MarketWatch: business_markets
   CNBC: business_economy
+  WHO — News: health
+  The Lancet: health
+  Nature Medicine: health
+  NOAA — News: environment_climate
+  UNEP — News and Stories: environment_climate
+  Bank for International Settlements — Press: business_macroeconomy
 
 # RSS `categories` values that map cleanly onto a class. Publishers fragment
 # their own vocabulary, so several strings collapse to one class.
