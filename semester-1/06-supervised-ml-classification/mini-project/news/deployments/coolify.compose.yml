@@ -46,6 +46,29 @@ services:
       mongo:
         condition: service_healthy
 
+  # Applies configs/sources.yaml, then exits. Sources are matched on feed_url and
+  # patched rather than replaced, and an omitted optional key is left untouched,
+  # so a value tuned through the API survives a redeploy. Sources already stored
+  # but absent from the file are left alone: this reconciles, it does not prune.
+  #
+  # The file is baked into the image, so changing the feed list means rebuilding.
+  seed:
+    image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
+    entrypoint: ["/app/seed"]
+    restart: "no"
+    environment:
+      - NEWS_MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_64_MONGO}@mongo:27017/?authSource=admin
+      - NEWS_MONGO_DATABASE=${NEWS_MONGO_DATABASE:-news}
+      - NEWS_APP_ENVIRONMENT=production
+      - NEWS_LOGGING_FORMAT=json
+      # Seeding talks to nothing but MongoDB, so it needs no API credentials.
+      - NEWS_AUTH_ENABLED=false
+    depends_on:
+      mongo:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   api:
     image: ${NEWS_IMAGE:-ghcr.io/mhd-riaz/news-collector:latest}
     restart: unless-stopped
@@ -75,6 +98,8 @@ services:
       mongo:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
     healthcheck:
       # /health is unauthenticated on purpose, so this probe needs no credential.

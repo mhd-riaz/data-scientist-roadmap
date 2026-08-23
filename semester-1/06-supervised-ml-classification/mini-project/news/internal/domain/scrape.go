@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -137,6 +138,15 @@ func (s ScrapeStatus) Retryable() bool {
 	return false
 }
 
+// RetryableScrapeStatuses lists the states a backlog query selects. It exists so
+// the storage layer builds its filter from the same list Retryable answers from,
+// rather than repeating it in a query where the two could drift apart.
+func RetryableScrapeStatuses() []ScrapeStatus {
+	return []ScrapeStatus{
+		ScrapeStatusPending, ScrapeStatusFetchFailed, ScrapeStatusExtractFailed,
+	}
+}
+
 // HasFullText reports whether the stored content is the whole article, whether
 // it arrived in the feed or was fetched afterwards. This is the filter a
 // consumer wants when it needs article bodies rather than headlines.
@@ -194,28 +204,80 @@ func BetterContent(existing, candidate string) bool {
 	return c > WordCount(existing)
 }
 
+// fetchStripParams are query keys that publishers disallow in robots.txt but
+// that NormalizeURL deliberately keeps.
+//
+// The two lists are separate on purpose. NormalizeURL's output is a stored
+// deduplication key, so widening what it strips would change the key of every
+// article already held and let the same story back in as a new one. This list
+// only affects which address is requested, and costs nothing to extend.
+var fetchStripParams = map[string]struct{}{
+	"traffic_source": {}, "at_medium": {}, "at_campaign": {},
+	"gb": {}, "ito": {}, "ncid": {}, "cmp": {}, "smid": {},
+}
+
+// FetchURL returns the address to request for an article.
+//
+// It is deliberately not NormalizeURL: that one exists to decide whether two
+// articles are the same and drops parts a server needs, such as the host's
+// "www". This one changes as little as possible — the fragment, which is never
+// sent anyway, and parameters that describe how a reader arrived.
+//
+// Stripping them is not cosmetic. Publishers routinely disallow them in
+// robots.txt: Al Jazeera refuses "/*?traffic_source=" and the BBC's own feed
+// links carry "?at_medium=RSS", so the URL a feed hands over can be forbidden
+// while the identical article is freely allowed.
+func FetchURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return raw
+	}
+
+	u.Fragment = ""
+	u.RawFragment = ""
+
+	if u.RawQuery != "" {
+		q := u.Query()
+		for k := range q {
+			lk := strings.ToLower(k)
+			_, tracked := trackingParams[lk]
+			_, stripped := fetchStripParams[lk]
+			if tracked || stripped || strings.HasPrefix(lk, "utm_") {
+				q.Del(k)
+			}
+		}
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
+}
+
 // ScrapeResult is one finished attempt, in the shape the repository writes. It
 // carries every field the update touches so content and status can never be
 // written apart.
+//
+// It holds no attempt count: the counter is raised when the article is claimed,
+// not when the attempt reports back, so that a worker which dies mid-fetch still
+// spends an attempt instead of being retried forever.
 type ScrapeResult struct {
-	Status   ScrapeStatus
-	Content  string
-	Attempts int
-	At       time.Time
+	Status ScrapeStatus
+
+	// Content is written only when it is set, so a failed attempt leaves the
+	// stored text alone rather than blanking it.
+	Content string
+
+	At time.Time
 
 	// NextAt is when the article becomes eligible again. It is nil for a
 	// terminal status, which is what removes the article from the backlog.
 	NextAt *time.Time
 }
 
-// ScrapeBacklogFilter selects the articles a run should work on.
-type ScrapeBacklogFilter struct {
-	// Now bounds NextScrapeAt. It is supplied rather than read from the clock so
-	// a test can drive the backoff schedule.
+// ScrapeClaim selects the next article a worker should take, and is the same
+// value the storage layer uses to take it.
+type ScrapeClaim struct {
+	// Now bounds NextScrapeAt and stamps the claim. It is supplied rather than
+	// read from the clock so a test can drive the backoff schedule.
 	Now time.Time
-
-	// Limit bounds one run's work.
-	Limit int
 
 	// MaxAttempts excludes articles that have spent their budget.
 	MaxAttempts int

@@ -52,6 +52,19 @@ func (f *fakeArticleReadRepo) DeleteOlderThan(_ context.Context, d domain.Articl
 	return f.deleted, f.err
 }
 
+// The read service does not enrich, so these exist only to satisfy the interface.
+func (f *fakeArticleReadRepo) ClaimForScraping(context.Context, domain.ScrapeClaim) (*domain.Article, error) {
+	return nil, repository.ErrNotFound
+}
+
+func (f *fakeArticleReadRepo) UpdateScrapeResult(context.Context, string, domain.ScrapeResult) error {
+	return nil
+}
+
+func (f *fakeArticleReadRepo) ReleaseStaleScrapeClaims(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func TestArticleListNormalizesBeforeQuerying(t *testing.T) {
 	repo := &fakeArticleReadRepo{}
 

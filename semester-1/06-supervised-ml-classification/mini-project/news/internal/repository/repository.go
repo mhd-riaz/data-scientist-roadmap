@@ -84,6 +84,30 @@ type ArticleRepository interface {
 	// not ErrNotFound: a retention sweep that finds the collection already
 	// tidy has succeeded.
 	DeleteOlderThan(ctx context.Context, d domain.ArticleDeletion) (int64, error)
+
+	// ClaimForScraping takes the article that has waited longest for full-text
+	// enrichment and marks it in flight, returning ErrNotFound when the backlog
+	// is empty. Claiming is a single atomic write rather than a read followed by
+	// one, because that is what stops two workers fetching the same article.
+	//
+	// The attempt counter is raised here, not when the attempt reports back: a
+	// worker that dies mid-fetch has still spent an attempt, and counting only
+	// completed attempts would let a article that reliably kills its worker be
+	// retried until the end of time.
+	ClaimForScraping(ctx context.Context, claim domain.ScrapeClaim) (*domain.Article, error)
+
+	// UpdateScrapeResult writes one finished attempt. Content, status and
+	// schedule go in a single update so a reader can never observe text that
+	// disagrees with the status describing it. It returns ErrNotFound if the
+	// article has since been deleted, which a retention sweep may legitimately
+	// have done while the fetch was in flight.
+	UpdateScrapeResult(ctx context.Context, id string, result domain.ScrapeResult) error
+
+	// ReleaseStaleScrapeClaims returns articles claimed before the given instant
+	// to the backlog and reports how many were freed. A claim outlives its
+	// worker only when that worker died, so this is how the backlog recovers
+	// from a crash or an evicted pod.
+	ReleaseStaleScrapeClaims(ctx context.Context, claimedBefore time.Time) (int64, error)
 }
 
 // CollectionRunRepository persists the audit record of every collection
