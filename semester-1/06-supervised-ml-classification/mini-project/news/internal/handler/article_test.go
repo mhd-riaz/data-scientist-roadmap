@@ -78,6 +78,7 @@ func newArticleServer(t *testing.T, articles ArticleManager) http.Handler {
 		NewCollectionRun(&fakeRunReader{}, logger),
 		NewArticle(articles, logger),
 		nil,
+		nil,
 		logger,
 	)
 }

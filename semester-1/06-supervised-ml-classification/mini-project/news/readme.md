@@ -272,6 +272,9 @@ set one is rejected rather than ignored.
 | `GET`    | `/api/v1/articles`             | List articles, filtered and paginated       | 6         |
 | `DELETE` | `/api/v1/articles`             | Expire articles older than a given date     | 6         |
 | `GET`    | `/api/v1/articles/{id}`        | Fetch one article, content included         | 6         |
+| `GET`    | `/`                            | Reader feed, newest first                   | 7         |
+| `GET`    | `/articles/{id}`               | Reader article page; records the click      | 7         |
+| `POST`   | `/read-events`                 | Impression and dwell telemetry              | 7         |
 
 Liveness is deliberately independent of MongoDB so a transient database outage causes
 a `503` on readiness rather than a restart loop.
@@ -573,8 +576,38 @@ gains a field is retired under its old name rather than edited in place. `Obsole
 lists those names and `make migrate` drops them before applying the plan, so upgrading an
 existing deployment is still `make migrate` and nothing else.
 
-## Offline ML pipeline
+## The reader site
 
+`web.enabled` serves two pages on the same port and behind the same credentials as
+the API: a feed at `/` and an article at `/articles/{id}`. They are Go templates plus
+one hand-written stylesheet, embedded in the binary with `go:embed`. There is no
+JavaScript build step, no bundler and no Node at runtime, and the pages work with
+JavaScript disabled.
+
+They exist mainly to accumulate read events, which is the one input to a later ranker
+that cannot be back-filled. Three kinds are recorded:
+
+| Kind         | Recorded by                     | Why it matters                                                          |
+| ------------ | ------------------------------- | ----------------------------------------------------------------------- |
+| `click`      | the server, on the page load    | Free, and survives with JavaScript off                                  |
+| `impression` | `IntersectionObserver`          | A card shown and not clicked is the only negative example a ranker gets |
+| `dwell`      | a timer plus `visibilitychange` | Separates a misleading headline from one that delivered                 |
+
+Every event carries its position in the feed, so a later ranker can correct for the
+fact that items at the top are clicked regardless of quality. A visit with no feed
+position — a bookmark, a shared link — records `-1` rather than `0`, because claiming
+it was the top story would poison exactly that correction.
+
+Events report *how long ago* they happened, never a timestamp. The server dates them
+from its own clock, so a wrong or hostile client clock cannot reach the data. They are
+written to `read_events` and read only offline; there is no HTTP read path.
+
+`POST /read-events` is the only state-changing request a browser makes here, so it is
+also the only one needing cross-origin defence: it accepts `Sec-Fetch-Site:
+same-origin`, falls back to a matching `Origin`, and refuses a request carrying
+neither.
+
+## Offline ML pipeline
 Everything under `ml/` is Python, runs on a laptop, and is never deployed. It reads
 the collection read-only and writes derived artifacts; the collector never depends on
 it, so a failure here cannot affect collection. The phase plan lives in
@@ -613,6 +646,7 @@ internal/config          layered configuration
 internal/observability   slog setup, request ID, access log, panic recovery
 internal/mongodb         connection management, collection names, index plan
 internal/handler         thin HTTP handlers, request and response contracts
+internal/web             reader pages: html/template, embedded CSS and telemetry JS
 internal/domain          models and rules
 internal/repository      persistence interfaces and storage-neutral errors
 internal/repository/mongo MongoDB implementations
@@ -666,6 +700,13 @@ they sort chronologically the `_id` index alone gives listings a stable order.
 - Panics return an opaque `500` and are logged server-side without a stack in the body.
 - Client-supplied `X-Request-Id` values are ignored; the server always generates its own.
 - All JSON responses carry `X-Content-Type-Options: nosniff`.
+- Reader pages render every article field through `html/template`, whose contextual
+  escaping is what stands between scraped third-party text and stored XSS. They ship a
+  `default-src 'none'` CSP with no inline script or style as the second line of defence,
+  plus `frame-ancestors 'none'` and `Referrer-Policy: no-referrer`.
+- The read-event endpoint is the only state-changing browser request; it requires
+  `Sec-Fetch-Site: same-origin` or a matching `Origin`, and refuses a request that
+  carries neither.
 - Configuration is validated at startup, including the MongoDB URI scheme and database name.
 - The container image runs as UID 10001, never root.
 - Request bodies are capped at 64 KiB and must be `application/json`; unknown fields are

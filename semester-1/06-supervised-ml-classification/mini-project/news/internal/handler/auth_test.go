@@ -23,6 +23,7 @@ func newGuardedServer(t *testing.T, creds AuthCredentials) http.Handler {
 		NewSource(&fakeSourceManager{}, logger),
 		NewCollectionRun(&fakeRunReader{}, logger),
 		NewArticle(&fakeArticleReader{}, logger),
+		nil,
 		NewAuthenticator(creds),
 		logger,
 	)

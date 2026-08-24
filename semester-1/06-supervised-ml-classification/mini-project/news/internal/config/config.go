@@ -32,6 +32,7 @@ type Config struct {
 	App       App       `yaml:"app"`
 	Server    Server    `yaml:"server"`
 	Auth      Auth      `yaml:"auth"`
+	Web       Web       `yaml:"web"`
 	Mongo     Mongo     `yaml:"mongo"`
 	Bootstrap Bootstrap `yaml:"bootstrap"`
 	Collector Collector `yaml:"collector"`
@@ -95,6 +96,18 @@ type Auth struct {
 
 	BasicUsername string `yaml:"-"`
 	BasicPassword string `yaml:"-"`
+}
+
+// Web holds the reader-facing pages. They share the API's port, its process
+// and its credentials; only whether they are served at all is separate.
+type Web struct {
+	// Enabled serves the pages. Off leaves the process a pure API.
+	Enabled bool `yaml:"enabled"`
+
+	// PageSize is how many cards one feed page carries. It also sets how far
+	// apart consecutive pages' feed positions are, so changing it changes the
+	// meaning of position_in_feed in the telemetry from that moment on.
+	PageSize int `yaml:"page_size"`
 }
 
 // Mongo holds MongoDB connection settings.
@@ -260,6 +273,10 @@ func Default() *Config {
 			Enabled:      false,
 			APIKeyHeader: DefaultAPIKeyHeader,
 		},
+		Web: Web{
+			Enabled:  true,
+			PageSize: 30,
+		},
 		Mongo: Mongo{
 			URI:                    "mongodb://localhost:27017",
 			Database:               "news",
@@ -392,6 +409,9 @@ func (c *Config) applyEnv() error {
 	b.str("AUTH_BASIC_USERNAME", &c.Auth.BasicUsername)
 	b.str("AUTH_BASIC_PASSWORD", &c.Auth.BasicPassword)
 
+	b.boolean("WEB_ENABLED", &c.Web.Enabled)
+	b.integer("WEB_PAGE_SIZE", &c.Web.PageSize)
+
 	b.str("MONGO_URI", &c.Mongo.URI)
 	b.str("MONGO_DATABASE", &c.Mongo.Database)
 	b.duration("MONGO_CONNECT_TIMEOUT", &c.Mongo.ConnectTimeout)
@@ -491,6 +511,7 @@ func (c *Config) Validate(opts ...Option) error {
 	errs = append(errs, c.Collector.validate(c.App.Environment)...)
 	errs = append(errs, c.Scheduler.validate(c.Collector.RequestTimeout)...)
 	errs = append(errs, c.Scraper.validate(c.App.Environment)...)
+	errs = append(errs, c.Web.validate()...)
 
 	return errors.Join(errs...)
 }
@@ -700,6 +721,21 @@ func (s Scraper) validate(environment string) []error {
 	}
 
 	return errs
+}
+
+// maxWebPageSize mirrors domain.MaxListLimit. It is restated rather than
+// imported because this package deliberately depends on nothing but the
+// standard library; the pair is held together by a test.
+const maxWebPageSize = 100
+
+func (w Web) validate() []error {
+	if !w.Enabled {
+		return nil
+	}
+	if w.PageSize < 1 || w.PageSize > maxWebPageSize {
+		return []error{fmt.Errorf("web.page_size must be between 1 and %d, got %d", maxWebPageSize, w.PageSize)}
+	}
+	return nil
 }
 
 func validateMongoURI(uri string) error {

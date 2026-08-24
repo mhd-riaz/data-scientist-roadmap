@@ -35,10 +35,10 @@ func TestCollectionsAreUnique(t *testing.T) {
 		seen[name] = struct{}{}
 	}
 
-	if len(seen) != 5 {
-		t.Errorf("expected 5 collections, got %d", len(seen))
+	if len(seen) != 6 {
+		t.Errorf("expected 6 collections, got %d", len(seen))
 	}
-	for _, want := range []string{"sources", "articles", "collection_runs", "feed_cache_metadata", "application_locks"} {
+	for _, want := range []string{"sources", "articles", "collection_runs", "feed_cache_metadata", "application_locks", "read_events"} {
 		if _, ok := seen[want]; !ok {
 			t.Errorf("missing required collection %q", want)
 		}

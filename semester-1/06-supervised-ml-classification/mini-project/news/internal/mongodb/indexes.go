@@ -197,6 +197,27 @@ func IndexPlan() []CollectionIndexes {
 				},
 			},
 		},
+		{
+			Collection: CollectionReadEvents,
+			Models: []mongo.IndexModel{
+				// Read events are written by the browser and read offline, in
+				// two shapes only: the whole log in time order, which is how a
+				// ranker is trained on a temporal split, and one article's
+				// history, which is how a single card is explained.
+				{
+					Keys:    bson.D{{Key: "occurred_at", Value: -1}, {Key: "_id", Value: -1}},
+					Options: options.Index().SetName("ix_occurred_cursor"),
+				},
+				{
+					Keys:    bson.D{{Key: "article_id", Value: 1}, {Key: "occurred_at", Value: -1}},
+					Options: options.Index().SetName("ix_article_occurred"),
+				},
+				{
+					Keys:    bson.D{{Key: "kind", Value: 1}, {Key: "occurred_at", Value: -1}},
+					Options: options.Index().SetName("ix_kind_occurred"),
+				},
+			},
+		},
 	}
 }
 

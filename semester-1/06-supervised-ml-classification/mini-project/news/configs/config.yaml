@@ -32,6 +32,14 @@ auth:
   enabled: true
   api_key_header: X-API-Key
 
+# The reader-facing pages, served on the same port and behind the same
+# credentials as the API.
+web:
+  enabled: true
+  # Also the spacing between consecutive pages' feed positions, so changing it
+  # changes what position_in_feed means in every read event recorded after.
+  page_size: 30
+
 mongo:
   uri: mongodb://localhost:27017
   database: news
