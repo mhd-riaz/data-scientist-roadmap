@@ -143,3 +143,10 @@ ml-labels-import: ## Validate completed sheets and write the gold set: make ml-l
 .PHONY: ml-verify
 ml-verify: ## Rebuild a snapshot and confirm byte-identical digests
 	cd ml && uv run newsml verify $(if $(ID),--id $(ID),)
+
+# nbconvert is pulled in for the run only. A notebook that has rotted is worth
+# catching, but not worth a permanent dependency.
+.PHONY: ml-notebook
+ml-notebook: ## Execute every notebook headlessly and fail if one has rotted
+	cd ml && uv run --with nbconvert --with ipykernel jupyter nbconvert \
+		--to notebook --execute notebooks/*.ipynb --output-dir /tmp/newsml-nb

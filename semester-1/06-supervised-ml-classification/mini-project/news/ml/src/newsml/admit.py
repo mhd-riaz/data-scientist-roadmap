@@ -28,6 +28,7 @@ class Reason(StrEnum):
     LANGUAGE_MISMATCH = "language_mismatch"
     PAYWALL = "paywall"
     NON_ARTICLE_FORMAT = "non_article_format"
+    SERVICE_BULLETIN = "service_bulletin"
     SPONSORED = "sponsored"
     FUTURE_TIMESTAMP = "future_timestamp"
     IMPLAUSIBLE_TIMESTAMP = "implausible_timestamp"
@@ -44,11 +45,23 @@ MAX_AGE = timedelta(days=365)
 
 # Formats whose text is not prose and would teach a classifier the wrong thing.
 NON_ARTICLE = re.compile(
-    r"(?i)\b(?:live\s+(?:blog|updates?|score(?:card)?)|highlights?\s*:|in\s+pictures?|photo\s+gallery"
+    r"(?i)\b(?:live\s+(?:blog|updates?|score(?:card)?)|highlights?\s*:|in\s+(?:\d{1,3}\s+)?pictures?|photo\s+gallery"
     r"|horoscope|rashifal|numerology|today'?s\s+panchang|quiz\s+of\s+the\s+day"
     r"|scorecard|points\s+table|full\s+schedule|winning\s+numbers?|lottery\s+result)\b"
 )
 LISTICLE = re.compile(r"(?i)^\s*(?:top|best|worst)\s+\d{1,3}\b|\b\d{1,3}\s+(?:things|ways|reasons|tips)\b")
+# Utility bulletins: real prose from a real newsroom, but a service to readers
+# rather than a report of an event. The first gold round put every one of these
+# in `unsorted`, which is the tell — they are unlabellable because they are not
+# about anything. Matched on the title alone, deliberately: a genuine flood story
+# quotes the weather bulletin in its body, and dropping those would starve
+# `disaster_accident` further to catch a handful of notices.
+SERVICE_BULLETIN = re.compile(
+    r"(?i)\bweather\s+(?:today|update|highlights?|forecast|report|alert)\b"
+    r"|\btraffic\s+(?:advisory|alert)\b|\balternate\s+routes?\b"
+    r"|\bnews\s+headlines\s+for\b|\bthis\s+week\s+in\s+(?:science|tech|business)\b"
+    r"|\btopic\s+page\b"
+)
 # Commercial content wearing a newsroom byline. Affiliate deals copy is the
 # common case and matters more than it looks: it carries a real publisher's
 # vocabulary, so left in, it teaches the technology class to recognise discount
@@ -127,6 +140,8 @@ def judge(
         return Rejection(article.id, article.source_id, Reason.PAYWALL)
     if NON_ARTICLE.search(haystack) or LISTICLE.search(article.title):
         return Rejection(article.id, article.source_id, Reason.NON_ARTICLE_FORMAT)
+    if SERVICE_BULLETIN.search(article.title):
+        return Rejection(article.id, article.source_id, Reason.SERVICE_BULLETIN)
 
     if len(article.title.split()) < MIN_TITLE_WORDS:
         return Rejection(article.id, article.source_id, Reason.TOO_SHORT, f"title={len(article.title.split())}w")

@@ -49,6 +49,14 @@ def test_every_article_is_accounted_for(make_article):
         ({"title": "Live updates: the results as they arrive today", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
         ({"title": "Daily horoscope for Friday, all sun signs", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
         ({"title": "Top 10 things to see in the city this weekend", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
+        ({"title": "The week around the world in 20 pictures", "summary": LONG_ENOUGH}, Reason.NON_ARTICLE_FORMAT),
+        ({"title": "Chennai weather today: rain likely to continue", "summary": LONG_ENOUGH}, Reason.SERVICE_BULLETIN),
+        ({"title": "Expressway closure: traffic police suggest alternate routes", "summary": LONG_ENOUGH},
+         Reason.SERVICE_BULLETIN),
+        ({"title": "Today news headlines for school assembly, August 3", "summary": LONG_ENOUGH},
+         Reason.SERVICE_BULLETIN),
+        ({"title": "We published a new topic page on economic inequality", "summary": LONG_ENOUGH},
+         Reason.SERVICE_BULLETIN),
         ({"summary": "Sponsored content produced by the brand desk for a partner."}, Reason.SPONSORED),
         ({"title": "TurboTax service codes and discounts",
           "summary": "Save with our TurboTax coupon codes and exclusive discount codes on WIRED."}, Reason.SPONSORED),
@@ -61,6 +69,23 @@ def test_reason_codes(make_article, kwargs, reason):
     )
     assert not admitted
     assert rejected[0].reason == reason
+
+
+def test_a_real_story_that_quotes_a_bulletin_survives(make_article):
+    """The service filter reads the title only, so a flood report is not collateral."""
+    article = make_article(
+        title="Thousands evacuated as the Adyar bursts its banks",
+        summary="Rescue teams worked overnight. The weather update issued at noon warned of more rain to come.",
+    )
+    admitted, rejected = admit.partition([_pair(article)], now=BASE + timedelta(hours=1), check_language=False)
+    assert len(admitted) == 1 and not rejected
+
+
+def test_a_travel_advisory_as_foreign_policy_is_not_a_bulletin(make_article):
+    """Caught on the live corpus: `travel advisory` matched a diplomacy story."""
+    article = make_article(title="J&K important part of India, US may re-evaluate travel advisory, says envoy")
+    admitted, rejected = admit.partition([_pair(article)], now=BASE + timedelta(hours=1), check_language=False)
+    assert len(admitted) == 1 and not rejected
 
 
 def test_future_and_ancient_timestamps_are_separated(make_article):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -141,9 +142,39 @@ def cmd_export_labels(args: argparse.Namespace) -> int:
     admitted, _ = admit_mod.partition(pairs, check_language=False)
     grouping = neardup_mod.group({a.article.id: a.cleaned.text for a in admitted})
 
-    sample = annotate_mod.choose_sample(
-        [a.article for a in admitted], size=args.size, seed=SEED, group_of=grouping.group_of
-    )
+    if args.seeds:
+        seeds = annotate_mod.read_gold(Path(args.seeds))
+        targeted = annotate_mod.choose_targeted_sample(
+            [a.article for a in admitted],
+            {a.article.id: a.cleaned.text for a in admitted},
+            taxonomy,
+            per_class=args.per_class,
+            seeds=seeds,
+            group_of=grouping.group_of,
+            random_share=args.random_share,
+            seed=SEED,
+        )
+        sample = targeted.articles
+        held = Counter(seeds.values())
+        served = [c for c in annotate_mod._leaf_classes(taxonomy) if c not in targeted.quota]
+        print(f"targeting {args.per_class} labels per class, {len(seeds):,} already held")
+        print(f"{len(served)} class(es) already at the target, sampled zero times:"
+              f" {', '.join(f'{c} {held.get(c, 0)}' for c in served) or 'none'}\n")
+        print(f"  {'class':<24}{'have':>6}{'short':>7}{'retrieve':>10}{'precision':>11}")
+        for topic, gap in sorted(targeted.quota.items(), key=lambda kv: -kv[1]):
+            rate = targeted.precision.get(topic)
+            print(f"  {topic:<24}{held.get(topic, 0):>6}{gap:>7}{targeted.asked_for[topic]:>10}"
+                  f"{(f'{rate:.0%}' if rate is not None else '-'):>11}")
+        print(f"  {'(random control)':<24}{'':>6}{'':>7}{targeted.asked_for['random']:>10}")
+        if targeted.shortfall:
+            print("the corpus could not supply enough candidates for:")
+            for topic, missing in sorted(targeted.shortfall.items(), key=lambda kv: -kv[1]):
+                print(f"  {topic:<26}{missing:>5} short")
+    else:
+        sample = annotate_mod.choose_sample(
+            [a.article for a in admitted], size=args.size, seed=SEED, group_of=grouping.group_of
+        )
+
     out = Path(args.out)
     sheets = annotate_mod.write_sheets(
         sample, out, shards=args.shards, overlap=args.overlap, seed=SEED
@@ -154,6 +185,42 @@ def cmd_export_labels(args: argparse.Namespace) -> int:
     for sheet in sheets:
         print(f"  {sheet}")
     print(f"guide  {guide}")
+    return 0
+
+
+def cmd_adjudicate(args: argparse.Namespace) -> int:
+    """Collect every article the sheets disagreed on into one ruling sheet.
+
+    Reads no database: the overlap block is the only place disagreement can
+    arise, and both the labels and the text under dispute are already in the
+    sheets.
+    """
+    taxonomy = load_taxonomy(TAXONOMY_PATH)
+
+    labels: list = []
+    for raw in args.sheets:
+        path = Path(raw)
+        if not path.exists():
+            print(f"no such sheet: {path}", file=sys.stderr)
+            return 1
+        found, _ = annotate_mod.read_sheet(path, taxonomy, annotator=path.stem)
+        labels.extend(found)
+
+    texts = annotate_mod.read_sheet_texts(Path(raw) for raw in args.sheets)
+    disputed = annotate_mod.conflicts(labels, texts)
+    if not disputed:
+        print("no disagreements to adjudicate")
+        return 0
+
+    parent_of = {c.id: (c.parent or c.id) for c in taxonomy.classes}
+    cross = sum(1 for c in disputed if c.crosses_groups(parent_of))
+    out = annotate_mod.write_adjudication_sheet(disputed, Path(args.out))
+
+    print(f"{len(disputed)} disputed article(s), {cross} of them across groups \u2192 {out}")
+    print("\nTie-breaks that apply (now also in the generated guide):")
+    for number, rule in enumerate(annotate_mod.TIE_BREAKS, start=1):
+        print(f"  {number}. {rule}")
+    print(f"\nFill the `label` column, then re-run import-labels with --adjudicated {out}")
     return 0
 
 
@@ -174,6 +241,21 @@ def cmd_import_labels(args: argparse.Namespace) -> int:
         )
         labels.extend(found)
         problems.extend(issues)
+
+    if args.adjudicated:
+        path = Path(args.adjudicated)
+        if not path.exists():
+            print(f"no such adjudication sheet: {path}", file=sys.stderr)
+            return 1
+        rulings, issues = annotate_mod.read_sheet(
+            path, taxonomy, known_ids=frozenset(articles), annotator="adjudicated"
+        )
+        problems.extend(issues)
+        # A ruling replaces the votes rather than joining them, so an adjudicated
+        # article stops counting as a disagreement.
+        ruled = {label.article_id: label for label in rulings}
+        labels = [x for x in labels if x.article_id not in ruled] + list(ruled.values())
+        print(f"{len(ruled)} article(s) resolved by adjudication")
 
     for problem in problems:
         print(f"  {problem.sheet}:{problem.row} {problem.article_id} \u2014 {problem.detail}", file=sys.stderr)
@@ -257,10 +339,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--shards", type=int, default=4, help="one sheet per annotator")
     p.add_argument("--overlap", type=int, default=20, help="articles shared by every sheet")
     p.add_argument("--variant", default=DEFAULT_TEXT_VARIANT, choices=TEXT_VARIANTS)
+    p.add_argument(
+        "--seeds",
+        default=None,
+        help="an existing gold.jsonl; turns on targeted sampling and ignores --size",
+    )
+    p.add_argument("--per-class", type=int, default=150, help="labels each class should end up with")
+    p.add_argument("--random-share", type=float, default=0.15, help="fraction drawn at random anyway")
     p.set_defaults(func=cmd_export_labels)
+
+    p = sub.add_parser("adjudicate", help="write a ruling sheet for the articles sheets disagree on")
+    p.add_argument("--sheets", nargs="+", required=True)
+    p.add_argument("--out", default=str(DATA_DIR / "labels" / "adjudicate.csv"))
+    p.set_defaults(func=cmd_adjudicate)
 
     p = sub.add_parser("import-labels", help="validate completed sheets and write the gold set")
     p.add_argument("--sheets", nargs="+", required=True)
+    p.add_argument("--adjudicated", default=None, help="ruling sheet that overrides sheet votes")
     p.add_argument("--out", default=str(DATA_DIR / "labels" / "gold.jsonl"))
     p.add_argument("--min-per-class", type=int, default=40)
     p.add_argument("--force", action="store_true", help="write even if problems were reported")
