@@ -150,7 +150,7 @@ def write_sheets(
             writer = csv.writer(handle, quoting=csv.QUOTE_ALL)
             writer.writerow(COLUMNS)
             for article in rows:
-                writer.writerow([article.id, _cell(article.title), _cell(article.summary), "", ""])
+                writer.writerow([article.id, _cell(article.title), _cell(article.lede), "", ""])
         written.append(path)
 
     return written

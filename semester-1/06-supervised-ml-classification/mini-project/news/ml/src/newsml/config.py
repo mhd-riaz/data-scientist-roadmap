@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Bump on any change to clean.py or admit.py that alters their output. Snapshots
 # are keyed by this: a bump makes existing snapshots stale, not wrong.
-CLEANING_VERSION = "1.0.0"
+CLEANING_VERSION = "1.1.0"
 
 # Fixed seed for every sampling decision. Ground rule 8.
 SEED = 20260823

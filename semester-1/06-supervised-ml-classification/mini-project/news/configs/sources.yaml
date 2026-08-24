@@ -843,6 +843,63 @@ sources:
     priority: 55
     fetch_interval_seconds: 3600
 
+  # ---------------------------------------------------------------------------
+  # City desks. A city is a place, not a subject, so these carry no topic label
+  # — the same reason World and International sections are absent from
+  # `feed_topics`. They are here because the classes the weak labels never reach
+  # (crime_justice, disaster_accident, and civic politics) are what a city desk
+  # files all day, and no publisher runs a "Crime" RSS section. Their value is
+  # material for human labelling, not more weak labels.
+  #
+  # Verified live 2026-08-24: all four answer 200 with RSS 2.0.
+  # ---------------------------------------------------------------------------
+
+  - name: Hindustan Times — Bengaluru
+    feed_url: https://www.hindustantimes.com/feeds/rss/cities/bengaluru-news/rssfeed.xml
+    type: rss
+    language: en
+    country: IN
+    state: Karnataka
+    city: Bengaluru
+    priority: 60
+    fetch_interval_seconds: 1800
+
+  # Both Indian Express city feeds serve 200 items with an empty <description>,
+  # so they contribute a title and nothing else until the scrape stage fills in
+  # the body. Same behaviour as the other Indian Express sections above.
+  - name: The Indian Express — Bengaluru
+    feed_url: https://indianexpress.com/section/cities/bangalore/feed/
+    type: rss
+    language: en
+    country: IN
+    state: Karnataka
+    city: Bengaluru
+    priority: 60
+    fetch_interval_seconds: 1800
+
+  - name: The Indian Express — Chennai
+    feed_url: https://indianexpress.com/section/cities/chennai/feed/
+    type: rss
+    language: en
+    country: IN
+    state: Tamil Nadu
+    city: Chennai
+    priority: 60
+    fetch_interval_seconds: 1800
+
+  # OneIndia's robots.txt is default-deny for every agent except Googlebot, so
+  # article pages must not be fetched — the same call already made for The
+  # Register. Its feed does carry a real summary, so title+summary still works.
+  - name: OneIndia — Chennai
+    feed_url: https://www.oneindia.com/rss/feeds/chennai-fb.xml
+    type: rss
+    language: en
+    country: IN
+    state: Tamil Nadu
+    city: Chennai
+    priority: 55
+    fetch_interval_seconds: 1800
+
 # -----------------------------------------------------------------------------
 # Verified dead, 2026-08-23. Recorded so they are not rediscovered and retried.
 #

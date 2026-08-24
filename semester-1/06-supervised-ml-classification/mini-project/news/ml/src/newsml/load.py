@@ -14,6 +14,12 @@ from pymongo import MongoClient
 
 from .config import mongo_uri
 
+# Every Indian Express feed ships an empty <description>, which is 2,000 articles
+# — a quarter of the corpus — reduced to a bare headline. The lede falls back to
+# the opening of the scraped body, and caps both fields at the same length so
+# that how much text an article carries never encodes which source it came from.
+LEDE_CHARS = 400
+
 # The fields Phase 2 needs. Projecting explicitly keeps the working set small and
 # makes it obvious when a new dependency on a field is introduced.
 PROJECTION = {
@@ -59,14 +65,29 @@ class Article:
     scrape_status: str
     processing_status: str
 
+    @property
+    def lede(self) -> str:
+        """The publisher's dek, or the opening of the body when there is none."""
+        return _clip(self.summary or self.content, LEDE_CHARS)
+
     def text(self, variant: str) -> str:
         """Concatenate the fields a given corpus variant is built from."""
         parts = {
             "title": (self.title,),
-            "title_summary": (self.title, self.summary),
-            "title_summary_content": (self.title, self.summary, self.content),
+            "title_summary": (self.title, self.lede),
+            "title_summary_content": (self.title, self.lede, self.content),
         }[variant]
         return "\n".join(p for p in parts if p)
+
+
+def _clip(value: str, limit: int) -> str:
+    """Cut at the last whole word inside `limit`, so no word is ever halved."""
+    text = " ".join((value or "").split())
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = head.rfind(" ")
+    return head[:cut] if cut > 0 else head
 
 
 def _as_utc(value: Any) -> datetime:
