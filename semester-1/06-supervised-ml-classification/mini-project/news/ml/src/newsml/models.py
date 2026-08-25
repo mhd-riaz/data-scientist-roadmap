@@ -16,6 +16,10 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 
+import numpy as np
+from numpy.typing import NDArray
+
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.dummy import DummyClassifier
 from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer, TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
@@ -29,6 +33,16 @@ from .dataset import Dataset
 
 # In ladder order. Each name is both the identifier and the report label.
 LADDER = ("majority", "complement_nb", "tfidf_linear_svc", "hashing_sgd")
+
+# Rungs that can put a number on how sure they are, which is what an `unsorted`
+# route needs. `tfidf_linear_svc` is deliberately absent: its margin has no scale
+# that compares across classes, and thresholding it would be arithmetic on an
+# uncalibrated quantity.
+ABSTAINING = ("calibrated_linear_svc", "hashing_sgd", "complement_nb")
+
+# Folds for the calibration wrapper. Five is the most the thinnest class in train
+# can support; raising it fails outright rather than degrading.
+CALIBRATION_FOLDS = 5
 
 # Shared across the vectorised rungs so a difference between them is the
 # classifier, not the features. HashingVectorizer keeps no vocabulary, so the
@@ -58,6 +72,27 @@ def build(name: str, *, seed: int = SEED) -> Pipeline:
             ]
         )
 
+    if name == "calibrated_linear_svc":
+        # The winning rung, wrapped so it emits a probability instead of a
+        # margin. Platt scaling fits a sigmoid per class on held-out folds, which
+        # costs a refit per fold and can move macro-F1 in either direction — the
+        # argmax of a calibrated score is not the argmax of the raw margin. That
+        # movement is the measurement Phase 3 needs, so it is a separate rung
+        # rather than a change to the one above.
+        return Pipeline(
+            [
+                ("vec", TfidfVectorizer(sublinear_tf=True, **_VOCAB)),
+                (
+                    "clf",
+                    CalibratedClassifierCV(
+                        LinearSVC(class_weight="balanced", random_state=seed),
+                        method="sigmoid",
+                        cv=CALIBRATION_FOLDS,
+                    ),
+                ),
+            ]
+        )
+
     if name == "hashing_sgd":
         # No vocabulary to store, so the serving artifact stays small and a word
         # unseen in training still hashes to a feature. modified_huber is the
@@ -80,6 +115,23 @@ def build(name: str, *, seed: int = SEED) -> Pipeline:
         )
 
     raise ValueError(f"unknown model {name!r}; expected one of {LADDER}")
+
+
+def probabilities(model: Pipeline, texts: list[str]) -> tuple[list[str], NDArray[np.float64]]:
+    """Per-class scores that are comparable across classes, and the class order.
+
+    A rung without `predict_proba` is refused rather than substituted with
+    `decision_function`. A margin ranks correctly inside one class, which is all
+    ROC needs, but a single cut applied across classes compares numbers that were
+    never on the same scale — and that is exactly what abstention does.
+    """
+    classifier = model.named_steps["clf"]
+    if not hasattr(classifier, "predict_proba"):
+        raise TypeError(
+            f"{type(classifier).__name__} emits no probability; "
+            f"use one of {ABSTAINING} for anything that thresholds a confidence"
+        )
+    return [str(c) for c in classifier.classes_], np.asarray(model.predict_proba(texts), dtype=float)
 
 
 @dataclass(frozen=True, slots=True)

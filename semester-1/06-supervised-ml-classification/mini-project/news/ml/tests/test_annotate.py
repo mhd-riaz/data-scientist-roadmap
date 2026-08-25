@@ -211,15 +211,6 @@ def test_votes_are_ordered_by_how_often_each_label_was_chosen(tmp_path, taxonomy
     assert disputed[0].rendered_votes == "sport x2 | politics x1"
 
 
-def test_a_conflict_within_one_group_is_distinguished_from_one_across_groups(taxonomy):
-    parent_of = {c.id: (c.parent or c.id) for c in taxonomy.classes}
-    within = annotate.Conflict("a1", "T", "S", (("politics_government", 2), ("politics_elections", 1)))
-    across = annotate.Conflict("a2", "T", "S", (("politics_government", 1), ("sport", 1)))
-
-    assert not within.crosses_groups(parent_of)
-    assert across.crosses_groups(parent_of)
-
-
 def test_adjudication_sheet_shows_the_votes_but_leaves_the_ruling_blank(tmp_path):
     conflict = annotate.Conflict("a1", "T", "S", (("sport", 2), ("politics", 1)))
     row = _read(annotate.write_adjudication_sheet([conflict], tmp_path / "adjudicate.csv"))[0]
@@ -437,12 +428,12 @@ def test_one_heavily_covered_story_cannot_fill_a_class_quota(make_article, taxon
         articles.append(article)
         texts[article.id] = f"{retold} number {i}"
 
-    seeds = {"dup00": "tech_security", "dup01": "tech_security"}
+    seeds = {"dup00": "technology", "dup01": "technology"}
     sample = annotate.choose_targeted_sample(
         articles, texts, taxonomy, per_class=8, seeds=seeds, random_share=0.0, max_similarity=0.5
     )
 
-    picked = [a.id for a in sample.articles if sample.retrieved_for[a.id] == "tech_security"]
+    picked = [a.id for a in sample.articles if sample.retrieved_for[a.id] == "technology"]
     assert sum(a.startswith("dup") for a in picked) <= 1, f"the same story was picked repeatedly: {picked}"
 
 
@@ -499,9 +490,9 @@ def test_a_source_carrying_its_own_topic_label_is_recognised(make_article, taxon
 def test_desk_prior_is_smoothed_so_a_thin_class_cannot_claim_certainty():
     """14 of 14 is not 100%: unsmoothed it becomes a hard filter, not a preference."""
     desks = {f"a{i}": True for i in range(14)}
-    prior = annotate._desk_prior({a: "politics_protest" for a in desks}, desks, base=0.5)
+    prior = annotate._desk_prior({a: "politics" for a in desks}, desks, base=0.5)
 
-    assert 0.8 < prior["politics_protest"] < 1.0
+    assert 0.8 < prior["politics"] < 1.0
     assert prior["a class never seen"] == 0.5
 
 
@@ -522,11 +513,11 @@ def test_a_class_only_ever_found_on_general_desks_is_hunted_there(make_article, 
         _add(f"desk{i:02d}", GENERAL_DESK)
         _add(f"section{i:02d}", SECTIONED)
 
-    seeds = {f"seed{i}": "politics_protest" for i in range(8)}
+    seeds = {f"seed{i}": "politics" for i in range(8)}
     sample = annotate.choose_targeted_sample(
         articles, texts, taxonomy, per_class=9, seeds=seeds, random_share=0.0, max_similarity=1.0
     )
 
-    picked = [a.id for a in sample.articles if sample.retrieved_for[a.id] == "politics_protest"]
+    picked = [a.id for a in sample.articles if sample.retrieved_for[a.id] == "politics"]
     assert picked, "the class was not served at all"
     assert all(a.startswith("desk") for a in picked), f"hunted the wrong kind of source: {picked}"

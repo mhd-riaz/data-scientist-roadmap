@@ -21,13 +21,31 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
-# 128 permutations split into 16 bands of 8 rows. Two documents become candidates
+# 128 permutations split into 32 bands of 4 rows. Two documents become candidates
 # when any band matches, which puts the S-curve's steep region near
-# (1/16)^(1/8) ~= 0.72 Jaccard — tight enough to skip rewrites of the same event,
-# loose enough to catch a syndicated copy with a changed headline and trim.
+# (1/32)^(1/4) ~= 0.42.
+#
+# This was 16 bands of 8 rows, steep near 0.72, and that was wrong — measured, not
+# guessed. An 8-row band has to match in full, which at 0.55 Jaccard happens about
+# a tenth of the time, so most true duplicates were never even proposed for
+# comparison. The proof is that lowering the threshold under the old banding
+# changed almost nothing: 464 folds to 468. Under this one the same change folds
+# 491. **The banding, not the threshold, was what suppressed folding.**
 NUM_PERM = 128
-BANDS = 16
+BANDS = 32
 ROWS = NUM_PERM // BANDS
+
+# Calibrated 2026-08-25 against 43 hand-judged pairs — a census of every candidate
+# pair in the region that was in doubt, not a sample. It was 0.72, derived from the
+# old banding arithmetic and never checked, and at that value it recovered **7 of
+# 31** true duplicates. At 0.44: recall 0.90, precision 0.80.
+#
+# 0.44 rather than the 0.42 that maximises F1, for two reasons. Recurring daily
+# features — gold-rate tables, horoscopes — are genuinely near-identical text about
+# different days and cluster at 0.406, so the cut needs clearance above them. And
+# picking the argmax of F1 measured on 43 pairs is fitting the sample; 0.44 is
+# inside the noise of that peak and further from the cliff.
+DEFAULT_THRESHOLD = 0.44
 
 SHINGLE_WORDS = 5
 
@@ -102,18 +120,18 @@ class Grouping:
         return len(set(self.group_of.values()))
 
 
-def group(
+def candidate_pairs(
     documents: dict[str, str],
-    threshold: float = 0.72,
     num_perm: int = NUM_PERM,
     bands: int = BANDS,
-) -> Grouping:
-    """Assign every document a story-group id.
+) -> tuple[tuple[str, str, float], ...]:
+    """Every pair the banding surfaced, with its score, threshold not applied.
 
-    Documents are banded into buckets, pairs sharing a bucket are verified
-    against the signature-estimated Jaccard, and survivors are unioned. The group
-    id is the lexicographically smallest document id in the group, so grouping is
-    reproducible regardless of iteration order.
+    `group` keeps only the pairs above the cut, which is right for grouping and
+    useless for calibrating the cut itself: the pairs that decide whether 0.72 is
+    the correct number are the ones sitting just below it. This returns the whole
+    candidate set so a threshold can be chosen from labelled evidence rather than
+    derived from the banding arithmetic and assumed.
     """
     rows = num_perm // bands
     signatures = {doc_id: signature(text, num_perm) for doc_id, text in sorted(documents.items())}
@@ -124,10 +142,6 @@ def group(
         for band in range(bands):
             buckets[(band, sig[band * rows : (band + 1) * rows])].append(doc_id)
 
-    union = _Union()
-    for doc_id in signatures:
-        union.find(doc_id)
-
     verified: dict[tuple[str, str], float] = {}
     for members in buckets.values():
         if len(members) < 2:
@@ -135,14 +149,36 @@ def group(
         for i, a in enumerate(members):
             for b in members[i + 1 :]:
                 key = (a, b) if a < b else (b, a)
-                if key in verified:
-                    continue
-                score = jaccard(signatures[a], signatures[b])
-                verified[key] = score
-                if score >= threshold:
-                    union.union(a, b)
+                if key not in verified:
+                    verified[key] = jaccard(signatures[a], signatures[b])
+
+    return tuple(sorted((a, b, score) for (a, b), score in verified.items()))
+
+
+def group(
+    documents: dict[str, str],
+    threshold: float = DEFAULT_THRESHOLD,
+    num_perm: int = NUM_PERM,
+    bands: int = BANDS,
+) -> Grouping:
+    """Assign every document a story-group id.
+
+    Documents are banded into buckets, pairs sharing a bucket are verified
+    against the signature-estimated Jaccard, and survivors are unioned. The group
+    id is the lexicographically smallest document id in the group, so grouping is
+    reproducible regardless of iteration order.
+    """
+    candidates = candidate_pairs(documents, num_perm=num_perm, bands=bands)
+
+    union = _Union()
+    for doc_id in sorted(documents):
+        union.find(doc_id)
+
+    kept = tuple((a, b, score) for a, b, score in candidates if score >= threshold)
+    for a, b, _ in kept:
+        union.union(a, b)
 
     return Grouping(
-        group_of={doc_id: union.find(doc_id) for doc_id in sorted(signatures)},
-        pairs=tuple(sorted((a, b, score) for (a, b), score in verified.items() if score >= threshold)),
+        group_of={doc_id: union.find(doc_id) for doc_id in sorted(documents)},
+        pairs=kept,
     )

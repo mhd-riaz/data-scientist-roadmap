@@ -47,15 +47,15 @@ ENCODING = "utf-8-sig"
 # genuinely fit; none of them changes what a class means. That distinction is
 # what lets these be added without bumping the taxonomy version and invalidating
 # every label already assigned under it. Derived from the collisions the first
-# round actually produced, not imagined in advance.
+# rounds actually produced, not imagined in advance. The taxonomy went flat at
+# v4 (see taxonomy.yaml), which retired the child-level rule about election
+# machinery vs government business — both are `politics` now, so there is
+# nothing left to break the tie between.
 TIE_BREAKS = (
-    "Election machinery is `politics_elections`: electoral rolls, the Election Commission's "
-    "own operations, delimitation, candidate selection and party organisation.",
-    "Otherwise the political process beats its subject. A legislature, ministry, regulator or "
-    "party acting is `politics_government`, even when the subject is the environment, defence "
-    "or technology.",
+    "The political process beats its subject. A legislature, ministry, regulator or party "
+    "acting is `politics`, even when the subject is the environment, defence or technology.",
     "An attack or military operation is `conflict_war`; prosecuting one in court is "
-    "`crime_justice`; a minister's remarks about one are `politics_diplomacy`.",
+    "`crime_justice`; a minister's remarks about one are `politics`.",
 )
 
 
@@ -534,22 +534,14 @@ def write_guide(taxonomy: Taxonomy, path: Path, *, overlap: int = 0) -> Path:
         "",
         "## How to choose",
         "",
-        "The classes come in two levels. Work in two steps:",
-        "",
-        "1. Pick the **group** the article belongs to — the bold rows.",
-        "2. Pick the **specific class** inside that group — the indented rows.",
-        "",
-        "**Always give the specific class.** A bare group label is a fallback for the rare",
-        "article that genuinely spans two of its children: \"Prime minister campaigns while",
-        "on a state visit\" is both diplomacy and elections, so it is `politics`. If you find",
-        "yourself reaching for group labels often, something is wrong with this guide — say so.",
-        "",
-        "Groups with no indented rows beneath them are used as they are.",
+        "Pick the one class the article is most about from the table below. The list is fixed —",
+        "13 classes, one level, no finer subdivision beneath any of them — so every article gets",
+        "exactly one id and there is no group-vs-specific judgement call to make.",
         "",
         "## Rules",
         "",
         "1. Label what the article is **about**, not where it happened. "
-        "A Karnataka election story is `politics_elections`, not a geography.",
+        "A Karnataka election story is `politics`, not a geography.",
         f"2. If it fits none of them, or you genuinely cannot tell, write `{taxonomy.unsorted}`. "
         "A forced guess is worse than an honest blank — it becomes silent noise no one can find later.",
         "3. Judge only from the title and summary shown. Do not search for the article. "
@@ -564,12 +556,8 @@ def write_guide(taxonomy: Taxonomy, path: Path, *, overlap: int = 0) -> Path:
         "| --- | --- | --- |",
     ]
     for group in taxonomy.groups:
-        children = taxonomy.children_of(group.id)
-        note = " *(fallback — only if two below apply equally)*" if children else ""
-        lines.append(f"| **`{group.id}`**{note} | {group.description} | {group.excludes or '—'} |")
-        for child in children:
-            lines.append(f"| ↳ `{child.id}` | {child.description} | {child.excludes or '—'} |")
-    lines.append(f"| **`{taxonomy.unsorted}`** | Anything else, or genuinely unclear. | — |")
+        lines.append(f"| `{group.id}` | {group.description} | {group.excludes or '—'} |")
+    lines.append(f"| `{taxonomy.unsorted}` | Anything else, or genuinely unclear. | — |")
 
     if overlap:
         lines += [

@@ -35,3 +35,13 @@ ml/data/snapshots/*/*.jsonl
 # The completed gold set (ml/data/labels/gold.jsonl) is ids and labels only and
 # is committed, because every reported metric depends on it.
 ml/data/labels/*/
+
+# The near-duplicate sheet quotes two articles per row, for the same reason. Its
+# key is ids and scores only, so that one is committed: without it a returned
+# sheet cannot be joined back to anything.
+ml/data/pairs/pairs.csv
+
+# The fitted model is an 11 MB binary that `make ml-train` reproduces from the
+# snapshot id in its own manifest. The manifest and model card sit beside it and
+# are committed, because they are what makes a prediction traceable.
+ml/artifacts/models/*/*.joblib

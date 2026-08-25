@@ -35,6 +35,8 @@ class Splits:
     val: tuple[str, ...]
     test: tuple[str, ...]
     dropped_at_boundary: tuple[str, ...]
+    train_until: datetime | None = None
+    val_until: datetime | None = None
 
     def assignment(self) -> dict[str, str]:
         return {
@@ -53,6 +55,7 @@ def make_splits(
     *,
     train_fraction: float = 0.70,
     val_fraction: float = 0.15,
+    reference: list[SplitRow] | None = None,
 ) -> Splits:
     """Cut the corpus at two publication times, then assign whole groups.
 
@@ -60,11 +63,19 @@ def make_splits(
     alternative — assign groups by order, then set the boundary to the newest
     training article — lets one group that happens to span the corpus drag the
     boundary to the end and empty the later splits.
+
+    `reference` decides *where* the cuts fall while `rows` decides what gets
+    assigned. They differ for a good reason: a corpus is labelled up to whenever
+    the last labelling round was drawn, and articles collected after that are
+    unlabelled. Taking quantiles over everything then puts almost no labelled
+    article in the test split — measured at 37 of 1,317 on this corpus. Taking
+    them over the labelled rows instead proportions the supervised splits
+    correctly, and the boundary is returned so it can be frozen in a manifest.
     """
     if not rows:
         return Splits((), (), (), ())
 
-    times = sorted(r.published_at for r in rows)
+    times = sorted(r.published_at for r in (reference or rows))
     last = len(times) - 1
     t1 = times[min(last, int(len(times) * train_fraction))]
     t2 = times[min(last, int(len(times) * (train_fraction + val_fraction)))]
@@ -95,6 +106,8 @@ def make_splits(
         val=tuple(sorted(r.article_id for r in buckets["val"])),
         test=tuple(sorted(r.article_id for r in buckets["test"])),
         dropped_at_boundary=tuple(sorted(dropped)),
+        train_until=t1,
+        val_until=t2,
     )
 
 

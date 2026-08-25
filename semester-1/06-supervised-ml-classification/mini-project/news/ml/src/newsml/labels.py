@@ -86,18 +86,26 @@ class Taxonomy:
 
     @property
     def groups(self) -> tuple[TopicClass, ...]:
-        """Top-level classes, in declaration order."""
+        """Every class, in declaration order.
+
+        Named `groups` from the v3 two-level taxonomy, where this meant
+        "top-level only". Since v4 is flat, every class has no parent, so this
+        is now simply all of them — kept under the old name for call-site
+        stability.
+        """
         return tuple(c for c in self.classes if not c.parent)
 
     def children_of(self, group_id: str) -> tuple[TopicClass, ...]:
+        """Always empty under the fixed v4 taxonomy — no class has a parent any more."""
         return tuple(c for c in self.classes if c.parent == group_id)
 
     def collapse(self, topic: str, starved: frozenset[str]) -> str:
         """Fold a starved child into its parent, repeatedly if needed.
 
-        Applied at training time only. Labels keep the class they were assigned,
-        so widening the corpus later restores the finer taxonomy without anyone
-        relabelling anything.
+        A no-op under the fixed v4 taxonomy: no class has a parent to fold into,
+        so a starved class is reported as out of scope instead (see
+        `dataset.MIN_PER_CLASS`). Kept for any v3-vintage child id that still
+        turns up in old data.
         """
         by_id = {c.id: c for c in self.classes}
         seen: set[str] = set()

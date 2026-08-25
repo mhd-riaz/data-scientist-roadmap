@@ -17,9 +17,12 @@ from . import admit as admit_mod
 from . import annotate as annotate_mod
 from . import boilerplate as boilerplate_mod
 from . import clean as clean_mod
+from . import dataset as dataset_mod
 from . import neardup as neardup_mod
+from . import pairs as pairs_mod
 from . import profile as profile_mod
 from . import snapshot as snapshot_mod
+from . import train as train_mod
 from .config import (
     ARTIFACT_DIR,
     CLEANING_VERSION,
@@ -40,6 +43,22 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _default_snapshot_id() -> str:
     return f"{datetime.now(timezone.utc):%Y%m%d}-{CLEANING_VERSION.replace('.', '')}"
+
+
+def _cut(value: str | None) -> datetime | None:
+    """Parse the corpus cut, and insist it is unambiguous about its timezone."""
+    if not value:
+        return None
+    moment = datetime.fromisoformat(value)
+    return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment
+
+
+def _gold(paths: list[str] | None) -> dict[str, str]:
+    """Merge every labelling round, later files winning on a repeated article."""
+    merged: dict[str, str] = {}
+    for raw in paths or []:
+        merged.update(annotate_mod.read_gold(Path(raw)))
+    return merged
 
 
 def cmd_profile(args: argparse.Namespace) -> int:
@@ -72,10 +91,12 @@ def cmd_boilerplate(args: argparse.Namespace) -> int:
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
-    articles = load_articles(args.uri, limit=args.limit)
+    articles = load_articles(args.uri, limit=args.limit, collected_before=_cut(args.collected_before))
     if not articles:
         print("no articles found — is the collector's MongoDB reachable?", file=sys.stderr)
         return 1
+    taxonomy = load_taxonomy(TAXONOMY_PATH)
+    gold = _gold(args.gold)
     result = snapshot_mod.build(
         articles,
         snapshot_id=args.id,
@@ -83,6 +104,9 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
         variant=args.variant,
         repo=REPO_ROOT,
         check_language=not args.no_language_check,
+        gold=gold,
+        taxonomy_version=taxonomy.version,
+        collected_before=_cut(args.collected_before),
     )
     print(json.dumps(result.manifest["counts"], indent=2, sort_keys=True))
     print(f"snapshot → {result.directory}")
@@ -93,7 +117,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
     """Rebuild a snapshot into a scratch directory and compare digests.
 
     This is the acceptance criterion "rebuilds byte-identically", run as a
-    command rather than asserted in prose.
+    command rather than asserted in prose. The cut recorded in the manifest is
+    reapplied, so a corpus that has grown since still yields the same rows.
     """
     import shutil
     import tempfile
@@ -102,9 +127,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if not original.exists():
         print(f"no snapshot at {original}", file=sys.stderr)
         return 1
-    expected = json.loads(original.read_text(encoding="utf-8"))["digests"]
+    manifest = json.loads(original.read_text(encoding="utf-8"))
+    expected = manifest["digests"]
+    cut = _cut(args.collected_before or manifest.get("collected_before"))
 
-    articles = load_articles(args.uri, limit=args.limit)
+    taxonomy = load_taxonomy(TAXONOMY_PATH)
+    articles = load_articles(args.uri, limit=args.limit, collected_before=cut)
     scratch = Path(tempfile.mkdtemp(prefix="newsml-verify-"))
     try:
         rebuilt = snapshot_mod.build(
@@ -114,6 +142,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
             variant=args.variant,
             repo=REPO_ROOT,
             check_language=not args.no_language_check,
+            gold=_gold(args.gold),
+            taxonomy_version=taxonomy.version,
+            collected_before=cut,
         )
         mismatched = {k: (v, rebuilt.manifest["digests"].get(k)) for k, v in expected.items()
                       if rebuilt.manifest["digests"].get(k) != v}
@@ -129,12 +160,25 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 def cmd_export_labels(args: argparse.Namespace) -> int:
-    """Draw a sample and write blind labelling sheets, one per annotator."""
+    """Draw a sample and write blind labelling sheets, one per annotator.
+
+    `--collected-before` must match the cut of the snapshot the labels will be
+    trained from. Round 3 was drawn without it and **77 of 342 labels (23%) were
+    unusable** — not wrong, just spent on articles collected after the cut, which
+    no snapshot can ever join. Sampling outside the frozen corpus wastes an
+    annotator's afternoon and gives nothing back.
+    """
     taxonomy = load_taxonomy(TAXONOMY_PATH)
-    articles = load_articles(args.uri, limit=args.limit)
+    cut = _cut(args.collected_before)
+    articles = load_articles(args.uri, limit=args.limit, collected_before=cut)
     if not articles:
         print("no articles found \u2014 is the collector's MongoDB reachable?", file=sys.stderr)
         return 1
+    if cut is None:
+        print("warning: no --collected-before, so this samples the live corpus. Any article",
+              file=sys.stderr)
+        print("         collected after the next snapshot's cut will be labelled for nothing.",
+              file=sys.stderr)
 
     # Only admitted articles: no one should spend attention labelling a
     # horoscope that the pipeline is going to drop anyway.
@@ -318,6 +362,160 @@ def cmd_import_labels(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_pairs(args: argparse.Namespace) -> int:
+    """Write a blind sheet of near-duplicate pairs from the boundary region.
+
+    The threshold this calibrates is currently derived from the LSH banding and
+    has never been checked against a person. Only the boundary is sampled: the
+    ends of the range are not in doubt.
+    """
+    snap = snapshot_mod.read(Path(args.snapshot))
+    texts = {row.article_id: row.text for row in snap.rows}
+    titles = {row.article_id: row.title for row in snap.rows}
+
+    candidates = neardup_mod.candidate_pairs(texts, bands=args.bands)
+    sample = pairs_mod.choose_pairs(
+        candidates, size=args.size, low=args.low, high=args.high, seed=SEED
+    )
+    if not sample:
+        print(f"no candidate pairs scored between {args.low} and {args.high}", file=sys.stderr)
+        return 1
+
+    sheet, key = pairs_mod.write_sheet(sample, titles, texts, Path(args.out))
+    guide = pairs_mod.write_guide(
+        Path(args.out) / "labelling-guide.md",
+        count=len(sample),
+        sources=len({row.source_name for row in snap.rows}),
+    )
+
+    in_range = sum(1 for _, _, score in candidates if args.low <= score < args.high)
+    print(f"{len(candidates):,} candidate pair(s) at {args.bands} bands; "
+          f"{in_range:,} in the boundary region")
+    print(f"{len(sample)} sampled across {len({p.stratum for p in sample})} strata\n")
+    print(f"  {'band':<16}{'in corpus':>11}{'sampled':>9}")
+    for stratum in sorted({p.stratum for p in sample}):
+        members = [p for p in sample if p.stratum == stratum]
+        lo = args.low + stratum * (args.high - args.low) / pairs_mod.STRATA
+        hi = lo + (args.high - args.low) / pairs_mod.STRATA
+        print(f"  {f'{lo:.2f}-{hi:.2f}':<16}{members[0].population:>11,}{len(members):>9}")
+    print(f"\nsheet  {sheet}\nguide  {guide}\nkey    {key}   (do not open this before labelling)")
+    print("\nSend the sheet and the guide together. The guide explains the one rule that")
+    print("nobody gets right unaided: two instalments of a daily feature are NOT one story.")
+    return 0
+
+
+def cmd_import_pairs(args: argparse.Namespace) -> int:
+    """Score every candidate threshold against the labelled pairs."""
+    key = pairs_mod.read_key(Path(args.key))
+    filled = pairs_mod.read_judgements(Path(args.sheet))
+    for problem in filled.problems:
+        print(f"  {problem}", file=sys.stderr)
+
+    judgements = filled.judgements
+    scored = pairs_mod.calibrate(key, judgements)
+    if not scored:
+        print("no readable judgements in the sheet", file=sys.stderr)
+        return 1
+
+    same = sum(1 for v in judgements.values() if v)
+    unanswered = len(key) - len(judgements)
+    print(f"{len(judgements)} of {len(key)} pair(s) judged; {same} are the same story")
+    if unanswered:
+        print(f"{unanswered} left blank — counted as unanswered, not as 'different'")
+    print()
+    print(f"  {'threshold':>10}{'precision':>11}{'recall':>9}{'F1':>8}{'folds':>10}{'misses':>9}")
+    for row in scored:
+        flag = "  <-- current" if abs(row.threshold - neardup_mod.DEFAULT_THRESHOLD) < 1e-9 else ""
+        print(f"  {row.threshold:>10.2f}{row.precision:>11.3f}{row.recall:>9.3f}"
+              f"{row.f1:>8.3f}{row.folded:>10,.0f}{row.missed:>9,.0f}{flag}")
+
+    passing = [r for r in scored if r.precision >= args.min_precision]
+    if passing:
+        best = max(passing, key=lambda r: r.recall)
+        print(f"\nlowest threshold holding precision >= {args.min_precision:.2f}: "
+              f"{best.threshold:.2f} (recall {best.recall:.3f})")
+    else:
+        print(f"\nno threshold reaches precision {args.min_precision:.2f} on these pairs")
+
+    if filled.notes:
+        print(f"\n{len(filled.notes)} note(s) from the annotator:")
+        for pair_id, note in sorted(filled.notes.items()):
+            print(f"  {pair_id}  {note}")
+
+    print("\nCounts are weighted by stratum and conditional on the boundary region;")
+    print("pairs above it were never sampled and are not claimed to be measured.")
+    return 0
+
+
+def cmd_train(args: argparse.Namespace) -> int:
+    """Fit the shipping model from a frozen snapshot and write the bundle."""
+    taxonomy = load_taxonomy(TAXONOMY_PATH)
+    snap = snapshot_mod.read(Path(args.snapshot))
+    if not snap.labels:
+        print(f"snapshot {snap.snapshot_id} carries no labels; re-cut it with --gold", file=sys.stderr)
+        return 1
+
+    data = dataset_mod.from_snapshot(snap, taxonomy, min_per_class=args.min_per_class)
+    if not data.train or not data.val:
+        print(f"not enough labelled data to train: {data.counts}", file=sys.stderr)
+        return 1
+
+    print("=== provenance ===")
+    for key, value in snap.provenance.items():
+        print(f"  {key:<20}{value}")
+
+    print("\n=== dataset ===")
+    for key, value in data.counts.items():
+        print(f"  {key:<20}{value:>7,}")
+    print(f"  {'classes':<20}{len(data.classes):>7}   {', '.join(data.classes)}")
+    if data.out_of_scope:
+        below = Counter(e.topic for e in data.out_of_scope)
+        print(f"  below the {args.min_per_class}-article floor: "
+              f"{', '.join(f'{t} {n}' for t, n in below.most_common())}")
+
+    report = train_mod.run(
+        snap,
+        taxonomy,
+        data,
+        out_root=Path(args.out),
+        repo=REPO_ROOT,
+        target_precision=args.target_precision,
+        seed=SEED,
+    )
+
+    print("\n=== the ladder, on validation ===")
+    print(f"  {'model':<24}{'macro-F1':>10}{'accuracy':>10}{'fit s':>8}{'ms/doc':>9}")
+    for result in report.ladder:
+        print(f"  {result.name:<24}{result.macro_f1:>10.3f}{result.accuracy:>10.3f}"
+              f"{result.fit_seconds:>8.2f}{result.predict_ms_per_doc:>9.3f}")
+
+    print("\n=== which rung can say how sure it is ===")
+    print(f"  {'model':<24}{'macro-F1':>10}{'coverage':>10}{'acc kept':>10}{'unreached':>11}")
+    for name, row in report.abstention.items():
+        mark = "  <-- shipped" if name == report.chosen else ""
+        print(f"  {name:<24}{row['macro_f1']:>10.3f}{row['coverage']:>10.1%}"
+              f"{row['accuracy_on_kept']:>10.3f}{int(row['unreached']):>11}{mark}")
+
+    cuts = report.thresholds
+    print(f"\n=== per-class cuts at {cuts.target_precision:.0%} target precision ===")
+    print(f"  {'class':<24}{'cut':>6}{'precision':>11}{'kept':>7}{'filed':>7}")
+    for choice in sorted(cuts.choices, key=lambda c: (c.forced, -c.cut)):
+        if choice.forced:
+            print(f"  {choice.topic:<24}{'--':>6}{'--':>11}{choice.kept:>7}{choice.predicted:>7}"
+                  "  <-- forced abstain, never emitted")
+            continue
+        flag = "  <-- never reaches the target" if not choice.reached_target else ""
+        print(f"  {choice.topic:<24}{choice.cut:>6.2f}{choice.precision:>11.3f}"
+              f"{choice.kept:>7}{choice.predicted:>7}{flag}")
+
+    print(f"\naccuracy {cuts.accuracy_before:.3f} over everything"
+          f"  ->  {cuts.accuracy_on_kept:.3f} over the {cuts.coverage:.1%} it still files")
+    print(f"{cuts.abstained:,} of {cuts.n:,} validation articles routed to unsorted")
+    print(f"\nbundle {report.bundle_bytes / 1e6:.1f} MB -> {report.directory}")
+    print("the test split has not been opened")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="newsml", description=__doc__)
     parser.add_argument("--uri", default=None, help=f"MongoDB URI (default: {mongo_uri()})")
@@ -346,12 +544,42 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--per-class", type=int, default=150, help="labels each class should end up with")
     p.add_argument("--random-share", type=float, default=0.15, help="fraction drawn at random anyway")
+    p.add_argument(
+        "--collected-before",
+        default=None,
+        help="ISO timestamp; must match the snapshot cut, or the labels cannot be joined to it",
+    )
     p.set_defaults(func=cmd_export_labels)
 
     p = sub.add_parser("adjudicate", help="write a ruling sheet for the articles sheets disagree on")
     p.add_argument("--sheets", nargs="+", required=True)
     p.add_argument("--out", default=str(DATA_DIR / "labels" / "adjudicate.csv"))
     p.set_defaults(func=cmd_adjudicate)
+
+    p = sub.add_parser("export-pairs", help="write a blind near-duplicate sheet from the boundary region")
+    p.add_argument("--snapshot", required=True, help="a frozen snapshot directory")
+    p.add_argument("--out", default=str(DATA_DIR / "pairs"))
+    p.add_argument("--size", type=int, default=100, help="pairs to sample")
+    p.add_argument("--low", type=float, default=pairs_mod.BOUNDARY_LOW)
+    p.add_argument("--high", type=float, default=pairs_mod.BOUNDARY_HIGH)
+    p.add_argument("--bands", type=int, default=pairs_mod.SHEET_BANDS,
+                   help="looser than the shipping banding, which cannot propose the pairs in doubt")
+    p.set_defaults(func=cmd_export_pairs)
+
+    p = sub.add_parser("import-pairs", help="calibrate the near-duplicate threshold from a labelled sheet")
+    p.add_argument("--sheet", default=str(DATA_DIR / "pairs" / "pairs.csv"))
+    p.add_argument("--key", default=str(DATA_DIR / "pairs" / "pairs-key.jsonl"))
+    p.add_argument("--min-precision", type=float, default=0.90)
+    p.set_defaults(func=cmd_import_pairs)
+
+    p = sub.add_parser("train", help="fit the shipping classifier from a snapshot and write the bundle")
+    p.add_argument("--snapshot", required=True, help="a frozen snapshot directory")
+    p.add_argument("--out", default=str(ARTIFACT_DIR / "models"))
+    p.add_argument("--min-per-class", type=int, default=40,
+                   help="below this a class is absent, not thin, and is left out of scope")
+    p.add_argument("--target-precision", type=float, default=0.80,
+                   help="precision each class's confidence cut aims for")
+    p.set_defaults(func=cmd_train)
 
     p = sub.add_parser("import-labels", help="validate completed sheets and write the gold set")
     p.add_argument("--sheets", nargs="+", required=True)
@@ -370,6 +598,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--out", default=str(SNAPSHOT_DIR))
         p.add_argument("--variant", default=DEFAULT_TEXT_VARIANT, choices=TEXT_VARIANTS)
         p.add_argument("--no-language-check", action="store_true", help="skip langdetect (much faster)")
+        p.add_argument(
+            "--collected-before",
+            default=None,
+            help="ISO timestamp; keep only articles collected before it, so the cut is re-cuttable",
+        )
+        p.add_argument("--gold", nargs="*", default=None, help="gold.jsonl file(s) to freeze alongside the corpus")
         p.set_defaults(func=func)
 
     args = parser.parse_args(argv)

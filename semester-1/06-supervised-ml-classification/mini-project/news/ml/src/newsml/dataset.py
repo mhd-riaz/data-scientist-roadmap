@@ -4,10 +4,10 @@ Everything upstream of this module is unsupervised bookkeeping: cleansing,
 admission, near-duplicate grouping. This is where an article becomes an
 `(x, y)` pair, and where the two decisions that shape v1 are enforced:
 
-* **Labels collapse to the top-level group.** The taxonomy is two levels deep,
-  but only its groups carry enough weakly-labelled articles to learn from. A
-  child label is folded into its parent here rather than in the taxonomy, so
-  widening the corpus later restores the finer classes without relabelling.
+* **The taxonomy is fixed and flat (v4).** It went through a two-level, 26-class
+  phase first; `group_of_topic`/`collapse_to_group` still exist and are now a
+  no-op (every class is already its own group) — kept rather than ripped out so
+  a v3-vintage label recorded before the flattening still resolves the same way.
 * **A class below `min_per_class` is out of scope, not a class with few
   examples.** Its articles are removed from the supervised set and counted.
   `crime_justice`, `conflict_war` and `disaster_accident` receive no weak label
@@ -18,7 +18,7 @@ admission, near-duplicate grouping. This is where an article becomes an
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from . import admit as admit_mod
@@ -27,6 +27,7 @@ from . import neardup as neardup_mod
 from .config import DEFAULT_TEXT_VARIANT
 from .labels import Label, LabelSource, Taxonomy, from_categories, from_feed, from_publisher, resolve
 from .load import Article
+from .snapshot import Snapshot
 
 # Below this, a class is not thin — it is absent, and pretending otherwise buys
 # a class that scores badly and hides the finding. Provisional; see the plan.
@@ -59,6 +60,7 @@ class Dataset:
     variant: str
     gold: tuple[Example, ...] = ()
     withheld_for_gold: int = 0
+    provenance: dict[str, object] = field(default_factory=dict)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -90,7 +92,12 @@ class Dataset:
 
 
 def group_of_topic(topic: str, taxonomy: Taxonomy) -> str:
-    """Walk a child class up to the group it belongs to."""
+    """Walk a child class up to the group it belongs to.
+
+    A no-op since v4: every class is its own group now. Kept so a v3-vintage
+    child id, if one ever turns up again, still resolves rather than silently
+    entering the class list unrecognised.
+    """
     parent = {c.id: c.parent for c in taxonomy.classes}
     seen: set[str] = set()
     while parent.get(topic) and topic not in seen:
@@ -108,9 +115,9 @@ def weak_label(
 ) -> tuple[str, LabelSource | None]:
     """Resolve every available weak signal into one topic.
 
-    Collapsed to the top-level group by default. Uncollapsed these are a poor
-    partner for human labels: a feed section resolves to `technology`, so it
-    would sit alongside a human's `tech_ai` as a sibling rather than its parent.
+    `collapse` is a no-op under the fixed v4 taxonomy (every class is already a
+    group); it is a leftover hook from the two-level v3 taxonomy, kept for
+    signature stability rather than for anything it still does.
     """
     candidates: list[Label] = [
         label
@@ -155,10 +162,10 @@ def build(
     Only an article appearing in both is an error, because that is the one case
     where the model is tested on a label it was handed.
 
-    `collapse_to_group` off keeps the finer child classes the taxonomy defines,
-    which only became possible once enough of them had been hand-labelled. Turn
-    `use_weak_labels` off alongside it: weak labels resolve to groups, so mixing
-    the two makes a class list where a parent competes with its own children.
+    `collapse_to_group` and `use_weak_labels` are v3-era hooks for the retired
+    two-level taxonomy. Under the fixed v4 taxonomy every class already is a
+    group, so `collapse_to_group=False` no longer produces a finer class list —
+    there is no finer level left to fall back to.
     """
     from .splits import SplitRow, make_splits
 
@@ -250,4 +257,73 @@ def build(
         variant=variant,
         gold=tuple(gold_rows),
         withheld_for_gold=withheld,
+    )
+
+
+def from_snapshot(
+    snap: Snapshot,
+    taxonomy: Taxonomy,
+    *,
+    min_per_class: int = MIN_PER_CLASS,
+) -> Dataset:
+    """Assemble the supervised dataset from a frozen snapshot.
+
+    The difference from `build` is what is *not* done here. Cleaning, admission,
+    story grouping and the split boundary were all decided when the snapshot was
+    written, so this only joins labels onto rows. That is what makes a reported
+    number reproducible from a snapshot id: rerun it in a month, against a
+    database twice the size, and the same articles land in the same splits.
+
+    The boundary itself is two publication times recorded in the manifest, so it
+    is a fact about the snapshot rather than a side effect of whatever happened
+    to be labelled on the day someone ran the notebook.
+    """
+    unsorted = taxonomy.unsorted
+    labelled: list[Example] = []
+    unlabelled = 0
+
+    for row in snap.rows:
+        topic = snap.labels.get(row.article_id)
+        # `unsorted` is the absence of a class, not a class: an article no
+        # annotator could file is not a row the model should be scored on.
+        if not topic or topic == unsorted:
+            unlabelled += 1
+            continue
+        labelled.append(
+            Example(
+                article_id=row.article_id,
+                text=row.text,
+                topic=group_of_topic(topic, taxonomy),
+                label_source=str(LabelSource.HUMAN),
+                source_name=row.source_name,
+                group_id=row.story_group_id,
+                published_at=row.published_at,
+            )
+        )
+
+    sizes = Counter(e.topic for e in labelled)
+    classes = tuple(sorted(c for c, n in sizes.items() if n >= min_per_class))
+    in_scope = [e for e in labelled if e.topic in classes]
+
+    split_of = {row.article_id: row.split for row in snap.rows}
+    by_split: dict[str, list[Example]] = {"train": [], "val": [], "test": []}
+    dropped = 0
+    for example in in_scope:
+        if (name := split_of.get(example.article_id)) in by_split:
+            by_split[str(name)].append(example)
+        else:
+            dropped += 1
+
+    counts = snap.manifest.get("counts", {})
+    return Dataset(
+        train=tuple(by_split["train"]),
+        val=tuple(by_split["val"]),
+        test=tuple(by_split["test"]),
+        classes=classes,
+        out_of_scope=tuple(e for e in labelled if e.topic not in classes),
+        unlabelled=unlabelled,
+        rejected=int(counts.get("rejected", 0)),
+        dropped_at_boundary=dropped,
+        variant=str(snap.manifest.get("text_variant", DEFAULT_TEXT_VARIANT)),
+        provenance=snap.provenance,
     )

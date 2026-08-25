@@ -4,13 +4,25 @@ from __future__ import annotations
 
 import pytest
 
-from newsml import dataset
+from newsml import dataset, snapshot
 
 
 def _corpus(make_article, spec):
-    """`spec` is (article_id, category, title) triples."""
+    """`spec` is (article_id, category, title) triples.
+
+    The summary is built from the article's own title, so two articles group as
+    near-duplicates exactly when their titles match and not otherwise. The shared
+    default summary this used to rely on made every article a near-duplicate of
+    every other once the grouping threshold came down to its calibrated 0.44.
+    """
     return [
-        make_article(article_id, categories=(category,), title=title, minutes=index * 90)
+        make_article(
+            article_id,
+            categories=(category,),
+            title=title,
+            summary=" ".join(title.split() * 4),
+            minutes=index * 90,
+        )
         for index, (article_id, category, title) in enumerate(spec)
     ]
 
@@ -53,9 +65,11 @@ def test_a_gold_class_the_weak_labels_never_taught_is_reported_as_unreachable(ma
     assert data.unreachable == {"conflict_war": 1}
 
 
-def test_gold_labels_collapse_to_the_group_the_model_predicts(make_article, taxonomy):
+def test_a_gold_label_naming_a_fixed_group_is_used_as_is(make_article, taxonomy):
+    """v4 is flat: there is no child level left to collapse, so a human label
+    naming one of the 13 groups passes straight through."""
     articles = _corpus(make_article, SPEC)
-    data = dataset.build(articles, taxonomy, min_per_class=1, holdout={"h1": "judiciary_courts"})
+    data = dataset.build(articles, taxonomy, min_per_class=1, holdout={"h1": "crime_justice"})
 
     assert data.gold[0].topic == "crime_justice"
 
@@ -100,21 +114,6 @@ def test_without_a_holdout_nothing_changes(make_article, taxonomy):
     assert len(data.train) + len(data.val) + len(data.test) == len(articles) - data.dropped_at_boundary
 
 
-def test_child_classes_survive_when_the_collapse_is_turned_off(make_article, taxonomy):
-    """Only worth doing once enough children have been hand-labelled."""
-    articles = _corpus(make_article, SPEC)
-    gold = {"h1": "judiciary_courts", "h2": "crime"}
-
-    collapsed = dataset.build(articles, taxonomy, min_per_class=1, gold=gold)
-    detailed = dataset.build(
-        articles, taxonomy, min_per_class=1, gold=gold, collapse_to_group=False
-    )
-
-    assert "crime_justice" in collapsed.classes
-    assert {"judiciary_courts", "crime"} <= set(detailed.classes)
-    assert "crime_justice" not in detailed.classes
-
-
 def test_dropping_weak_labels_leaves_only_the_hand_labelled_articles(make_article, taxonomy):
     articles = _corpus(make_article, SPEC)
     gold = {"s1": "sport", "s2": "sport"}
@@ -127,3 +126,79 @@ def test_dropping_weak_labels_leaves_only_the_hand_labelled_articles(make_articl
     assert kept == set(gold), f"an article with no human label was trained on: {kept - set(gold)}"
     assert all(e.label_source == "human" for e in data.train)
     assert data.unlabelled == len(articles) - len(gold)
+
+
+def _snapshot(tmp_path, make_article, gold, taxonomy):
+    articles = _corpus(make_article, SPEC)
+    result = snapshot.build(
+        articles, snapshot_id="s", out_root=tmp_path, variant="title_summary", repo=tmp_path,
+        check_language=False, apply_boilerplate=False, gold=gold, taxonomy_version=taxonomy.version,
+    )
+    return snapshot.read(result.directory)
+
+
+def test_a_snapshot_dataset_uses_the_split_the_snapshot_already_decided(tmp_path, make_article, taxonomy):
+    """No re-cleaning, no re-grouping, no re-cutting. That is the whole point."""
+    gold = {"s1": "sport", "s2": "sport", "h1": "health", "h2": "health"}
+    snap = _snapshot(tmp_path, make_article, gold, taxonomy)
+
+    data = dataset.from_snapshot(snap, taxonomy, min_per_class=1)
+
+    split_of = {row.article_id: row.split for row in snap.rows}
+    for example in (*data.train, *data.val, *data.test):
+        assert example.text == next(r.text for r in snap.rows if r.article_id == example.article_id)
+    for name in ("train", "val", "test"):
+        assert all(split_of[e.article_id] == name for e in getattr(data, name))
+
+
+def test_the_split_boundary_is_frozen_in_the_snapshot(tmp_path, make_article, taxonomy):
+    """The boundary is a recorded publication time, not a side effect of the run."""
+    gold = {"s1": "sport", "s2": "sport", "s3": "sport", "h1": "health", "h2": "health"}
+    snap = _snapshot(tmp_path, make_article, gold, taxonomy)
+
+    boundaries = snap.manifest["split_boundaries"]
+
+    assert boundaries["placed_by"] == "labelled articles"
+    assert boundaries["train_until"] and boundaries["val_until"]
+    assert dataset.from_snapshot(snap, taxonomy, min_per_class=1).train
+
+
+def test_the_cut_follows_the_labels_not_the_unlabelled_bulk(tmp_path, make_article, taxonomy):
+    """Labelling stops when the round was drawn; everything collected after it is
+    unlabelled. Cutting over the whole corpus put 37 of 1,317 labelled articles in
+    the real test split, which is not a test split."""
+    labelled = _corpus(make_article, SPEC)
+    later = [
+        make_article(f"u{i}", categories=("sport",), title=f"Unlabelled later story {i}", minutes=5000 + i * 90)
+        for i in range(30)
+    ]
+    result = snapshot.build(
+        [*labelled, *later], snapshot_id="cut", out_root=tmp_path, variant="title_summary",
+        repo=tmp_path, check_language=False, apply_boilerplate=False, taxonomy_version=taxonomy.version,
+        gold={a.id: "sport" if a.id.startswith("s") else "health" for a in labelled},
+    )
+
+    snap = snapshot.read(result.directory)
+    data = dataset.from_snapshot(snap, taxonomy, min_per_class=1)
+
+    assert data.test, "the later unlabelled articles swallowed the whole test window"
+    assert snap.manifest["labelled_by_split"].get("test", 0) > 0
+
+
+def test_every_snapshot_label_is_human_and_carries_its_provenance(tmp_path, make_article, taxonomy):
+    snap = _snapshot(tmp_path, make_article, {"s1": "sport", "s2": "sport"}, taxonomy)
+
+    data = dataset.from_snapshot(snap, taxonomy, min_per_class=1)
+
+    assert {e.label_source for e in (*data.train, *data.val, *data.test)} == {"human"}
+    assert data.provenance["snapshot_id"] == "s"
+    assert data.provenance["taxonomy_version"] == taxonomy.version
+
+
+def test_an_unlabelled_snapshot_row_is_counted_not_guessed(tmp_path, make_article, taxonomy):
+    snap = _snapshot(tmp_path, make_article, {"s1": "sport", "h1": "unsorted"}, taxonomy)
+
+    data = dataset.from_snapshot(snap, taxonomy, min_per_class=1)
+
+    assert data.unlabelled == len(snap.rows) - 1, "`unsorted` is the absence of a class, not a class"
+    assert {e.article_id for e in (*data.train, *data.val, *data.test)} == {"s1"}

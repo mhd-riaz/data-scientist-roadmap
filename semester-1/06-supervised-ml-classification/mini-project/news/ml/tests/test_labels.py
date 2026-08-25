@@ -137,12 +137,10 @@ def test_non_topical_and_categories_do_not_overlap(taxonomy):
     assert not (taxonomy.non_topical & set(taxonomy.category_map))
 
 
-def test_collapse_folds_a_starved_child_into_its_group(taxonomy):
-    assert taxonomy.collapse("politics_elections", frozenset({"politics_elections"})) == "politics"
-
-
-def test_collapse_leaves_healthy_classes_alone(taxonomy):
-    assert taxonomy.collapse("politics_elections", frozenset()) == "politics_elections"
+def test_collapse_is_a_no_op_now_the_taxonomy_is_flat(taxonomy):
+    """There is no parent left to fold into: v4 retired the child level."""
+    assert taxonomy.collapse("politics", frozenset({"politics"})) == "politics"
+    assert taxonomy.collapse("technology", frozenset()) == "technology"
 
 
 def test_collapse_stops_at_a_group(taxonomy):
@@ -151,9 +149,9 @@ def test_collapse_stops_at_a_group(taxonomy):
     assert taxonomy.collapse("politics", frozenset({"politics"})) == "politics"
 
 
-@pytest.mark.parametrize("raw", ["tech_ai", "TECH_AI", " Tech_AI ", "tech-ai"])
+@pytest.mark.parametrize("raw", ["crime_justice", "CRIME_JUSTICE", " Crime_Justice ", "crime-justice"])
 def test_canonical_accepts_case_and_separator_variants(taxonomy, raw):
-    assert taxonomy.canonical(raw) == "tech_ai"
+    assert taxonomy.canonical(raw) == "crime_justice"
 
 
 def test_group_labels_are_valid_labels(taxonomy):
@@ -180,7 +178,7 @@ def test_unknown_source_has_no_publisher_label(taxonomy, make_article):
 def test_category_label_is_independent_of_publisher_ordering(taxonomy, make_article):
     forward = from_categories(make_article(categories=("ai", "india")), taxonomy)
     reverse = from_categories(make_article(categories=("india", "ai")), taxonomy)
-    assert forward is not None and forward.topic == reverse.topic == "tech_ai"
+    assert forward is not None and forward.topic == reverse.topic == "technology"
 
 
 def test_geography_only_article_yields_no_label(taxonomy, make_article):
@@ -209,7 +207,7 @@ def test_conflicting_signals_route_to_review(taxonomy, make_article):
 def test_a_lone_publisher_prior_is_not_trusted(taxonomy, make_article):
     """Measured on the pilot gold set, a lone publisher prior named the wrong
     group 42% of the time. "TikTok reaches $400M privacy settlement" arrives on
-    Wired's feed and is judiciary_courts, not technology."""
+    Wired's feed and is crime_justice, not technology."""
     article = make_article(source_name="Wired", categories=())
     outcome = resolve(article.id, [from_publisher(article, taxonomy)], taxonomy)
 

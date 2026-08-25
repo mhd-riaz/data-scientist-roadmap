@@ -72,7 +72,7 @@ def test_manifest_records_full_provenance(tmp_path, make_article):
 
     assert manifest["cleaning_version"] == CLEANING_VERSION
     assert manifest["text_variant"] == "title_summary"
-    assert set(manifest["digests"]) == {"articles.jsonl", "rejections.jsonl"}
+    assert set(manifest["digests"]) == {"articles.jsonl", "rejections.jsonl", "labels.jsonl"}
     for key in ("input", "admitted", "rejected", "story_groups", "train", "val", "test"):
         assert key in manifest["counts"]
 
@@ -121,3 +121,42 @@ def test_data_card_states_the_limitations(tmp_path, make_article):
     assert "Known limitations" in card
     assert "language_declared" in card
     assert CLEANING_VERSION in card
+
+
+def test_labels_are_frozen_with_the_corpus_they_belong_to(tmp_path, make_article):
+    """The snapshot id has to name one exact pairing of corpus and labels."""
+    result = snapshot.build(
+        _corpus(make_article), snapshot_id="lab", out_root=tmp_path, variant="title_summary",
+        repo=tmp_path, check_language=False, gold={"a01": "politics", "a02": "sport"}, taxonomy_version=4,
+    )
+
+    snap = snapshot.read(result.directory)
+
+    assert snap.labels == {"a01": "politics", "a02": "sport"}
+    assert snap.provenance["taxonomy_version"] == 4
+    assert snap.manifest["counts"]["labelled"] == 2
+
+
+def test_a_label_whose_article_was_rejected_is_not_written(tmp_path, make_article):
+    """Writing it would claim a label the snapshot cannot join to a row."""
+    result = snapshot.build(
+        _corpus(make_article), snapshot_id="orphan", out_root=tmp_path, variant="title_summary",
+        repo=tmp_path, check_language=False,
+        gold={"a01": "politics", "bad": "sport", "never-collected": "health"},
+    )
+
+    snap = snapshot.read(result.directory)
+
+    assert set(snap.labels) == {"a01"}
+    assert snap.manifest["counts"]["labels_offered"] == 3
+
+
+def test_reading_a_snapshot_returns_the_rows_that_were_written(tmp_path, make_article):
+    result = snapshot.build(_corpus(make_article), snapshot_id="rt", out_root=tmp_path,
+                            variant="title_summary", repo=tmp_path, check_language=False)
+
+    snap = snapshot.read(result.directory)
+
+    assert len(snap.rows) == result.manifest["counts"]["admitted"]
+    assert snap.snapshot_id == "rt"
+    assert all(row.text for row in snap.rows), "text is already cleaned; nothing re-cleans it"

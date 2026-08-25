@@ -129,20 +129,34 @@ ml-boilerplate: ## Discover per-source template lines for review
 	cd ml && uv run newsml boilerplate
 
 .PHONY: ml-snapshot
-ml-snapshot: ## Freeze a dataset: make ml-snapshot ID=20260823-100
-	cd ml && uv run newsml snapshot $(if $(ID),--id $(ID),)
+ml-snapshot: ## Freeze a dataset with its labels: make ml-snapshot CUT=2026-08-25T00:00:00+00:00
+	cd ml && uv run newsml snapshot $(if $(ID),--id $(ID),) $(if $(CUT),--collected-before $(CUT),) \
+		--no-language-check --gold data/labels/v1/gold.jsonl data/labels/v2/gold.jsonl
+
+.PHONY: ml-train
+ml-train: ## Fit the shipping classifier from a snapshot: make ml-train SNAPSHOT=data/snapshots/20260825-120
+	cd ml && uv run newsml train --snapshot $(SNAPSHOT)
 
 .PHONY: ml-labels-export
-ml-labels-export: ## Write blind labelling sheets: make ml-labels-export SIZE=150 SHARDS=4
-	cd ml && uv run newsml export-labels $(if $(SIZE),--size $(SIZE),) $(if $(SHARDS),--shards $(SHARDS),) $(if $(OVERLAP),--overlap $(OVERLAP),)
+ml-labels-export: ## Write blind labelling sheets: make ml-labels-export SIZE=150 SHARDS=4 CUT=2026-08-25T00:00:00+00:00
+	cd ml && uv run newsml export-labels $(if $(SIZE),--size $(SIZE),) $(if $(SHARDS),--shards $(SHARDS),) $(if $(OVERLAP),--overlap $(OVERLAP),) $(if $(CUT),--collected-before $(CUT),)
 
 .PHONY: ml-labels-import
 ml-labels-import: ## Validate completed sheets and write the gold set: make ml-labels-import SHEETS="a.csv b.csv"
 	cd ml && uv run newsml import-labels --sheets $(SHEETS)
 
+.PHONY: ml-pairs-export
+ml-pairs-export: ## Write the blind near-duplicate sheet: make ml-pairs-export SNAPSHOT=data/snapshots/20260825-120
+	cd ml && uv run newsml export-pairs --snapshot $(SNAPSHOT)
+
+.PHONY: ml-pairs-import
+ml-pairs-import: ## Calibrate the near-duplicate threshold from the labelled sheet
+	cd ml && uv run newsml import-pairs
+
 .PHONY: ml-verify
 ml-verify: ## Rebuild a snapshot and confirm byte-identical digests
-	cd ml && uv run newsml verify $(if $(ID),--id $(ID),)
+	cd ml && uv run newsml verify $(if $(ID),--id $(ID),) $(if $(CUT),--collected-before $(CUT),) \
+		--no-language-check --gold data/labels/v1/gold.jsonl data/labels/v2/gold.jsonl
 
 # nbconvert is pulled in for the run only. A notebook that has rotted is worth
 # catching, but not worth a permanent dependency.

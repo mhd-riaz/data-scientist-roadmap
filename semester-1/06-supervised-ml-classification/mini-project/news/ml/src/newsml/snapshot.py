@@ -52,10 +52,87 @@ def _write_jsonl(path: Path, rows: list[dict]) -> str:
     return _sha256(path)
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    with path.open(encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
 @dataclass(frozen=True, slots=True)
 class Result:
     directory: Path
     manifest: dict
+
+
+@dataclass(frozen=True, slots=True)
+class Row:
+    """One admitted article as the snapshot recorded it.
+
+    `text` is already cleaned and `split` is already decided, so a consumer never
+    re-runs the pipeline and never re-cuts the boundary. That is the whole point:
+    two runs a month apart read the same rows.
+    """
+
+    article_id: str
+    source_id: str
+    source_name: str
+    title: str
+    text: str
+    categories: tuple[str, ...]
+    published_at: datetime
+    story_group_id: str
+    split: str
+
+
+@dataclass(frozen=True, slots=True)
+class Snapshot:
+    directory: Path
+    manifest: dict
+    rows: tuple[Row, ...]
+    labels: dict[str, str]
+
+    @property
+    def snapshot_id(self) -> str:
+        return str(self.manifest["snapshot_id"])
+
+    @property
+    def provenance(self) -> dict[str, object]:
+        """The tuple every reported number has to be quotable against."""
+        return {
+            "snapshot_id": self.snapshot_id,
+            "git_sha": self.manifest.get("git_sha"),
+            "seed": self.manifest.get("seed"),
+            "cleaning_version": self.manifest.get("cleaning_version"),
+            "taxonomy_version": self.manifest.get("taxonomy_version"),
+            "collected_before": self.manifest.get("collected_before"),
+        }
+
+
+def read(directory: Path) -> Snapshot:
+    """Load a frozen snapshot back. The only door training goes through."""
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"no snapshot manifest at {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    rows = tuple(
+        Row(
+            article_id=row["article_id"],
+            source_id=row["source_id"],
+            source_name=row["source_name"],
+            title=row["title"],
+            text=row["text"],
+            categories=tuple(row.get("categories") or ()),
+            published_at=datetime.fromisoformat(row["published_at"]),
+            story_group_id=row["story_group_id"],
+            split=row["split"],
+        )
+        for row in _read_jsonl(directory / "articles.jsonl")
+    )
+
+    labels_path = directory / "labels.jsonl"
+    labels = {row["article_id"]: row["topic"] for row in _read_jsonl(labels_path)} if labels_path.is_file() else {}
+
+    return Snapshot(directory=directory, manifest=manifest, rows=rows, labels=labels)
 
 
 def build(
@@ -67,8 +144,17 @@ def build(
     repo: Path,
     check_language: bool = True,
     apply_boilerplate: bool = True,
+    gold: dict[str, str] | None = None,
+    taxonomy_version: int | None = None,
+    collected_before: datetime | None = None,
 ) -> Result:
-    """Run the whole Phase 2 pipeline and write the snapshot directory."""
+    """Run the whole Phase 2 pipeline and write the snapshot directory.
+
+    `gold` is written alongside the articles rather than left in `data/labels/`,
+    so the snapshot id names one exact pairing of corpus and labels. A model
+    trained from it can be traced to both without knowing which labelling round
+    happened to be on disk that day.
+    """
     candidates = boilerplate.discover(articles, variant) if apply_boilerplate else []
     lookup = boilerplate.as_lookup(candidates)
 
@@ -77,6 +163,7 @@ def build(
 
     grouping = neardup.group({a.article.id: a.cleaned.text for a in admitted})
 
+    gold = gold or {}
     rows = [
         splits.SplitRow(
             article_id=a.article.id,
@@ -85,7 +172,11 @@ def build(
         )
         for a in admitted
     ]
-    assignment = splits.make_splits(rows)
+    # The cut is placed by the labelled articles and applied to all of them.
+    # Labelling stops at whenever the last round was drawn, so quantiles over the
+    # whole corpus would leave the test split almost entirely unlabelled.
+    labelled_rows = [r for r in rows if r.article_id in gold] or None
+    assignment = splits.make_splits(rows, reference=labelled_rows)
     split_of = assignment.assignment()
 
     spanning = splits.groups_spanning_splits(rows, assignment)
@@ -121,16 +212,34 @@ def build(
         for r in sorted(rejected, key=lambda r: (r.article_id, str(r.reason)))
     ]
 
+    # A label whose article did not survive admission is dropped here rather than
+    # written, so the snapshot never claims a label it cannot join to a row.
+    admitted_ids = {row["article_id"] for row in article_rows}
+    label_rows = [
+        {"article_id": article_id, "topic": gold[article_id], "label_source": "human"}
+        for article_id in sorted(gold)
+        if article_id in admitted_ids
+    ]
+    labelled_split_counts: dict[str, int] = {}
+    for row in article_rows:
+        if row["article_id"] in gold:
+            labelled_split_counts[row["split"]] = labelled_split_counts.get(row["split"], 0) + 1
+
     directory = out_root / snapshot_id
     directory.mkdir(parents=True, exist_ok=True)
     digests = {
         "articles.jsonl": _write_jsonl(directory / "articles.jsonl", article_rows),
         "rejections.jsonl": _write_jsonl(directory / "rejections.jsonl", rejection_rows),
+        "labels.jsonl": _write_jsonl(directory / "labels.jsonl", label_rows),
     }
 
     reason_counts: dict[str, int] = {}
     for row in rejection_rows:
         reason_counts[row["reason"]] = reason_counts.get(row["reason"], 0) + 1
+
+    label_counts: dict[str, int] = {}
+    for row in label_rows:
+        label_counts[row["topic"]] = label_counts.get(row["topic"], 0) + 1
 
     manifest = {
         "snapshot_id": snapshot_id,
@@ -139,6 +248,14 @@ def build(
         "cleaning_version": CLEANING_VERSION,
         "seed": SEED,
         "text_variant": variant,
+        "near_duplicates": {
+            "threshold": neardup.DEFAULT_THRESHOLD,
+            "bands": neardup.BANDS,
+            "num_perm": neardup.NUM_PERM,
+            "shingle_words": neardup.SHINGLE_WORDS,
+        },
+        "taxonomy_version": taxonomy_version,
+        "collected_before": collected_before.isoformat() if collected_before else None,
         "counts": {
             "input": len(articles),
             "admitted": len(admitted),
@@ -149,8 +266,17 @@ def build(
             "val": len(assignment.val),
             "test": len(assignment.test),
             "dropped_at_boundary": len(assignment.dropped_at_boundary),
+            "labelled": len(label_rows),
+            "labels_offered": len(gold),
         },
         "rejection_reasons": dict(sorted(reason_counts.items())),
+        "split_boundaries": {
+            "train_until": assignment.train_until.isoformat() if assignment.train_until else None,
+            "val_until": assignment.val_until.isoformat() if assignment.val_until else None,
+            "placed_by": "labelled articles" if labelled_rows else "whole corpus",
+        },
+        "labelled_by_split": dict(sorted(labelled_split_counts.items())),
+        "label_distribution": dict(sorted(label_counts.items(), key=lambda kv: -kv[1])),
         "boilerplate_lines": len(candidates),
         "digests": digests,
     }
@@ -203,6 +329,32 @@ def _data_card(manifest: dict, rows: list[dict]) -> str:
     lines += ["", "## Sources", "", "| Source | Articles |", "| --- | --- |"]
     lines += [f"| {k} | {v:,} |" for k, v in sorted(sources.items(), key=lambda kv: -kv[1])]
 
+    labelled = counts.get("labelled", 0)
+    boundaries = manifest.get("split_boundaries", {})
+    lines += [
+        "",
+        "## Labels",
+        "",
+        f"| Taxonomy version | `{manifest.get('taxonomy_version')}` |",
+        "| --- | --- |",
+        f"| Hand-labelled articles | {labelled:,} |",
+        f"| Labels offered but not admitted | {counts.get('labels_offered', 0) - labelled:,} |",
+        f"| Split boundary placed by | {boundaries.get('placed_by', '—')} |",
+        f"| Train ends | {boundaries.get('train_until') or '—'} |",
+        f"| Validation ends | {boundaries.get('val_until') or '—'} |",
+        "",
+        "| Split | Labelled articles |",
+        "| --- | --- |",
+    ]
+    lines += [f"| `{k}` | {v:,} |" for k, v in manifest.get("labelled_by_split", {}).items()] or ["| — | 0 |"]
+
+    lines += [
+        "",
+        "| Class | Articles |",
+        "| --- | --- |",
+    ]
+    lines += [f"| `{k}` | {v:,} |" for k, v in manifest.get("label_distribution", {}).items()] or ["| — | 0 |"]
+
     lines += [
         "",
         "## Known limitations",
@@ -213,7 +365,10 @@ def _data_card(manifest: dict, rows: list[dict]) -> str:
         "  copy. Two independent reports of the same event do not group.",
         "- Splits are grouped and temporal, so articles straddling a cut point are",
         "  dropped rather than assigned. The count is above.",
-        "- No labels. The taxonomy and gold set are deferred until the corpus is",
-        "  large enough to support them — see `docs/plan.md`.",
+        "- The split boundary is a publication time chosen from the labelled articles",
+        "  and frozen here. Labelling stops at whenever the last round was drawn, so",
+        "  cutting over the whole corpus would leave the test split almost unlabelled.",
+        "- Every label here is human. Weak labels from feed sections are not written:",
+        "  they agree with a person only ~74% of the time — see `docs/plan.md`.",
     ]
     return "\n".join(lines) + "\n"

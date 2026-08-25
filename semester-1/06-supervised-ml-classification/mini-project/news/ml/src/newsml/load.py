@@ -117,15 +117,28 @@ def _to_article(doc: dict[str, Any]) -> Article:
     )
 
 
-def load_articles(uri: str | None = None, limit: int | None = None) -> list[Article]:
+def load_articles(
+    uri: str | None = None,
+    limit: int | None = None,
+    collected_before: datetime | None = None,
+) -> list[Article]:
     """Fetch the corpus, sorted by `_id` so two runs see the same order.
 
     Sort order matters: near-duplicate grouping and split assignment are both
     order-sensitive, and an unsorted cursor would make snapshots irreproducible.
+
+    `collected_before` is the cut that makes a snapshot re-cuttable from a larger
+    corpus later. It filters on `collected_at`, never `published_at`: an article
+    published in 2019 can be collected tomorrow, so only the arrival time is
+    stable enough to reproduce the same row set from a database that has grown.
     """
+    query: dict[str, Any] = {}
+    if collected_before is not None:
+        query["collected_at"] = {"$lt": collected_before}
+
     client: MongoClient = MongoClient(uri or mongo_uri(), tz_aware=True)
     try:
-        cursor = client.get_database().get_collection("articles").find({}, PROJECTION).sort("_id", 1)
+        cursor = client.get_database().get_collection("articles").find(query, PROJECTION).sort("_id", 1)
         if limit is not None:
             cursor = cursor.limit(limit)
         return [_to_article(doc) for doc in cursor]

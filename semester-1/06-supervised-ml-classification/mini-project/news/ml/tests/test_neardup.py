@@ -39,6 +39,24 @@ def test_unrelated_documents_do_not_group():
     assert grouping.group_of["a"] != grouping.group_of["b"]
 
 
+def test_candidate_pairs_keeps_what_grouping_throws_away():
+    """Calibrating the cut needs the pairs that fell just under it."""
+    documents = {"a": WIRE, "b": WIRE_REPRINT, "c": UNRELATED}
+
+    candidates = neardup.candidate_pairs(documents)
+    kept = neardup.group(documents).pairs
+
+    assert len(candidates) >= len(kept)
+    assert all(score >= neardup.DEFAULT_THRESHOLD for _, _, score in kept)
+    assert {(a, b) for a, b, _ in kept} <= {(a, b) for a, b, _ in candidates}
+
+
+def test_candidate_pairs_are_ordered_so_two_runs_agree():
+    documents = {"a": WIRE, "b": WIRE_REPRINT, "c": UNRELATED}
+
+    assert neardup.candidate_pairs(documents) == neardup.candidate_pairs(dict(reversed(documents.items())))
+
+
 def test_grouping_is_transitive():
     """A~B and B~C must put all three in one group even if A and C never matched
     directly — otherwise a story leaks across a split boundary."""
