@@ -118,6 +118,30 @@ def score(
     )
 
 
+def bootstrap_class_f1(
+    truth: np.ndarray,
+    predicted: np.ndarray,
+    groups: np.ndarray,
+    labels: list[str],
+    *,
+    rounds: int = BOOTSTRAP_ROUNDS,
+    seed: int = 0,
+) -> dict[str, tuple[float, float]]:
+    """95% interval per class, so a thin class cannot be read as if it were precise."""
+    rng = np.random.default_rng(seed)
+    unique = np.unique(groups)
+    index_of = {g: np.flatnonzero(groups == g) for g in unique}
+
+    draws = np.empty((rounds, len(labels)))
+    for i in range(rounds):
+        picked = rng.choice(unique, size=len(unique), replace=True)
+        idx = np.concatenate([index_of[g] for g in picked])
+        draws[i] = f1_score(truth[idx], predicted[idx], labels=labels,
+                            average=None, zero_division=0)
+    low, high = np.percentile(draws, 2.5, axis=0), np.percentile(draws, 97.5, axis=0)
+    return {t: (float(low[i]), float(high[i])) for i, t in enumerate(labels)}
+
+
 def mcnemar(truth: list[str], a: list[str], b: list[str]) -> tuple[int, int, float]:
     """Paired test for two models on the same examples.
 
