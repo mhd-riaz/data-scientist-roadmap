@@ -164,3 +164,41 @@ ml-verify: ## Rebuild a snapshot and confirm byte-identical digests
 ml-notebook: ## Execute every notebook headlessly and fail if one has rotted
 	cd ml && uv run --with nbconvert --with ipykernel jupyter nbconvert \
 		--to notebook --execute notebooks/*.ipynb --output-dir /tmp/newsml-nb
+
+# --- ml-v2 (body-aware classifier, POC) --------------------------------------
+# A standalone package, not an evolution of ml/. It classifies on the article body
+# as well as the headline, and reruns v1's configuration on its own snapshot so the
+# two are comparable. See ml-v2/docs/plan.md.
+
+.PHONY: ml2-setup
+ml2-setup: ## Create the ml-v2 virtualenv and install dependencies
+	cd ml-v2 && uv sync --group dev && uv run python -m spacy download en_core_web_sm
+
+.PHONY: ml2-test
+ml2-test: ## Run the ml-v2 test suite
+	cd ml-v2 && uv run pytest
+
+.PHONY: ml2-labels
+ml2-labels: ## Re-vendor the gold labels from ml/ and print the digest that pins them
+	cp ml/data/labels/gold-combined.jsonl ml-v2/data/labels/gold.jsonl
+	@shasum -a 256 ml-v2/data/labels/gold.jsonl
+
+.PHONY: ml2-report
+ml2-report: ## Write the data-quality report to ml-v2/reports
+	cd ml-v2 && uv run newsmlv2 report
+
+.PHONY: ml2-snapshot
+ml2-snapshot: ## Freeze a dataset: make ml2-snapshot ID=v2-001 (--id is mandatory, ids must never collide)
+	cd ml-v2 && uv run newsmlv2 snapshot --id $(ID)
+
+.PHONY: ml2-verify
+ml2-verify: ## Rebuild a snapshot and confirm byte-identical digests
+	cd ml-v2 && uv run newsmlv2 verify --id $(ID)
+
+.PHONY: ml2-run
+ml2-run: ## Run one experiment config: make ml2-run CONFIG=configs/experiments/baseline.yaml
+	cd ml-v2 && uv run newsmlv2 run --config $(CONFIG)
+
+.PHONY: ml2-compare
+ml2-compare: ## Render the model comparison table from the experiment ledger
+	cd ml-v2 && uv run newsmlv2 compare
