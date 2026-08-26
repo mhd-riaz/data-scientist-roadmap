@@ -3,11 +3,15 @@
 > Living document. Update status as phases land; append to the decision log rather than
 > rewriting history.
 
-**Status:** **Phases A, B, C complete** · snapshot `v2-001` · best **0.771 [0.743, 0.796]** · next Phase D0/D
+**Status:** **Phases A, B, C, D0, D complete** · snapshot `v2-001` · best **0.771 [0.743, 0.796]** · next Phase E
 
 **The core hypothesis is confirmed.** The article body is worth **+0.059 macro-F1**
 (word_char_svc: 0.712 → 0.771), with non-overlapping intervals and McNemar p=7.5e-06.
 Against the v1-parity rung measured on this same snapshot (0.696), the gain is **+0.075**.
+
+**Two clean negative results, both worth as much as the positive one:** entity/geography
+scrubbing (D0) buys nothing because Phase A already removed the publisher fingerprints,
+and up-weighting the title actively hurts. Neither is enabled.
 
 **Frozen corpus cut:** `collected_before = 2026-08-26T12:00:00+00:00` → 14,189 articles,
 40 publishers, all **8,001** gold labels join.
@@ -301,7 +305,45 @@ Three findings worth keeping:
 
 ---
 
-## Phase D0 — Signal hygiene *(needs C2)*
+## Phase D0 — Signal hygiene *(done 2026-08-26 — NEGATIVE RESULT, nothing adopted)*
+
+> Cleaning here is signal correction, not tidying: furniture and place names become
+> **publisher→class shortcuts** that score well on validation and collapse on an unseen
+> masthead. `scrub.py` runs one spaCy pass (105s for 6,607 docs) and renders every policy
+> from the stored annotations, so ablations are cheap.
+
+**Result: no rule earned adoption.** Measured on `word_char_svc` + `title_body`,
+baseline 0.773.
+
+| Policy | val | Δ val | Δ holdout | publisher probe | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| raw | 0.773 | — | — | 0.482 | baseline |
+| mask PERSON | 0.769 | −0.004 | −0.000 | 0.481 | reject |
+| mask PLACE | 0.768 | −0.005 | **+0.003** | 0.476 | inside noise |
+| mask numbers | 0.766 | −0.007 | −0.000 | 0.477 | reject |
+| lemmatise | 0.771 | −0.002 | −0.003 | 0.487 | reject |
+| person+place | 0.766 | −0.007 | −0.008 | 0.474 | reject |
+| person+place+numbers | 0.764 | −0.009 | −0.009 | 0.471 | reject |
+| all four | **0.775** | **+0.002** | **−0.018** | 0.473 | **reject** |
+
+Three things this bought, all worth more than a fractional gain would have been:
+
+1. **The acceptance test paid for itself on the last row.** `person+place+numbers+
+   lemmatise` *improves validation* (+0.002) while *losing 0.018 of publisher
+   generalization*. On validation alone it looks like the winner. That is precisely the
+   failure mode the holdout-vs-validation rule exists to catch, and without it this
+   would have shipped.
+2. **The publisher probe barely moves** (0.482 → 0.471 at best). Entity masking removes
+   almost no publisher fingerprint — because **Phase A already removed it**. The
+   boilerplate, affix and publisher-level work did the job, so D0 arrived with nothing
+   left to clean.
+3. **The brief's warning was right.** "Do not blindly apply traditional NLP
+   preprocessing" — lemmatisation was the only rule that made the probe *worse* (+0.005),
+   i.e. it made publishers easier to identify, presumably by collapsing distinct
+   vocabulary into shared stems.
+
+Kept as a switchable module for Phase E to re-test on embeddings, where masking may
+behave differently. Not enabled anywhere.
 
 > **Cleaning here is signal correction, not tidiness.** `Story continues below this ad`
 > is in 75% of Indian Express bodies; `- Ends` in 62% of India Today; `Who's behind this
@@ -349,7 +391,42 @@ handles it), removing all entities (throws away ORG signal).
 
 ---
 
-## Phase D — Feature engineering *(needs C2, D0)*
+## Phase D — Feature engineering *(done 2026-08-26)*
+
+**Body length sweep** (`word_char_svc`, title ×1, head truncation):
+
+| Body chars | val macro-F1 | Hindu | Guardian |
+| --- | --- | --- | --- |
+| none (summary only) | 0.712 | 0.688 | 0.675 |
+| 256 | 0.716 | 0.694 | 0.613 |
+| 512 | 0.759 | 0.730 | 0.665 |
+| 1024 | 0.760 | 0.752 | 0.679 |
+| 2048 | 0.774 | 0.752 | 0.700 |
+| **4000** | **0.771** | **0.772** | **0.726** |
+| 8000 | 0.783 | 0.760 | 0.721 |
+| full | 0.781 | 0.765 | 0.712 |
+
+The curve climbs steeply to ~2,048 characters and then flattens — 8000 is nominally best
+but its interval [0.753, 0.807] overlaps everything from 2048 up, so the extra text is
+not measurably worth anything. **4000 wins on the tiebreak that matters: it has the best
+publisher holdout on both mastheads.** It was already the default, so the sweep confirmed
+the setting rather than changing it.
+
+**Title repetition — the lazy alternative to a weighted FeatureUnion — loses, clearly:**
+
+| Title × | 1 | 2 | 3 | 5 |
+| --- | --- | --- | --- | --- |
+| val macro-F1 | **0.783** | 0.768 | 0.764 | 0.751 |
+
+Monotonically worse. That settles the field-weighting question in the *opposite*
+direction to the prior: the body deserves its weight, and up-weighting the headline
+actively destroys signal. No FeatureUnion weighting is needed, which removes a whole
+tuning dimension.
+
+**Head+tail is not better than head-only** (2048: 0.764 h+t vs 0.774 head; 4000: 0.779 vs
+0.771 — all overlapping). News puts the topic in the lede, as expected.
+
+**Settled: `body_chars=4000`, title ×1, head truncation, no field weighting.**
 
 - [ ] **Body reduction — test three, assume none.** The body is ~650 words against a
   ~10-word title, so it must be compressed or weighted or it dominates:
