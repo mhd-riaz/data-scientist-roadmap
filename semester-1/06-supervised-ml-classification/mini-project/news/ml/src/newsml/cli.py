@@ -196,14 +196,22 @@ def cmd_export_labels(args: argparse.Namespace) -> int:
             seeds=seeds,
             group_of=grouping.group_of,
             random_share=args.random_share,
+            exclude=args.exclude,
             seed=SEED,
         )
         sample = targeted.articles
         held = Counter(seeds.values())
-        served = [c for c in annotate_mod._leaf_classes(taxonomy) if c not in targeted.quota]
+        excluded = set(args.exclude or ())
+        served = [
+            c for c in annotate_mod._leaf_classes(taxonomy) if c not in targeted.quota and c not in excluded
+        ]
         print(f"targeting {args.per_class} labels per class, {len(seeds):,} already held")
         print(f"{len(served)} class(es) already at the target, sampled zero times:"
-              f" {', '.join(f'{c} {held.get(c, 0)}' for c in served) or 'none'}\n")
+              f" {', '.join(f'{c} {held.get(c, 0)}' for c in served) or 'none'}")
+        if excluded:
+            print(f"excluded regardless of shortfall: {', '.join(sorted(excluded))}\n")
+        else:
+            print()
         print(f"  {'class':<24}{'have':>6}{'short':>7}{'retrieve':>10}{'precision':>11}")
         for topic, gap in sorted(targeted.quota.items(), key=lambda kv: -kv[1]):
             rate = targeted.precision.get(topic)
@@ -544,6 +552,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--per-class", type=int, default=150, help="labels each class should end up with")
     p.add_argument("--random-share", type=float, default=0.15, help="fraction drawn at random anyway")
+    p.add_argument(
+        "--exclude",
+        nargs="+",
+        default=None,
+        help="class(es) to skip regardless of shortfall, e.g. a class more labels won't fix",
+    )
     p.add_argument(
         "--collected-before",
         default=None,

@@ -373,6 +373,19 @@ def test_min_precision_must_be_a_rate(bad, make_article, taxonomy):
         )
 
 
+def test_excluded_class_is_never_targeted_even_when_short(make_article, taxonomy):
+    articles, texts = _targetable(make_article)
+    seeds = {f"wr{i:03d}": "conflict_war" for i in range(3)}
+
+    sample = annotate.choose_targeted_sample(
+        articles, texts, taxonomy, per_class=8, seeds=seeds, random_share=0.0,
+        exclude=["conflict_war"],
+    )
+
+    assert "conflict_war" not in sample.quota
+    assert "conflict_war" not in sample.asked_for
+
+
 def test_targeted_sample_reports_what_the_corpus_could_not_supply(make_article, taxonomy):
     articles, texts = _targetable(make_article)
 

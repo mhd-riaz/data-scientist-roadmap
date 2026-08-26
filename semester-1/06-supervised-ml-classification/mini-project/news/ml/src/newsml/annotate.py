@@ -302,6 +302,7 @@ def choose_targeted_sample(
     random_share: float = 0.15,
     max_similarity: float = 0.3,
     min_precision: float = 0.25,
+    exclude: Iterable[str] | None = None,
     seed: int = 0,
 ) -> TargetedSample:
     """Go looking for the rare classes instead of hoping a random draw finds them.
@@ -351,6 +352,11 @@ def choose_targeted_sample(
     Retrieval is a *suggestion of where to look*, never a label: the returned
     articles are shuffled into one sheet and `retrieved_for` is kept out of it,
     because an annotator shown a proposed class will agree with it.
+
+    `exclude` skips a class entirely regardless of how short of `per_class` it
+    is — for a class where more labels are already known not to help (see
+    `society_lifestyle`'s round 3 result), asking again just spends an
+    annotator's attention on a question the evidence already answered.
     """
     if per_class < 1:
         raise ValueError("per_class must be at least 1")
@@ -369,10 +375,11 @@ def choose_targeted_sample(
     have = Counter(seeds.values())
     # A class already at the target is finished: it is sampled zero times, so the
     # whole sheet goes to the classes that are actually short.
+    excluded = set(exclude or ())
     quota = {
         topic: per_class - have.get(topic, 0)
         for topic in _leaf_classes(taxonomy)
-        if per_class - have.get(topic, 0) > 0
+        if topic not in excluded and per_class - have.get(topic, 0) > 0
     }
 
     ranking_text = {a.id: _with_topical_categories(a, texts, taxonomy) for a in articles}
