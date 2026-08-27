@@ -1,0 +1,304 @@
+%% Supervised Machine Learning (Classification) -- Mini Project
+%% Two-page IEEE conference report.
+%%
+%% No LaTeX toolchain is installed locally. Compile on Overleaf:
+%%   New Project -> Upload Project -> upload this folder (report/)
+%%   -> "IEEE Conference" style is provided by IEEEtran.cls, which Overleaf ships.
+%% Or install BasicTeX and run: latexmk -pdf ieee-report.tex
+%%
+%% If it spills past two pages, delete Table III first, then shorten Section VII.
+
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Reading the Body: A Calibrated, Abstaining\\Classifier for 13-Class News Topic Assignment}
+
+\author{\IEEEauthorblockN{Mohamed Riaz}
+\IEEEauthorblockA{\textit{PES1PGE25DS037} \\
+\textit{Department of Computer Science and Engineering} \\
+\textit{PES University}, Bengaluru, India}
+}
+
+\maketitle
+
+\begin{abstract}
+News topic classifiers are conventionally trained on headlines, because that is the text
+a feed provides. This work tests whether the full article body is worth the cost of
+scraping it, on a purpose-built corpus of 14{,}189 articles from 40 publishers with
+8{,}001 human labels across 13 topics. It is: reading the first 4{,}000 characters of the
+body instead of the headline and summary is worth $+0.059$ macro-F1 ($0.712 \rightarrow
+0.771$), with non-overlapping bootstrap intervals and McNemar $p = 7.5\times10^{-6}$.
+Every alternative modelling choice measured against that linear baseline --- entity
+scrubbing, gradient-boosted trees, random forests, sentence embeddings and four
+ensembles --- lost or tied, so the accuracy came from data preparation rather than from
+the classifier. The remaining contribution is a system that knows when it is unsure:
+isotonic calibration turns an uncalibrated SVM margin into a probability with expected
+calibration error $0.021$, and a single confidence threshold lets the model decline the
+hardest $19\%$ of articles, raising accuracy on what it does file from $77.7\%$ to
+$83.4\%$. On a test split opened exactly once, macro-F1 is $0.751$ $[0.719, 0.780]$.
+\end{abstract}
+
+\begin{IEEEkeywords}
+text classification, probability calibration, classification with rejection, support
+vector machines, TF-IDF, news
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+A reader following several newspapers sees the same story repeatedly, filed under
+whatever section each publisher happened to choose. Automatic topic assignment is the
+prerequisite for reorganising that stream. The standard approach classifies from the
+headline, because an RSS item usually carries nothing else.
+
+That constraint is now soft: a collector that follows the article link has the whole
+body, roughly $100\times$ more text. Whether the extra text pays is an empirical
+question rather than an obvious one --- bodies carry publisher house style, boilerplate
+and author biographies, all of which are shortcuts a classifier can learn instead of the
+topic.
+
+This paper reports three results.
+\begin{enumerate}
+\item The body is worth $+0.059$ macro-F1, significant on every linear model tested
+      (Section~\ref{sec:results}).
+\item Seven alternative model families and four ensembles were measured against a linear
+      SVM baseline; none beat it. A perfect selector over the ten candidates would score
+      $0.900$, yet every reachable vote lands on $0.771$, because model disagreement is
+      \emph{asymmetric}.
+\item Calibration plus a rejection option converts a $0.78$-accuracy classifier into one
+      that files $81\%$ of articles at $83\%$ accuracy and routes the rest to a human
+      (Section~\ref{sec:abstain}). This is the practical contribution: an honest
+      confidence number is more useful than a marginally higher one.
+\end{enumerate}
+
+\section{Dataset}
+
+A Go service polls 97 RSS and Atom feeds into MongoDB and scrapes article bodies. Frozen
+at \texttt{2026-08-26T12:00Z}, the corpus holds 14{,}189 articles from 40 publishers,
+$92.6\%$ with a body. Labels are 8{,}001 single-label human judgements over a flat
+13-class taxonomy derived from IPTC Media Topics~\cite{iptc}: \textit{politics},
+\textit{business\_economy}, \textit{crime\_justice}, \textit{technology},
+\textit{sport}, \textit{entertainment\_arts}, \textit{health}, \textit{education},
+\textit{science\_space}, \textit{environment\_climate}, \textit{disaster\_accident},
+\textit{conflict\_war} and \textit{society\_lifestyle}. Class imbalance is $6.7\!:\!1$.
+Body coverage on labelled articles is $94.3\%$, median 3{,}765 characters, and is uniform
+across classes ($89.7\%$--$99.3\%$), so no class is disadvantaged by the hypothesis.
+
+\subsection{Preparation}
+
+Title, summary and body are cleaned independently. Per-source line-frequency discovery
+found 355 repeated furniture lines across 47 sources --- \textit{``Story continues below
+this ad''} appears in $75\%$ of one publisher's bodies --- including multi-sentence
+author biographies, which a length-based rule cannot reach. Nine admission gates reject
+$4.1\%$ of the corpus (implausible timestamps, service bulletins, non-article formats);
+every gate is a switch so its cost can be measured rather than assumed.
+
+Near-duplicate stories are grouped in two stages, sparse TF-IDF cosine blocking followed
+by threshold verification with time-gap and boilerplate guards. Calibrated against 43
+hand-judged pairs it reaches precision $0.86$ at recall $0.81$. Grouping on bodies folds
+999 articles against 708 for headlines, $+41\%$, which matters because a syndicated copy
+of a training article appearing in validation is leakage.
+
+\section{Method}
+
+The final model is a linear SVM over the union of word 1--2 grams (sublinear TF,
+$\text{min\_df}=2$, $\text{max\_df}=0.6$) and character \texttt{char\_wb} 3--5 grams
+restricted to the first 600 characters, with \texttt{class\_weight="balanced"}
+\cite{sklearn,joachims}. Input is the title concatenated with the first 4{,}000
+characters of the body; an article with no body falls back to its summary. A sweep over
+$\{256, \ldots, \text{full}\}$ characters showed the curve flattening past 2{,}048;
+4{,}000 was chosen because it has the best publisher-holdout score, not the best
+validation score. Repeating the title to up-weight it made the model monotonically worse.
+
+A \texttt{LinearSVC} decision value is a signed distance from a hyperplane: it has no
+scale and is not comparable across classes, so it must never be shown as a confidence.
+Scores are mapped to probabilities by isotonic regression~\cite{zadrozny} fitted across
+five grouped folds of the training split, each fold calibrating on data its own base
+estimator never saw.
+
+\section{Evaluation methodology}
+
+Three design choices exist specifically to stop the evaluation flattering itself.
+First, the train/validation/test split is \emph{grouped and temporal}: cuts are placed on
+collection time, and no near-duplicate story group spans two splits. Second, 95\%
+intervals are bootstrapped~\cite{efron} over \emph{story groups} rather than articles,
+because syndicated copies of one story are not independent observations; model
+comparisons use McNemar's test~\cite{dietterich}, not a subtraction of two accuracies.
+Third, two publishers (\textit{The Hindu}, in-distribution; \textit{The Guardian},
+out-of-distribution) are held out and scored on every run, each with the model refitted
+without them.
+
+The test split was opened exactly once, through a single function that refuses to run
+without an explicit flag, after the model was frozen --- and nothing was changed in
+response to what it reported.
+
+\begin{table}[t]
+\caption{Validation macro-F1: the body A/B test. Every linear model gains; ComplementNB,
+whose independence assumption is length-sensitive, loses.}
+\label{tab:ladder}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Model & title+summary & title+body & McNemar $p$ \\
+\midrule
+majority baseline      & 0.025 & 0.025 & --- \\
+ComplementNB           & \textbf{0.635} & 0.594 & $2.8\times10^{-2}$ \\
+TF-IDF + LogReg        & 0.698 & 0.752 & $3.0\times10^{-5}$ \\
+TF-IDF + LinearSVC     & 0.696 & 0.753 & $1.3\times10^{-4}$ \\
+word+char SVM \textit{(final)} & 0.712 & \textbf{0.771} & $7.5\times10^{-6}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Alternatives measured against the final model on validation. Nothing was
+rejected on intuition; each row carries an interval or a paired test.}
+\label{tab:rejected}
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Alternative & Result \\
+\midrule
+Entity / geography scrubbing (spaCy) & no rule cleared the bar \\
+Up-weighting the title & monotonically worse \\
+$C$ swept over a $6\times$ range & moves macro-F1 by $0.002$ \\
+XGBoost on 256 SVD components~\cite{xgboost} & $-0.036$, $5\times$ slower \\
+Random forest / extra trees & $-0.041$ to $-0.087$ \\
+MiniLM embeddings + LogReg~\cite{sbert} & $-0.061$ \\
+Majority vote over 10 models & $+0.001$, $p = 1.00$ \\
+Per-class confidence cuts & no better than one global cut \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results}
+\label{sec:results}
+
+Table~\ref{tab:ladder} reports the central experiment. The body is worth $+0.059$
+macro-F1 on the final model, with disjoint bootstrap intervals. Against a rung
+reproducing an earlier headline-only system on the same snapshot ($0.696$) the gain is
+$+0.075$. The one model that gets \emph{worse} with more text is ComplementNB, whose
+term-independence assumption is sensitive to document length --- a useful reminder that
+``more text'' is not universally better.
+
+Publisher generalisation \emph{improved} rather than degraded, which was the main risk
+the hypothesis carried: \textit{The Hindu} rose $0.682 \rightarrow 0.769$ and
+\textit{The Guardian} $0.665 \rightarrow 0.724$ when bodies were added. The boilerplate
+work in preparation is the likely reason.
+
+Table~\ref{tab:rejected} lists what did not work. The ensemble row deserves comment: an
+oracle that could always pick the correct member among the ten candidates would score
+$0.900$ $[0.878, 0.919]$, disjoint from $0.771$, so the models genuinely disagree. Every
+vote still lands within $0.002$ of the incumbent because the disagreement is asymmetric
+--- the embedding model rescues 70 of the incumbent's errors while destroying 148 of its
+correct answers, and a vote has no way to know which side of that trade it is on.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/calibration.png}
+\caption{(a) Reliability on validation. Points above the diagonal mean the model is
+\emph{under}-confident --- in the $0.7$--$0.8$ band it claims $0.75$ and delivers $0.88$
+--- which is the safe direction for a system that abstains. (b) The rejection trade-off:
+raising the cut files fewer articles but is right more often on those it files. The
+shipping cut of $0.584$ was fitted on training out-of-fold probabilities for $90\%$
+precision and never on anything it is scored against.}
+\label{fig:calibration}
+\end{figure*}
+
+\section{Calibration and abstention}
+\label{sec:abstain}
+
+Calibration costs almost nothing in accuracy ($0.769$ against a raw $0.771$) and buys a
+probability that can be acted on. Fig.~\ref{fig:calibration}(a) shows the model is
+under-confident rather than over-confident, the unusual direction; expected calibration
+error~\cite{guo} is $0.039$ on validation and $0.021$ on test, so the confidence number
+generalised \emph{better} than the accuracy did.
+
+That makes classification with rejection~\cite{chow} straightforward. One global
+threshold suffices --- per-class thresholds, which exist because raw scores are not
+comparable across classes, bought nothing once calibration had made them comparable
+($0.879$ against $0.891$ at matched coverage). Table~\ref{tab:test} gives the outcome on
+the held-out test split: declining the least certain $19.3\%$ of articles raises accuracy
+on the remainder from $77.7\%$ to $83.4\%$.
+
+\begin{table}[t]
+\caption{The held-out test split, opened once. Validation shown for comparison.}
+\label{tab:test}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+& validation & test \\
+\midrule
+articles                     & 1{,}120 & 1{,}159 \\
+macro-F1                     & 0.771 [0.743, 0.796] & \textbf{0.751 [0.719, 0.780]} \\
+accuracy                     & 0.794 & 0.778 \\
+expected calibration error   & 0.039 & \textbf{0.021} \\
+\midrule
+\multicolumn{3}{l}{\textit{shipping policy, cut $=0.584$}} \\
+coverage (articles filed)    & 0.761 & 0.807 \\
+accuracy on filed articles   & 0.879 & \textbf{0.834} \\
+accuracy if forced to answer & 0.795 & 0.777 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The gap between validation and test is $-0.021$ against a pre-registered guard of
+$\pm0.05$, with overlapping intervals. Only \textit{conflict\_war} moved further
+($0.74 \rightarrow 0.60$); it is the thinnest class in the corpus at 120 training
+articles, and its validation interval $[0.62, 0.83]$ had already flagged it as
+unreliable.
+
+\section{Discussion and limitations}
+
+Roughly $18.6\%$ of validation errors fall on the three class pairs where human
+annotators themselves disagreed when the corpus was labelled, an estimate that matches an
+independent measurement of label disagreement across multi-article story groups
+($18$--$22\%$). Macro-F1 therefore has a real ceiling well below $1.0$, and chasing the
+remaining confusions would mean fitting the annotation noise rather than the task.
+
+\textit{society\_lifestyle} scores F1 $0.42$: it is a definitional grab-bag of community,
+labour and lifestyle reporting. Notably it still calibrates honestly, reaching $91\%$
+precision at a high cut --- the class is weak at \emph{ranking} but not at \emph{knowing},
+so abstention protects it where an earlier system had retired it entirely. The collection
+window spans four days, so nothing here measures topic drift over weeks; the publisher
+holdouts carry the whole generalisation argument. The system is English-only and
+India-heavy. Serving costs $0.78$~ms per article.
+
+\section{Conclusion}
+
+On a hand-labelled 13-class news corpus, article bodies beat headlines by $+0.059$
+macro-F1, and no fancier model family or ensemble improved on a linear SVM over TF-IDF
+--- the gains came from data preparation and honest evaluation, not from model capacity.
+Adding calibrated confidence and a rejection option turned a $77.7\%$-accurate classifier
+into one that files $80.7\%$ of unseen articles at $83.4\%$ accuracy, which is the form
+in which such a system is actually usable. Future work is a fine-tuned transformer
+encoder, deliberately sequenced after this A/B so that any gain can be attributed.
+
+\begin{thebibliography}{00}
+\bibitem{iptc} IPTC, ``Media Topics NewsCodes,'' International Press Telecommunications Council, 2024. [Online]. Available: \url{https://iptc.org/standards/media-topics/}
+\bibitem{sklearn} F. Pedregosa \textit{et al.}, ``Scikit-learn: Machine learning in Python,'' \textit{J. Mach. Learn. Res.}, vol. 12, pp. 2825--2830, 2011.
+\bibitem{joachims} T. Joachims, ``Text categorization with support vector machines: Learning with many relevant features,'' in \textit{Proc. ECML}, 1998, pp. 137--142.
+\bibitem{zadrozny} B. Zadrozny and C. Elkan, ``Transforming classifier scores into accurate multiclass probability estimates,'' in \textit{Proc. ACM SIGKDD}, 2002, pp. 694--699.
+\bibitem{guo} C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, ``On calibration of modern neural networks,'' in \textit{Proc. ICML}, 2017, pp. 1321--1330.
+\bibitem{chow} C. K. Chow, ``On optimum recognition error and reject tradeoff,'' \textit{IEEE Trans. Inf. Theory}, vol. 16, no. 1, pp. 41--46, 1970.
+\bibitem{dietterich} T. G. Dietterich, ``Approximate statistical tests for comparing supervised classification learning algorithms,'' \textit{Neural Comput.}, vol. 10, no. 7, pp. 1895--1923, 1998.
+\bibitem{efron} B. Efron and R. J. Tibshirani, \textit{An Introduction to the Bootstrap}. New York, NY, USA: Chapman \& Hall, 1993.
+\bibitem{xgboost} T. Chen and C. Guestrin, ``XGBoost: A scalable tree boosting system,'' in \textit{Proc. ACM SIGKDD}, 2016, pp. 785--794.
+\bibitem{sbert} N. Reimers and I. Gurevych, ``Sentence-BERT: Sentence embeddings using Siamese BERT-networks,'' in \textit{Proc. EMNLP}, 2019, pp. 3982--3992.
+\end{thebibliography}
+
+\end{document}

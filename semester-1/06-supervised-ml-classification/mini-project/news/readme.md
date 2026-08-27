@@ -1,21 +1,158 @@
-# Regional News Collection System — Phase 1
+# News Topic Classifier
 
-Collects articles from configurable RSS and Atom feeds into MongoDB.
+**Supervised Machine Learning — Classification · Mini Project**
+Mohamed Riaz · PES1PGE25DS037 · Department of CSE, PES University
 
-Phase 1 is **data collection only**. Topic classification, bias analysis, location
-matching, LLMs, site scraping, browser automation, social media and any frontend are
-explicitly out of scope.
+A news article goes in; one of 13 topics comes out, with a confidence score you can
+actually act on — and the model is allowed to say *"I don't know"* rather than guess.
+
+Everything here was built from scratch: the collector that gathered the corpus, the
+8,001 hand labels, the preparation pipeline, the classifier, the evaluation harness and
+the demo. No large language model is used anywhere. Every prediction is explainable from
+the model's own weights.
+
+## The result
+
+| | |
+| --- | --- |
+| **Test macro-F1** | **0.751** [0.719, 0.780] — on a split opened exactly once |
+| **Accuracy on the articles it files** | **83.4%**, against 77.7% if forced to answer everything |
+| **Coverage** | 80.7% filed automatically; the rest routed to a human |
+| **Calibration error (test)** | 0.021 — the confidence number is honest |
+| Corpus | 14,189 articles · 40 publishers · 8,001 human labels · 13 classes |
+| Cost | 0.78 ms per article |
+
+**The research question was whether the article body beats the headline.** It does, by
+**+0.059 macro-F1** (0.712 → 0.771), with non-overlapping bootstrap intervals and
+McNemar *p* = 7.5 × 10⁻⁶.
+
+**The second finding is that nothing else helped.** Entity scrubbing, feature
+engineering, gradient-boosted trees, random forests, sentence embeddings and four
+ensembles were each measured against a linear SVM and each lost or tied. The accuracy
+came from data preparation, not from model capacity.
+
+## Try it
+
+```bash
+cd ml-v2
+uv sync --group dev --group demo
+uv run newsmlv2 train --id v2-001          # fit + persist the model (~3 min)
+uv run streamlit run app/streamlit_app.py  # http://localhost:8501
+```
+
+Four tabs: **Classify an article** (paste anything, or press *a real one it is unsure
+about* to pull a genuinely hard article out of the corpus), **Validation** (per-class
+intervals, reliability diagram, confusion matrix), **Run it on the corpus** (batch
+classification over real unlabelled news) and **How it was built**.
+
+Or from the command line:
+
+```bash
+uv run newsmlv2 predict \
+  --title "Reserve Bank holds repo rate steady as inflation cools" \
+  --body  "The monetary policy committee voted five to one to keep the benchmark ..."
+
+# business_economy       0.961   FILED
+# (cut 0.584)
+#   because of: rate, dollar, growth, bank, bond, inflation, bond yields, reserve
+```
+
+## Submission deliverables
+
+| Deliverable | Where |
+| --- | --- |
+| Working project | [ml-v2/](ml-v2/) — 133 tests, `uv run pytest` |
+| User interface | [ml-v2/app/streamlit_app.py](ml-v2/app/streamlit_app.py) |
+| Validation evidence | [ml-v2/docs/plan.md](ml-v2/docs/plan.md) · [model card](ml-v2/artifacts/models/v2-001/model-card.md) · Validation tab in the UI |
+| 2-page IEEE report | [submission/report/ieee-report.tex](submission/report/ieee-report.tex) |
+| Slide deck | [submission/slides/](submission/slides/) — `build_deck.py` writes the `.pptx` |
+| Long-form report | [docs/project-report.md](docs/project-report.md) |
+| Submission checklist | [submission/README.md](submission/README.md) |
+
+## How it works
+
+```
+RSS/Atom feeds ──▶ collector (Go) ──▶ MongoDB
+                                        │
+                        clean · admit · group near-duplicates
+                                        │
+                              frozen Parquet snapshot
+                                        │
+              word 1–2 grams + char 3–5 grams  ──▶  linear SVM
+                                        │
+                       isotonic calibration ──▶ probability
+                                        │
+                     above the cut? ──▶ file it.  below? ──▶ hand it to a person
+```
+
+Three things in that chain are worth more than the classifier:
+
+- **Boilerplate removal.** 355 repeated furniture lines across 47 sources, including
+  multi-sentence author biographies that a length-based rule cannot reach. A cricket
+  correspondent's bio inside a business article drags it toward `sport`.
+- **Near-duplicate story grouping**, so a syndicated copy of a training article can
+  never land in validation. Precision 0.86 at recall 0.81 on 43 hand-judged pairs.
+- **Grouped, temporal splits** with bootstrap intervals resampled over *story groups*
+  rather than articles, because syndicated copies are not independent observations.
+
+## Repository map
+
+| Path | What it is |
+| --- | --- |
+| [ml-v2/](ml-v2/) | **The submitted project.** Body-aware classifier, evaluation harness, demo UI |
+| `ml-v2/src/newsmlv2/` | clean · admit · dedup · snapshot · splits · models · confidence · serve |
+| `ml-v2/scripts/` | one script per experiment phase; results land in the ledger |
+| `ml-v2/docs/plan.md` | the full experiment log — every decision with its evidence |
+| [ml/](ml/) | version 1, headline-only. Kept as the baseline v2 is measured against |
+| [submission/](submission/) | IEEE report, slide deck, figures |
+| [docs/](docs/) | long-form project report and the overall plan |
+| `cmd/` `internal/` `configs/` | the Go collector that produced the corpus |
+
+## Reproducing the numbers
+
+```bash
+cd ml-v2
+uv sync --group dev
+uv run pytest                                  # 133 tests
+uv run newsmlv2 verify --id v2-001             # snapshot digests still match
+uv run newsmlv2 train  --id v2-001             # refit, rescore, rewrite the model card
+uv run python scripts/build_figures.py         # the report figures
+```
+
+The snapshot is frozen at `collected_before = 2026-08-26T12:00:00Z` and its manifest
+pins the git SHA, the seed, the cleaning version and a SHA-256 digest of the label file,
+so any number traces back to the exact code and labels that produced it.
+
+**The test split has been opened once and is closed.** `scripts/phase_h4_open_test.py`
+is the single door, it refuses to run without `--yes`, and it must not be run again — a
+held-out split stops being held out the moment it informs a decision.
+
+## Honest limitations
+
+- The collection window is four days, so nothing here measures topic drift over weeks.
+- `society_lifestyle` scores F1 0.42; it is a definitional grab-bag of community, labour
+  and lifestyle reporting. It still calibrates honestly, so abstention protects it.
+- `education` has 29 validation articles and an interval a quarter of an F1 point wide.
+  That is noise, and it is reported as noise.
+- ~18.6% of errors sit on class pairs where the human annotators disagreed with each
+  other, so macro-F1 has a real ceiling below 1.0.
+- English only, and India-heavy.
+
+---
+
+# Reference — the collector service
+
+Everything below documents the Go service that gathered the corpus. It is Phase 1 of the
+wider project and is independent of the classifier: the ML pipeline reads its database
+read-only and never writes to it.
 
 > **Status: Phase 1 complete (Milestone 6).** Configuration, logging, MongoDB
 > connection management, health endpoints, the migration and the container stack
 > (M1); the source model, persistence layer, management APIs and seeding CLI
 > (M2); the SSRF-guarded HTTP client and the RSS/Atom collector (M3); the article
 > model and the processing pipeline (M4); the scheduler, per-source leases, run
-> history and the collector CLI (M5); and now the article query APIs (M6). Feeds
+> history and the collector CLI (M5); and the article query APIs (M6). Feeds
 > are configured, collected on a schedule, deduplicated, stored and readable.
-
-Everything after Phase 1 — the ML models and the e-newspaper they assemble — is
-planned in [docs/plan.md](docs/plan.md).
 
 ## Requirements
 
@@ -608,10 +745,13 @@ same-origin`, falls back to a matching `Origin`, and refuses a request carrying
 neither.
 
 ## Offline ML pipeline
-Everything under `ml/` is Python, runs on a laptop, and is never deployed. It reads
-the collection read-only and writes derived artifacts; the collector never depends on
-it, so a failure here cannot affect collection. The phase plan lives in
-[docs/plan.md](docs/plan.md).
+
+Everything under `ml/` and `ml-v2/` is Python, runs on a laptop, and is never deployed.
+It reads the collection read-only and writes derived artifacts; the collector never
+depends on it, so a failure here cannot affect collection. `ml/` is version 1
+(headline-only, macro-F1 0.720); `ml-v2/` is the submitted rewrite described at the top
+of this file. Phase plans live in [docs/plan.md](docs/plan.md) and
+[ml-v2/docs/plan.md](ml-v2/docs/plan.md).
 
 ```bash
 make ml-setup                      # create ml/.venv and install pinned dependencies
@@ -752,6 +892,6 @@ they sort chronologically the `_id` index alone gives listings a stable order.
 Every outbound request in the application goes through `internal/httpclient`, so no
 caller can reach the network without those guards.
 
-**The API is unauthenticated.** Phase 1 has no identity layer, so anyone who can reach
-the port can add or remove feeds and read every collected article. Do not expose it
-beyond a trusted network.
+**There is still no identity layer** — a valid credential is a credential, with no
+notion of who holds it and no per-caller scoping or rate limit. Keep the service on a
+trusted network.

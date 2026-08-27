@@ -24,6 +24,9 @@ dev = [
     "pytest>=8.3",
     "ipykernel>=6.29",  # notebooks drive the reporting; the logic stays in src/
 ]
+demo = [
+    "streamlit>=1.38",  # the demo UI; not needed to train, score or reproduce anything
+]
 
 [project.scripts]
 newsmlv2 = "newsmlv2.cli:main"
