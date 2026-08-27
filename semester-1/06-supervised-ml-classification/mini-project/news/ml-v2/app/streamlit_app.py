@@ -456,7 +456,7 @@ That is the headline result, and it is a *measured* answer rather than an assume
             {"Idea": "Per-class confidence cuts", "Result": "no better than one global cut", "Kept?": "No"},
             {"Idea": "Isotonic calibration", "Result": "costs 0.002 F1, makes confidence honest", "Kept?": "Yes"},
             {"Idea": "Abstention below a global cut", "Result": "78% → 83% accuracy on filed", "Kept?": "Yes"},
-            {"Idea": "Reading the body", "Result": "+0.059, p = 7.5e-06", "Kept?": "Yes"},
+            {"Idea": "Reading the full article", "Result": "+0.059, p = 7.5e-06", "Kept?": "Yes"},
         ]),
         hide_index=True, use_container_width=True,
     )

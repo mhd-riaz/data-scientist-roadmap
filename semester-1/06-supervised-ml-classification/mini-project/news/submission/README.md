@@ -11,7 +11,7 @@ Mohamed Riaz · PES1PGE25DS037
 | 4 | Validation / testing | UI *Validation* tab · `ml-v2/docs/plan.md` · model card · 133 tests | ready |
 | 4 | Novelty / innovation | calibrated confidence + abstention + the body A/B | ready |
 | 4 | PPT presentation | `slides/news-topic-classifier.pptx` (17 slides) | **read it through once** |
-| 4 | 2-page IEEE report | `report/ieee-report.tex` | **compile on Overleaf, check it fits 2 pages** |
+| 4 | 2-page IEEE report | `report/ieee-report.pdf` — compiled, 2 pages | ready |
 
 ## Building each artifact
 
@@ -32,10 +32,22 @@ neither can quote a number the shipped model does not produce. Retrain and they 
 
 ### The report
 
-No LaTeX toolchain is installed on this machine. Compile on **Overleaf**: *New Project →
-Upload Project →* upload the `report/` folder. Overleaf ships `IEEEtran.cls`, so it
-builds as-is. If it spills onto a third page, delete Table III first, then shorten
-Section VII.
+`report/ieee-report.pdf` is the submission copy: **2 pages**, IEEEtran conference format.
+Rebuild it with Tectonic, which needs no TeX Live install and fetches packages on demand:
+
+```bash
+brew install tectonic          # once
+cd report && tectonic -X compile ieee-report.tex
+```
+
+Overleaf also works (*New Project → Upload Project →* the `report/` folder). Two things
+keep the page count stable across toolchains and should not be removed: `newtxtext`,
+which pins Times so the engine cannot fall back to the wider Computer Modern, and the
+float-spacing block in the preamble. It fits two pages with about four lines to spare, so
+any added sentence needs one removed.
+
+The file `Reading_the_Body__A_Calibrated__AbstainingClassifier_...pdf` is the earlier
+3-page Overleaf build and is **stale** — delete it before submitting.
 
 ## Demo script — about six minutes
 
@@ -106,7 +118,7 @@ different model to the one every reported number describes.
 
 ## Before you submit
 
-- [ ] Compile `report/ieee-report.tex` on Overleaf and confirm it is exactly 2 pages.
+- [ ] Delete the stale 3-page `Reading_the_Body__...pdf` from `report/`.
 - [ ] Open the `.pptx` and read every slide — check nothing overflows its box.
 - [ ] Run the demo end to end once on the machine you will present from.
 - [ ] `uv run pytest` in `ml-v2/` — all green.

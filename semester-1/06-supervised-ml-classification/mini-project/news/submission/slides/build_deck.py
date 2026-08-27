@@ -74,8 +74,9 @@ def heading(slide, title: str, kicker: str = "") -> None:
 
 
 def bullets(slide, items: list, top=Inches(2.0), left=Inches(0.7),
-            width=Inches(11.9), size=18) -> None:
-    box = slide.shapes.add_textbox(left, top, width, Inches(4.6))
+            width=Inches(11.9), size=18, height=None) -> None:
+    box = slide.shapes.add_textbox(left, top, width,
+                                   height or (H - top - Inches(0.4)))
     frame = box.text_frame
     frame.word_wrap = True
     for i, item in enumerate(items):
@@ -125,6 +126,24 @@ def picture(slide, name: str, left, top, width) -> bool:
     return True
 
 
+def formula(slide, lines: list[str], top, size=20, left=Inches(2.2),
+            width=Inches(8.9)) -> None:
+    box = slide.shapes.add_shape(5, left, top, width,
+                                 Inches(0.52) * len(lines) + Inches(0.3))
+    box.fill.solid()
+    box.fill.fore_color.rgb = RGBColor(0xF2, 0xF5, 0xF8)
+    box.line.color.rgb = RULE
+    frame = box.text_frame
+    frame.word_wrap = True
+    for i, line in enumerate(lines):
+        para = frame.paragraphs[0] if i == 0 else frame.add_paragraph()
+        para.alignment = PP_ALIGN.CENTER
+        run = para.add_run()
+        run.text = line
+        run.font.size, run.font.bold, run.font.color.rgb = Pt(size), True, INK
+        run.font.name = "Consolas"
+
+
 def build(m: dict) -> Presentation:
     val, test, ab = m["validation"], m["test"], m["body_ab"]
     prs = deck()
@@ -133,11 +152,11 @@ def build(m: dict) -> Presentation:
     s = _blank(prs)
     _, run = _text(s, Inches(1.0), Inches(2.1), Inches(11.3), Inches(1.4),
                    size=44, bold=True)
-    run.text = "Reading the Body"
+    run.text = "Beyond the Headline"
     _, run = _text(s, Inches(1.0), Inches(3.2), Inches(11.3), Inches(0.9), size=24,
                    color=MUTED)
-    run.text = ("A calibrated, abstaining classifier for 13-class news topic "
-                "assignment")
+    run.text = ("Calibrated news article classifier: 13 topics, read from the whole "
+                "article, and quiet when it is not sure")
     _, run = _text(s, Inches(1.0), Inches(4.6), Inches(11.3), Inches(0.5), size=18)
     run.text = "Mohamed Riaz  ·  PES1PGE25DS037"
     _, run = _text(s, Inches(1.0), Inches(5.1), Inches(11.3), Inches(0.5), size=16,
@@ -147,38 +166,38 @@ def build(m: dict) -> Presentation:
 
     # --- 2. problem ---------------------------------------------------------
     s = _blank(prs)
-    heading(s, "The same story, five times, filed five ways", kicker="Problem")
+    heading(s, "The same story, filed five different ways", kicker="Problem")
     bullets(s, [
-        "A reader following several papers sees one wire story repeated, each publisher "
-        "filing it under its own section names.",
-        "Sections are a publishing convention, not a property of the article — there is "
-        "no shared taxonomy across mastheads.",
-        "So: assign every article a topic from one fixed 13-class taxonomy, "
-        "independently of who published it.",
-        ("The constraint I set myself: classical supervised ML only. No large language "
-         "model anywhere in the pipeline — every prediction has to be explainable from "
-         "the model's own weights.", 1),
+        "One PTI story on the repo rate. The Hindu files it under Business. "
+        "Indian Express files it under India. Deccan Herald puts it in Top Stories.",
+        "Every paper has its own section names. There is no common list, because "
+        "sections are a newsroom habit, not a fact about the article.",
+        "My job: give every article one topic from a fixed list of 13, no matter who "
+        "published it.",
+        ("Rule I set for myself: only the classical ML from this course. No ChatGPT, no "
+         "LLM anywhere. If the model says sport, I must be able to point at the words "
+         "that made it say sport.", 1),
     ])
-    note(s, "13 classes: politics · business_economy · crime_justice · technology · sport · "
-            "entertainment_arts · health · education · science_space · environment_climate · "
-            "disaster_accident · conflict_war · society_lifestyle")
+    note(s, "The 13 topics: politics · business · crime and justice · technology · sport · "
+            "entertainment · health · education · science and space · environment · "
+            "disaster · conflict · society and lifestyle")
 
     # --- 3. the question ----------------------------------------------------
     s = _blank(prs)
-    heading(s, "The research question", kicker="Hypothesis")
+    heading(s, "My question", kicker="Hypothesis")
     bullets(s, [
-        "An RSS feed gives you a headline and maybe a summary — about 33 words. "
-        "That is what news classifiers are normally trained on.",
-        "My collector follows the link and scrapes the body: a median of 3,765 "
-        "characters, roughly 100× more text.",
-        "Is the body worth it? Not obviously — bodies also carry house style, "
-        "boilerplate and author biographies, which are shortcuts a classifier will "
-        "happily learn instead of the topic.",
+        "An RSS feed gives me the headline and a one-line summary. About 33 words. "
+        "Most news classifiers stop there.",
+        "My collector opens the link and pulls the full article. About 650 words, "
+        "roughly 100 times more text.",
+        "Is the extra text actually useful? Not obvious. Full articles also carry ads, "
+        "author bios and “Story continues below this ad”. The model can easily learn "
+        "those instead of the topic.",
     ])
     _, run = _text(s, Inches(0.7), Inches(5.3), Inches(11.9), Inches(1.0), size=26,
                    bold=True, color=ACCENT)
-    run.text = ("Does 650 words of body beat 33 words of headline — "
-                "and can I prove it rather than assume it?")
+    run.text = ("Does the full article beat the headline? "
+                "I wanted to measure it, not assume it.")
 
     # --- 4. system ----------------------------------------------------------
     s = _blank(prs)
@@ -186,8 +205,8 @@ def build(m: dict) -> Presentation:
     stages = [
         ("Collector", "Go service, 97 RSS/Atom feeds\n→ MongoDB, deduplicated"),
         ("Preparation", "clean · admit · group\nnear-duplicate stories"),
-        ("Snapshot", "frozen Parquet corpus\n+ manifest of every input"),
-        ("Model", "word+char TF-IDF → linear SVM\n+ isotonic calibration"),
+        ("Snapshot", "frozen corpus, so every\nnumber can be re-run"),
+        ("Model", "word counts → linear SVM\n→ an honest probability"),
         ("Demo UI", "Streamlit: classify, explain,\nabstain, validate"),
     ]
     for i, (name, detail) in enumerate(stages):
@@ -213,8 +232,8 @@ def build(m: dict) -> Presentation:
             arrow.fill.solid()
             arrow.fill.fore_color.rgb = MUTED
             arrow.line.fill.background()
-    note(s, "Nothing is deployed. This is a proof of concept: build it, measure it "
-            "honestly, then decide whether it earns a deployment conversation.",
+    note(s, "Nothing is deployed. This is a proof of concept. Build it, measure it "
+            "properly, then decide if it is worth putting anywhere near production.",
          top=Inches(5.0))
 
     # --- 5. data ------------------------------------------------------------
@@ -222,141 +241,260 @@ def build(m: dict) -> Presentation:
     heading(s, "The data", kicker="Dataset")
     table(s, [
         ["", "Value"],
-        ["Corpus at the frozen cut", "14,189 articles, 40 publishers"],
-        ["Human labels", "8,001 — single label, 13 classes"],
-        ["Body coverage on labelled articles", "94.3% (median 3,765 chars)"],
-        ["Class imbalance", "6.7 : 1"],
-        ["Labelled split (grouped + temporal)",
-         f"train {m['splits'].get('train', 0):,} / val {m['splits'].get('val', 0):,} "
-         f"/ test {m['splits'].get('test', 0):,}"],
-        ["Rejected by admission rules", "4.1% (582 articles)"],
+        ["Articles collected", "14,189 from 40 publishers"],
+        ["Articles I labelled by hand", "8,001"],
+        ["Articles where the full body was available", "94.3%"],
+        ["Biggest class vs smallest class", "6.7 : 1"],
+        ["Train / validation / test",
+         f"{m['splits'].get('train', 0):,} / {m['splits'].get('val', 0):,} "
+         f"/ {m['splits'].get('test', 0):,}"],
+        ["Thrown out as not-an-article", "4.1% (582)"],
     ], top=Inches(2.1), height=Inches(0.46))
-    note(s, "Labels were produced over three rounds with a targeted sampler, because "
-            "random sampling could never reach the rare classes — conflict_war is 1.7% "
-            "of news, so 150 labels would need ~9,000 random draws.", top=Inches(5.6))
+    note(s, "Random sampling was not an option. War and conflict stories are about 1.7% "
+            "of Indian news, so getting 150 of them by random draw means reading about "
+            "9,000 articles. I wrote a sampler that goes looking for the rare topics "
+            "instead, and ran three rounds of labelling.", top=Inches(5.6))
 
     # --- 6. preparation -----------------------------------------------------
     s = _blank(prs)
-    heading(s, "Preparation is where the accuracy came from", kicker="Method")
+    heading(s, "Cleaning the data is where the accuracy came from", kicker="Method")
     bullets(s, [
-        "Boilerplate discovery, per source. 355 repeated furniture lines across 47 "
-        "sources — “Story continues below this ad” is in 75% of one publisher's bodies.",
-        ("Including multi-sentence author biographies, which a length-based rule "
-         "cannot reach. A cricket correspondent's bio inside a business article drags "
-         "it toward sport.", 1),
-        "Nine admission gates, each a switch so its cost can be measured, not assumed. "
-        "4.1% rejected.",
-        "Near-duplicate story grouping: TF-IDF cosine blocking, then verification with "
-        "time-gap and boilerplate guards. Precision 0.86 at recall 0.81 on 43 "
-        "hand-judged pairs.",
-        ("Grouping on bodies folds 999 articles vs 708 on headlines, +41%. This matters: "
-         "a syndicated copy of a training article landing in validation is leakage.", 1),
+        "Every paper repeats the same lines. “Story continues below this ad” shows up in "
+        "75% of one publisher's articles. I found 355 such lines across 47 sources and "
+        "removed them.",
+        ("Author bios are the dangerous ones. A cricket reporter's bio sitting at the "
+         "bottom of a business story pulls the whole article towards sport.", 1),
+        "9 rules to throw out things that are not really articles: photo galleries, "
+        "weather bulletins, “Today's headlines for school assembly”. That removed 4.1%.",
+        "The same PTI copy runs in five papers. I group those together, so a copy of a "
+        "training article can never appear in the test set.",
+        ("If I skip this, the model sees the answer during training and my score looks "
+         "better than it really is. Grouping on full bodies catches 41% more copies "
+         "than grouping on headlines.", 1),
     ])
 
-    # --- 7. methodology -----------------------------------------------------
+    # --- 7. the accuracy trap ----------------------------------------------
     s = _blank(prs)
-    heading(s, "How the evaluation avoids fooling itself", kicker="Validation")
-    bullets(s, [
-        "Grouped + temporal splits. No story group spans two splits; every test article "
-        "was collected after every training article.",
-        "Bootstrap intervals resample story groups, not articles — syndicated copies of "
-        "one story are not independent observations.",
-        "Model comparisons use McNemar's test, never a subtraction of two accuracies.",
-        "Two publisher holdouts scored on every run: The Hindu (in-distribution) and "
-        "The Guardian (out-of-distribution), each refit without that publisher.",
-        "The test split was opened exactly once, through one function that refuses to "
-        "run without an explicit flag — after the model was frozen.",
-    ])
-    note(s, "Any delta under ~0.03 on a 1,120-article validation split is noise. "
-            "The harness exists to stop that being read as signal.")
-
-    # --- 8. the result ------------------------------------------------------
-    s = _blank(prs)
-    heading(s, "The body wins — measured, not assumed", kicker="Results")
+    heading(s, "Why I do not report accuracy", kicker="Chapter 07 §1")
+    formula(s, [
+        "Accuracy = (TP + TN) / (TP + TN + FP + FN)",
+        "macro-F1 = (F1 of topic 1 + F1 of topic 2 + ... + F1 of topic 13) / 13",
+    ], Inches(1.9), size=17, left=Inches(1.4), width=Inches(10.5))
     table(s, [
-        ["Model", "title+summary", "title+body", "McNemar p"],
-        ["majority baseline", "0.025", "0.025", "—"],
-        ["ComplementNB", "0.635", "0.594", "2.8e-02"],
-        ["TF-IDF + LogisticRegression", "0.698", "0.752", "3.0e-05"],
-        ["TF-IDF + LinearSVC", "0.696", "0.753", "1.3e-04"],
-        ["word+char SVM  (final model)", f"{ab['title_summary']:.3f}",
-         f"{ab['title_body']:.3f}", f"{ab['mcnemar_p']:.1e}"],
-    ], top=Inches(2.1), height=Inches(0.48), highlight=5)
-    _, run = _text(s, Inches(0.7), Inches(5.2), Inches(11.9), Inches(0.6), size=24,
+        ["On the 1,120 validation articles", "accuracy", "macro-F1"],
+        ["one line of code: always answer “politics”", "19.0%", "0.025"],
+        ["my model", f"{val['accuracy']:.1%}", f"{val['macro_f1']:.3f}"],
+    ], top=Inches(3.4), height=Inches(0.5), highlight=2, size=16)
+    bullets(s, [
+        "Politics is the biggest topic. A model that always answers politics scores 19% "
+        "and finds nothing in the other 12 topics. Same trick as the guard who waves "
+        "everybody through.",
+        "Accuracy here is exactly micro-F1, so it just repeats the confusion matrix.",
+        "macro-F1 gives all 13 topics an equal vote. Society and lifestyle with 66 "
+        "articles counts as much as politics with 213. That is why I use it.",
+    ], top=Inches(5.0), size=15)
+
+    # --- 7b. the confusion matrix -------------------------------------------
+    s = _blank(prs)
+    heading(s, "The confusion matrix, all 13 topics", kicker="Chapter 07 §2")
+    charted = picture(s, "confusion.png", Inches(0.8), Inches(1.85), Inches(6.6))
+    bullets(s, [
+        "Rows are the true topic. Columns are what my model said. The diagonal is what "
+        "it got right.",
+        "Politics is the dustbin. It wrongly takes 13 business stories, 13 society "
+        "stories and 10 conflict stories.",
+        ("Fair enough, honestly. A story about the budget IS both business and "
+         "politics. My labellers argued about the same pairs.", 1),
+        "Society and lifestyle is the weak row. Only 25 of its 66 articles land on the "
+        "diagonal. The rest scatter everywhere.",
+        "Sport is the clean row: 89 out of 91. Cricket and football vocabulary does not "
+        "look like anything else.",
+    ], top=Inches(2.0),
+        left=Inches(7.7) if charted else Inches(0.7),
+        width=Inches(4.9) if charted else Inches(11.9),
+        size=15 if charted else 18)
+
+    # --- 7c. one class out of it --------------------------------------------
+    s = _blank(prs)
+    heading(s, "Taking one topic out of that matrix", kicker="Chapter 07 §3")
+    table(s, [
+        ["conflict / war = the positive class", "model said conflict",
+         "model said something else"],
+        ["really conflict", "TP = 34", "FN = 21"],
+        ["really something else", "FP = 5", "TN = 1,060"],
+    ], top=Inches(1.95), height=Inches(0.5), size=16)
+    formula(s, [
+        "Precision = TP/(TP+FP) = 34/39 = 0.87        "
+        "Recall = TP/(TP+FN) = 34/55 = 0.62",
+        "F1 = 2PR/(P+R) = 0.72",
+    ], Inches(3.6), size=17, left=Inches(1.1), width=Inches(11.1))
+    bullets(s, [
+        "So when it says conflict, it is right 87% of the time. But it only finds 62% "
+        "of the conflict stories. Too shy.",
+        "Education is the opposite: precision 0.63, recall 0.83. Too eager. It shouts "
+        "education at any story that mentions a school.",
+        "Both land at F1 near 0.72. One number, two completely different problems.",
+    ], top=Inches(5.1), size=15)
+
+    # --- 7d. methodology ----------------------------------------------------
+    s = _blank(prs)
+    heading(s, "How I stopped myself from cheating", kicker="Validation")
+    bullets(s, [
+        "Train, validation and test are split by time. Every test article was collected "
+        "after every training article, like a real deployment.",
+        "No story group is split across two sets, so the same PTI copy cannot be in "
+        "both training and test.",
+        "Error bars come from bootstrap resampling. Same bootstrap as Chapter 06 §3.1, "
+        "just used for confidence intervals instead of for bagging.",
+        "I never compare two models by subtracting their scores. On 1,120 articles a "
+        "gap of 0.02 can easily be luck, so I use a paired test on the articles where "
+        "the two models actually disagree.",
+        "Two publishers held out on every run: The Hindu and The Guardian, each time "
+        "refitting the model without that publisher.",
+        "The test set was opened once, at the very end, after the model was frozen.",
+    ])
+
+    # --- 8. the ladder ------------------------------------------------------
+    s = _blank(prs)
+    heading(s, "I started with the models we studied", kicker="Results")
+    charted = picture(s, "ladder.png", Inches(0.8), Inches(1.9), Inches(7.3))
+    bullets(s, [
+        "Logistic regression first, because that is the classifier Chapter 03 builds. "
+        "It reached 0.752.",
+        "Then the tree side of the course: random forest, XGBoost, and a majority vote "
+        "of ten models. Every one of them came in lower.",
+        "So I was stuck around 0.75 with nothing left on the syllabus to try.",
+        "That is when I went and read about the support vector machine.",
+        ("Naive Bayes is the odd one. It gets WORSE with the full article, 0.635 down to "
+         "0.594. More text is not automatically better.", 1),
+    ], top=Inches(2.1),
+        left=Inches(8.4) if charted else Inches(0.7),
+        width=Inches(4.3) if charted else Inches(11.9),
+        size=15 if charted else 18)
+    note(s, "Every bar is validation macro-F1 on the same 1,120 articles, same split, "
+            "same cleaning. Only the model changes.", top=Inches(5.5))
+
+    # --- 9. why the SVM -----------------------------------------------------
+    s = _blank(prs)
+    heading(s, "Why I ended up using an SVM", kicker="Method")
+    formula(s, [
+        "logistic regression:   p = 1 / (1 + e^-(w·x + b))",
+        "linear SVM:            answer yes if  w·x + b > 0",
+    ], Inches(1.95), size=18, left=Inches(1.6), width=Inches(10.1))
+    bullets(s, [
+        "Both are the same shape. Multiply every word count by a weight, add them up, "
+        "look at the sign. Only the fitting rule is different.",
+        "Logistic regression picks weights that maximise likelihood. The SVM picks "
+        "weights that push the boundary as far as it can from both classes. That gap is "
+        "the margin.",
+        "Chapter 06b mentions the SVM once, as the expensive strong learner that "
+        "ensembles try to replace. It never builds one, so I read about it on my own.",
+        "Honest result: on its own the SVM ties logistic regression, 0.753 against "
+        "0.752. What actually helped was adding character n-grams, which took it to "
+        "0.771.",
+        "It also stays linear, so I can still print the exact words behind any "
+        "prediction. A tree ensemble cannot.",
+    ], top=Inches(3.5), size=16)
+    note(s, "One problem it brought with it: no sigmoid, so the output is a distance "
+            "and not a probability. That is fixed two slides from now.", top=Inches(6.7))
+
+    # --- 9a. the body wins --------------------------------------------------
+    s = _blank(prs)
+    heading(s, "The full article wins", kicker="The main result")
+    bullets(s, [
+        f"Same model, same split, same cleaning. The only change is the text I feed it: "
+        f"headline and summary gives {ab['title_summary']:.3f}, headline and full body "
+        f"gives {ab['title_body']:.3f}.",
+        "The two confidence intervals do not overlap. The paired test on the articles "
+        "where the two versions disagree gives p = 0.0000075, so this is not luck.",
+        "Why it works: a headline says “RBI holds rates”. The body says repo rate, "
+        "inflation, monetary policy committee, bond yields. Four more chances to get "
+        "it right instead of one.",
+    ])
+    _, run = _text(s, Inches(0.7), Inches(5.2), Inches(11.9), Inches(0.8), size=28,
                    bold=True, color=GOOD)
-    run.text = (f"+{ab['delta']:.3f} macro-F1, non-overlapping intervals, "
-                f"p = {ab['mcnemar_p']:.1e}")
-    note(s, "ComplementNB gets WORSE with the body — its term-independence assumption is "
-            "length-sensitive. “More text” is not universally better.", top=Inches(6.0))
+    run.text = (f"+{ab['delta']:.3f} macro-F1 just from reading the article "
+                f"instead of the headline")
 
-    # --- 9. what failed -----------------------------------------------------
+    # --- 9b. what failed ----------------------------------------------------
     s = _blank(prs)
-    heading(s, "Everything else I tried, and lost", kicker="Results")
+    heading(s, "Things I tried that did not work", kicker="Results")
     table(s, [
-        ["Alternative", "Result", "Kept?"],
-        ["Entity / geography scrubbing (spaCy)", "no rule cleared the bar", "no"],
-        ["Up-weighting the title", "monotonically worse", "no"],
-        ["Tuning C over a 6× range", "moves macro-F1 by 0.002", "no"],
-        ["XGBoost on 256 SVD components", "−0.036, 5× slower", "no"],
-        ["Random forest / extra trees", "−0.041 to −0.087", "no"],
-        ["MiniLM sentence embeddings", "−0.061", "no"],
-        ["Majority vote over 10 models", "+0.001, p = 1.00", "no"],
-        ["Per-class confidence cuts", "no better than one global cut", "no"],
+        ["What I tried", "From", "What happened", "Kept?"],
+        ["Random forest / extra trees", "Ch 06 §4", "0.04 to 0.09 worse", "no"],
+        ["XGBoost on compressed features", "Ch 06 §5.3", "0.036 worse, 5× slower", "no"],
+        ["Majority vote of 10 models", "Ch 06 §2", "+0.001, p = 1.00", "no"],
+        ["KNN", "Ch 04", "ruled out on paper, not run", "no"],
+        ["Removing names and places", "my idea", "no version helped", "no"],
+        ["Giving the headline extra weight", "my idea", "steadily worse", "no"],
+        ["Tuning the SVM over a 6× range", "my idea", "changes score by 0.002", "no"],
+        ["Sentence embeddings (MiniLM)", "researched", "0.061 worse", "no"],
     ], top=Inches(2.0), height=Inches(0.42))
-    note(s, "A negative result you can defend is worth more than a positive one you "
-            "cannot. Every row carries an interval or a paired test.", top=Inches(6.1))
+    note(s, "KNN is the one I ruled out by reasoning instead of by running it. It is a "
+            "lazy learner: it keeps all 5,487 training articles and measures distance "
+            "to each one at predict time. My feature space has about 30,000 dimensions, "
+            "which is exactly the curse of dimensionality Chapter 04 warns about.",
+         top=Inches(5.9))
 
     # --- 10. ensemble paradox ----------------------------------------------
     s = _blank(prs)
-    heading(s, "The ensemble paradox", kicker="Finding")
+    heading(s, "Why my ensemble failed, and Chapter 06 told me so",
+            kicker="Finding")
     bullets(s, [
-        "The models DO disagree. A perfect selector over the ten candidates would score "
-        "0.900 [0.878, 0.919] — disjoint from the incumbent's 0.771.",
-        "And every reachable vote lands on 0.771. Four different member sets, four ties, "
-        "McNemar p = 1.0000.",
-        "Why: the disagreement is asymmetric. MiniLM rescues 70 of the incumbent's "
-        "errors and destroys 148 of its correct answers — worse than 2:1 against.",
-        ("A vote has no way to know which side of that trade it is on. So I refused to "
-         "build the stacked ensemble the plan had scheduled, and recorded why.", 1),
+        "Chapter 06 §2 gives two conditions for a vote to beat its members. Each model "
+        "must be better than random, and their mistakes must be roughly independent. "
+        "Mine failed the second one.",
+        "The models do disagree, a lot. If I could magically pick the right model for "
+        "every article I would score 0.900 instead of 0.771. So the disagreement is "
+        "real and it is big.",
+        "But it is lopsided. The embedding model fixes 70 of the SVM's mistakes and "
+        "breaks 148 of its correct answers. A vote has no way to tell those apart.",
+        "Four different combinations of models, four identical scores, p = 1.0000.",
+        ("So I dropped the stacked ensemble I had planned and wrote down why. If a "
+         "chooser would help but an average does not, then what I need is abstention, "
+         "which is the next slide.", 1),
     ])
-    _, run = _text(s, Inches(0.7), Inches(5.6), Inches(11.9), Inches(0.7), size=20,
-                   bold=True, color=ACCENT)
-    run.text = ("The 0.129 oracle gap says a SELECTOR would pay where an AVERAGE does "
-                "not — which is exactly what abstention is.")
-
     # --- 11. calibration ----------------------------------------------------
     s = _blank(prs)
-    heading(s, "Novelty 1 — the confidence number is honest", kicker="Innovation")
+    heading(s, "Novelty 1: making the confidence number mean something",
+            kicker="Innovation")
     if not picture(s, "calibration.png", Inches(1.2), Inches(2.0), Inches(10.9)):
         bullets(s, ["(figures/calibration.png missing — run "
                     "`uv run python scripts/build_figures.py` in ml-v2/)"])
-    note(s, f"A LinearSVC margin is a signed distance from a hyperplane: no scale, not "
-            f"comparable across classes. Isotonic calibration on 5 grouped folds of "
-            f"train makes it a probability. ECE {val['ece']:.3f} on validation, "
-            f"{test['ece']:.3f} on test — the calibration generalised BETTER than the "
-            f"accuracy did.", top=Inches(5.9))
+    note(s, f"The SVM gives me w·x + b, a distance from the boundary. A score of 2.4 "
+            f"does not mean 90% sure, it does not mean anything on its own. So I take "
+            f"the training data, check how often a score of that size is actually "
+            f"correct, and use that fraction as the confidence. Left chart: the dots "
+            f"should sit on the dotted line, and they nearly do. When it claims 0.9 it "
+            f"is right about 9 times in 10. Average gap is {test['ece']:.3f} on test. "
+            f"Chapter 07 §7 warns that AUC cannot see this at all.", top=Inches(5.6))
 
     # --- 12. abstention -----------------------------------------------------
     s = _blank(prs)
-    heading(s, "Novelty 2 — it is allowed to say “I don't know”", kicker="Innovation")
+    heading(s, "Novelty 2: letting it say “I am not sure”", kicker="Chapter 07 §4")
+    formula(s, ["Coverage = articles it answered / all articles"], Inches(1.9),
+            size=18)
     table(s, [
-        ["On the held-out test split", "coverage", "accuracy on what it files"],
+        ["On the held-out test set", "coverage", "accuracy on what it filed"],
         ["forced to answer everything", "100%", f"{test['accuracy_without_abstention']:.1%}"],
-        [f"abstain below {test['cut']:.3f}", f"{test['coverage']:.1%}",
+        [f"stays quiet below {test['cut']:.3f}", f"{test['coverage']:.1%}",
          f"{test['accuracy_filed']:.1%}"],
-    ], top=Inches(2.2), height=Inches(0.55), highlight=2, size=16)
+    ], top=Inches(2.8), height=Inches(0.5), highlight=2, size=16)
     bullets(s, [
-        "The cut is fitted on training out-of-fold probabilities for 90% precision — "
-        "never on anything it is scored against.",
-        "Per-class cuts bought nothing (0.879 vs 0.891 at matched coverage): once "
-        "calibration makes scores comparable across classes, one global cut is enough.",
-        "It abstains on the right things: on the 63 articles humans labelled "
-        "“unsorted”, median confidence is 0.70 against 0.81 on labelled articles.",
-    ], top=Inches(4.2), size=17)
+        "Chapter 07 §4 moves the threshold to trade precision against recall. I move the "
+        "same threshold, but instead of flipping the answer I hold the article back and "
+        "send it to a person.",
+        "The cut-off is chosen on training data only, at the point where precision hits "
+        "90%. It never looks at validation or test.",
+        "One cut-off for all 13 topics. Separate cut-offs per topic gained nothing, "
+        "because calibration had already put every topic on the same scale.",
+        "It doubts the right things. On 63 articles that my labellers could not classify "
+        "either, the median confidence is 0.70 against 0.81 on the rest.",
+    ], top=Inches(4.4), size=15)
 
     # --- 13. test split -----------------------------------------------------
     s = _blank(prs)
-    heading(s, "The held-out test split, opened once", kicker="Results")
+    heading(s, "Opening the test set, once", kicker="Results")
     table(s, [
         ["", "validation", "test"],
         ["articles", f"{val['n']:,}", f"{test['n']:,}"],
@@ -364,50 +502,69 @@ def build(m: dict) -> Presentation:
          f"{val['macro_f1']:.3f} [{val['macro_f1_low']:.3f}, {val['macro_f1_high']:.3f}]",
          f"{test['macro_f1']:.3f} [{test['macro_f1_low']:.3f}, {test['macro_f1_high']:.3f}]"],
         ["accuracy", f"{val['accuracy']:.3f}", f"{test['accuracy']:.3f}"],
-        ["expected calibration error", f"{val['ece']:.3f}", f"{test['ece']:.3f}"],
-        ["coverage at the shipping cut", f"{0.761:.1%}", f"{test['coverage']:.1%}"],
-        ["accuracy on filed articles", f"{0.879:.3f}", f"{test['accuracy_filed']:.3f}"],
+        ["gap between claimed and real confidence", f"{val['ece']:.3f}",
+         f"{test['ece']:.3f}"],
+        ["how much it answered", f"{0.761:.1%}", f"{test['coverage']:.1%}"],
+        ["accuracy on what it answered", f"{0.879:.3f}", f"{test['accuracy_filed']:.3f}"],
     ], top=Inches(2.1), height=Inches(0.46), highlight=2)
     _, run = _text(s, Inches(0.7), Inches(5.6), Inches(11.9), Inches(0.8), size=20,
                    bold=True, color=GOOD)
-    run.text = (f"Delta {test['macro_f1'] - val['macro_f1']:+.3f} against a "
-                "pre-registered ±0.05 guard, intervals overlapping. Nothing was changed "
-                "in response.")
+    run.text = (f"Test is {test['macro_f1'] - val['macro_f1']:+.3f} below validation. "
+                "I had written down beforehand that anything inside 0.05 was fine, so "
+                "I changed nothing after seeing it.")
 
     # --- 14. per class ------------------------------------------------------
     s = _blank(prs)
-    heading(s, "Per class — and which scores mean anything", kicker="Results")
-    charted = picture(s, "per-class.png", Inches(0.9), Inches(1.9), Inches(5.6))
+    heading(s, "Precision and recall, topic by topic", kicker="Results")
+    charted = picture(s, "precision-recall.png", Inches(0.8), Inches(1.9), Inches(6.5))
     bullets(s, [
-        "sport 0.95, entertainment_arts 0.89 — tight intervals, real measurements.",
-        ("education 0.71 has 29 validation articles and an interval a quarter of an F1 "
-         "point wide. That is noise, and it is labelled as noise.", 1),
-        "society_lifestyle 0.42 is a definitional grab-bag: community + labour + "
-        "lifestyle glued together.",
-        ("But it still calibrates honestly — 91% precision at a high cut. Weak at "
-         "RANKING, fine at KNOWING. Abstention protects it.", 1),
-        "18.6% of errors sit on class pairs where human annotators disagreed with each "
-        "other. Macro-F1 has a real ceiling below 1.0.",
+        "Sport is the best: precision 0.93, recall 0.98.",
+        "Conflict and education both have F1 near 0.72, but look at the bars. Conflict "
+        "is high precision and low recall. Education is the reverse. Two different "
+        "problems hiding behind one number.",
+        ("Education only has 29 validation articles, so its bars move a lot. I treat "
+         "that as noise, not as a result.", 1),
+        "Society and lifestyle is the genuine failure. Recall 0.38, so it misses 41 of "
+        "its 66 articles. It is three ideas stuck together: community, jobs, lifestyle.",
+        "About 19% of all mistakes are on topic pairs where my own labellers disagreed "
+        "with each other. So there is a ceiling here well below a perfect score.",
     ], top=Inches(2.0),
-        left=Inches(6.9) if charted else Inches(0.7),
-        width=Inches(5.7) if charted else Inches(11.9),
+        left=Inches(7.6) if charted else Inches(0.7),
+        width=Inches(5.0) if charted else Inches(11.9),
         size=15 if charted else 18)
+
+    # --- 14b. borrowed vocabulary -------------------------------------------
+    s = _blank(prs)
+    heading(s, "Four things I had to learn outside class", kicker="Honesty")
+    bullets(s, [
+        "The SVM itself. Chapter 06b names it in one line as the strong learner that "
+        "ensembles try to replace, and never builds one.",
+        "Calibration. Chapter 07 §7 says AUC cannot see it, but nothing in the course "
+        "fixes it. I learn a curve from raw score to how often that score is right.",
+        "Turning text into numbers. Every chapter starts from a table with columns. "
+        "News has no columns, so I count words, and also 3 to 5 letter chunks, which is "
+        "what catches Rs. against Rs and different word endings.",
+        "A paired test, so a 0.02 gap on 1,120 articles does not get reported as a real "
+        "improvement when it is luck.",
+        ("And one thing I thought was new and was not. The bootstrap behind my error "
+         "bars is Chapter 06 §3.1's bootstrap sample, doing a different job.", 1),
+    ])
 
     # --- 15. demo -----------------------------------------------------------
     s = _blank(prs)
     heading(s, "The demo", kicker="Live")
     shown = picture(s, "demo.png", Inches(0.9), Inches(1.9), Inches(7.4))
     bullets(s, [
-        "Paste any news article — it classifies, scores its own confidence, and "
-        "either files it or holds it for review.",
-        "Explains itself: the model is linear over TF-IDF, so the decision is a plain "
-        "sum of weight × term-frequency. The largest terms ARE the reasons — an exact "
-        "explanation, not an approximation.",
-        "The abstention dial is live: move the cut, watch coverage and accuracy trade.",
-        "A Validation tab with the real per-class intervals, reliability diagram and "
-        "confusion matrix — the evidence, not a claim.",
-        "And a batch tab that runs the model over real collected articles nobody "
-        "labelled.",
+        "Paste any news article. It gives a topic, a confidence, and either files it or "
+        "holds it back for a human.",
+        "It shows its working. The model is a weighted sum of word counts, so the words "
+        "with the biggest weights are literally the reason. That is the actual sum, not "
+        "an explanation invented afterwards.",
+        "The threshold is a live slider. Move it and watch coverage and accuracy trade "
+        "against each other, which is the Chapter 07 §4 curve running in front of you.",
+        "A Validation tab with the real per-class bars, the reliability chart and the "
+        "confusion matrix, so you can check the claims instead of believing them.",
+        "A batch tab that runs it over real collected articles that nobody labelled.",
     ], top=Inches(2.0),
         left=Inches(8.5) if shown else Inches(0.7),
         width=Inches(4.2) if shown else Inches(11.9),
@@ -416,39 +573,45 @@ def build(m: dict) -> Presentation:
 
     # --- 16. limits ---------------------------------------------------------
     s = _blank(prs)
-    heading(s, "What I would not claim", kicker="Limitations")
+    heading(s, "What I am not claiming", kicker="Limitations")
     bullets(s, [
-        "Four-day collection window. Nothing here measures topic drift over weeks — "
-        "the publisher holdouts carry the whole generalisation argument.",
-        "English only, and India-heavy: 40 publishers, mostly Indian mastheads plus "
-        "The Guardian, BBC and France 24.",
-        "conflict_war has 120 training articles and moved −0.14 on test. A thin class "
-        "behaving like a thin class — flagged in advance, not explained afterwards.",
-        "The label set is single-annotator for most rounds, so label noise cannot be "
-        "estimated from agreement.",
-        "Next lever is a fine-tuned transformer encoder — deliberately sequenced AFTER "
-        "this A/B, so any gain can be attributed to one change.",
+        "I collected over four days. So I cannot say anything about how news topics "
+        "change over months. The two publisher holdouts are the only evidence I have "
+        "that it generalises.",
+        "English only, and mostly Indian papers, plus The Guardian, BBC and France 24. "
+        "I would not trust it on Hindi or Tamil news without retraining.",
+        "Conflict and war has only 120 training articles and dropped 0.14 on the test "
+        "set. A thin class behaving like a thin class. I flagged that before opening "
+        "the test set, not after.",
+        "Most of the labelling was done by one person, me. So I cannot measure how noisy "
+        "the labels are by comparing two labellers.",
+        "I do not report ROC or AUC. Chapter 07 §7 says AUC only scores ranking and "
+        "ignores whether the probabilities are honest, and honest probabilities are the "
+        "whole basis of my abstention. So I measured that instead.",
+        "Obvious next step is a modern language model. I deliberately left it until "
+        "after this comparison, so any gain belongs to one change and not two.",
     ])
 
     # --- 17. conclusion -----------------------------------------------------
     s = _blank(prs)
-    heading(s, "What the project actually showed", kicker="Conclusion")
+    heading(s, "What I found", kicker="Conclusion")
     bullets(s, [
-        f"Article bodies beat headlines by +{ab['delta']:.3f} macro-F1, "
-        f"p = {ab['mcnemar_p']:.1e}. The hypothesis held.",
-        "No fancier model family or ensemble improved on a linear SVM over TF-IDF. "
-        "The classifier was never the bottleneck — data preparation was.",
-        f"Calibration plus a rejection option turned a {test['accuracy_without_abstention']:.1%}"
-        f"-accurate classifier into one that files {test['coverage']:.1%} of unseen "
-        f"articles at {test['accuracy_filed']:.1%} accuracy.",
-        f"Test macro-F1 {test['macro_f1']:.3f} "
-        f"[{test['macro_f1_low']:.3f}, {test['macro_f1_high']:.3f}], on a split opened "
-        "once and never reopened.",
+        f"Reading the full article beats reading the headline, by "
+        f"{ab['delta']:.3f} macro-F1 with p = {ab['mcnemar_p']:.1e}. My hypothesis held.",
+        "Trees, forests, boosting and voting, the entire ensemble half of the course, "
+        "all scored below one plain linear model. The classifier was never my problem. "
+        "Cleaning the data was.",
+        f"Adding an honest confidence and the right to stay quiet turned a "
+        f"{test['accuracy_without_abstention']:.1%} accurate model into one that answers "
+        f"{test['coverage']:.1%} of new articles and gets "
+        f"{test['accuracy_filed']:.1%} of those right.",
+        f"Final score on the test set: macro-F1 {test['macro_f1']:.3f}, opened once, "
+        "never reopened.",
     ])
     _, run = _text(s, Inches(0.7), Inches(5.8), Inches(11.9), Inches(0.8), size=22,
                    bold=True, color=ACCENT)
-    run.text = ("The most useful output of this project is the list of things that "
-                "did not work, each with a p-value attached.")
+    run.text = ("The most useful part of this project is the list of things that did "
+                "not work, with a number attached to each one.")
 
     return prs
 

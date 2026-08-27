@@ -1,4 +1,4 @@
-# News Topic Classifier
+# Beyond the Headline: Calibrated News Article Classifier
 
 **Supervised Machine Learning — Classification · Mini Project**
 Mohamed Riaz · PES1PGE25DS037 · Department of CSE, PES University
