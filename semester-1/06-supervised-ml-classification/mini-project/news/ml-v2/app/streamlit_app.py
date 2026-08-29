@@ -410,12 +410,13 @@ with batch_tab:
     st.caption(
         "These are drawn from the frozen snapshot — genuine collected news that was never "
         "part of training, validation or test. It is the closest thing to watching the "
-        "model work on data it has never met."
+        "model work on data it has never met. Every click draws a different batch."
     )
 
     how_many = st.slider("How many articles", 20, 300, 60, 20)
-    if st.button("Classify them", type="primary"):
-        pool = load_unlabelled().head(how_many)
+    if st.button("Classify a fresh batch", type="primary"):
+        available = load_unlabelled(3000)
+        pool = available.sample(min(how_many, len(available))).reset_index(drop=True)
         texts = [
             serve.text_for(t, s, b)
             for t, s, b in zip(pool["title"], pool["summary"], pool["body"])
