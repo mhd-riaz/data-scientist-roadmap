@@ -11,6 +11,10 @@ name: news-collector
 #   COOLIFY_WEBHOOK  the resource's Deploy Webhook URL from the Coolify UI
 #   COOLIFY_TOKEN    a Coolify API token with deploy permission
 # Without them the deploy step is skipped and the image is still published.
+#
+# The Coolify host sits behind Cloudflare Access, so the deploy request also
+# needs an Access service token that the hostname's Service Auth policy admits:
+#   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET
 
 on:
   push:
@@ -126,12 +130,27 @@ jobs:
         env:
           COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           if [ -z "$COOLIFY_WEBHOOK" ] || [ -z "$COOLIFY_TOKEN" ]; then
             echo "::warning::COOLIFY_WEBHOOK or COOLIFY_TOKEN is not set; skipping deployment."
             exit 0
           fi
-          # --fail turns an HTTP error into a non-zero exit, so a rejected
-          # webhook fails the run instead of passing silently.
-          curl --fail --silent --show-error --request POST "$COOLIFY_WEBHOOK" \
-            --header "Authorization: Bearer $COOLIFY_TOKEN"
+          headers=(--header "Authorization: Bearer $COOLIFY_TOKEN")
+          if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
+            headers+=(--header "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID"
+                      --header "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+          else
+            echo "::warning::CF_ACCESS_CLIENT_ID or CF_ACCESS_CLIENT_SECRET is not set; Cloudflare Access will reject the request."
+          fi
+          # Cloudflare Access answers a rejected request with a 302 to its login
+          # page, which `curl --fail` would count as success, so require a 2xx
+          # from Coolify itself.
+          status=$(curl --silent --show-error --output response.txt --write-out '%{http_code}' \
+            --request POST "$COOLIFY_WEBHOOK" "${headers[@]}")
+          head -c 1000 response.txt; echo
+          case "$status" in
+            2??) ;;
+            *) echo "::error::Coolify deploy request returned HTTP $status"; exit 1 ;;
+          esac
