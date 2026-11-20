@@ -183,6 +183,15 @@ that has already exited successfully is not guaranteed to be recreated on a
 redeploy — and when it is skipped, an edited feed list silently never reaches
 the database.
 
+MongoDB only accepts TLS (1.2 or later), and the API connects with
+`tls=true` plus the CA file. The certificate comes from a private CA on the host,
+which must exist before a deploy: `/etc/mongodb-tls/server` (`server.pem` and
+`ca.crt`, owned by uid 999) and `/etc/mongodb-tls-public/ca.crt`. Coolify never
+creates these paths, so if one is missing the deploy fails rather than starting
+MongoDB without TLS. The port is published on the host's loopback and LAN
+address only, and a `DOCKER-USER` rule in `/etc/ufw/after.rules` limits which
+LAN clients can reach it.
+
 Set these in the Coolify UI before the first deploy — the compose file marks
 them required, so a missing one fails the deployment instead of starting an
 unguarded API:
