@@ -192,6 +192,11 @@ MongoDB without TLS. The port is published on the host's loopback and LAN
 address only, and a `DOCKER-USER` rule in `/etc/ufw/after.rules` limits which
 LAN clients can reach it.
 
+The API logs in as `collector`, which has `readWrite` on `news` only, not as root.
+Coolify generates its password (`SERVICE_PASSWORD_64_COLLECTOR`, also given to the
+mongo container as `MONGO_COLLECTOR_PASSWORD`), but the user itself is created
+once with mongosh as root. On a fresh volume, create it before the API can connect.
+
 Set these in the Coolify UI before the first deploy — the compose file marks
 them required, so a missing one fails the deployment instead of starting an
 unguarded API:

@@ -90,7 +90,10 @@ services:
       - SERVICE_FQDN_API_8080
       - NEWS_SERVER_HOST=0.0.0.0
       - NEWS_SERVER_PORT=8080
-      - NEWS_MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_64_MONGO}@mongo:27017/?authSource=admin&tls=true&tlsCAFile=/etc/mongo-tls-ca/ca.crt
+      # `collector`, not root: readWrite on the news database only. The user lives
+      # in `news` (hence authSource=news); to use another NEWS_MONGO_DATABASE,
+      # first grant collector readWrite on it.
+      - NEWS_MONGO_URI=mongodb://collector:${SERVICE_PASSWORD_64_COLLECTOR}@mongo:27017/?authSource=news&tls=true&tlsCAFile=/etc/mongo-tls-ca/ca.crt
       - NEWS_MONGO_DATABASE=${NEWS_MONGO_DATABASE:-news}
 
       # The default reads the copy baked into the image, which means a new feed
